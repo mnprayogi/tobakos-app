@@ -1,0 +1,1 @@
+export const REALTIME_INTERVAL_MS = 10_000

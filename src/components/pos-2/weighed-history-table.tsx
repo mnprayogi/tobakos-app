@@ -1,0 +1,315 @@
+"use client"
+
+import { useState, useRef, useCallback } from "react"
+import { toast } from "sonner"
+import { getWeighedHistory, endWeighSession, getSessionUnweighed } from "@/lib/actions/weighing"
+import { usePrintDocument, printBaseStyle } from "@/lib/print"
+import { NotaTimbangan } from "@/components/pos-2/nota-timbangan"
+import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
+import { formatCurrency } from "@/lib/utils"
+import { StatusPill } from "@/components/shared/status-pill"
+import { usePolling } from "@/hooks/usePolling"
+import { REALTIME_INTERVAL_MS } from "@/lib/realtime"
+import type { NotaItem, HistoryPurchase, SessionCheckResult } from "@/lib/actions/weighing"
+
+interface NotaData {
+  transactionCode: string
+  farmerName: string
+  farmerNik: string | null
+  warehouse: string
+  date: string
+  items: NotaItem[]
+  totals: NotaItem
+}
+
+interface Props {
+  laneId: number
+  farmerId: number | null
+  farmerName: string | null
+  refreshKey?: number
+  onSessionEnded?: () => void
+  onSelectItem?: (labelCode: string) => void
+}
+
+export function WeighedHistory({ laneId, farmerId, farmerName, refreshKey = 0, onSessionEnded, onSelectItem }: Props) {
+  const [purchases, setPurchases] = useState<HistoryPurchase[]>([])
+  const [loadedFor, setLoadedFor] = useState<string | null>(null)
+  const loading = farmerId != null && loadedFor !== `${farmerId}:${laneId}`
+  const [notaData, setNotaData] = useState<NotaData | null>(null)
+  const [finishing, setFinishing] = useState<number | null>(null)
+  const [sessionEnded, setSessionEnded] = useState(false)
+  const [confirmPurchase, setConfirmPurchase] = useState<HistoryPurchase | null>(null)
+  const [sessionCheck, setSessionCheck] = useState<SessionCheckResult | null>(null)
+  const [checking, setChecking] = useState(false)
+  const notaRef = useRef<HTMLDivElement>(null)
+  const handlePrintNota = usePrintDocument(notaRef, printBaseStyle)
+
+  const loadHistory = useCallback(async () => {
+    if (!farmerId) return
+    try {
+      const data = await getWeighedHistory(farmerId, laneId)
+      setPurchases(data)
+      setLoadedFor(`${farmerId}:${laneId}`)
+    } catch {
+      setPurchases([])
+      setLoadedFor(`${farmerId}:${laneId}`)
+      toast.error("Gagal memuat riwayat")
+    }
+  }, [farmerId, laneId])
+
+  usePolling(loadHistory, REALTIME_INTERVAL_MS, [loadHistory, refreshKey])
+
+  async function handleRequestFinish(purchase: HistoryPurchase) {
+    setConfirmPurchase(purchase)
+    setSessionCheck(null)
+    setChecking(true)
+    try {
+      const check = await getSessionUnweighed(purchase.id, laneId)
+      setSessionCheck(check)
+    } catch (err) {
+      setConfirmPurchase(null)
+      toast.error((err as Error).message)
+    } finally {
+      setChecking(false)
+    }
+  }
+
+  async function handleFinishSession(purchaseId: number) {
+    setFinishing(purchaseId)
+    try {
+      const data = await endWeighSession(purchaseId, laneId)
+      setNotaData(data)
+      setSessionEnded(true)
+      setConfirmPurchase(null)
+      toast.success("Transaksi ditutup — Nota sementara siap dicetak")
+    } catch (err) {
+      toast.error((err as Error).message)
+    } finally {
+      setFinishing(null)
+    }
+  }
+
+  function handleCloseNota() {
+    setNotaData(null)
+    if (sessionEnded) {
+      onSessionEnded?.()
+    }
+  }
+
+  const totalBales = purchases.reduce((s, p) => s + p.items.length, 0)
+
+  if (loading) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-4">
+        <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted-2 mb-3">
+          Riwayat Ditimbang
+        </p>
+        <p className="text-sm text-muted-foreground">Memuat...</p>
+      </div>
+    )
+  }
+
+  if (totalBales === 0) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-4">
+        <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted-2 mb-3">
+          Riwayat Ditimbang{farmerName ? ` — ${farmerName}` : ""}
+        </p>
+        <p className="text-sm text-muted-foreground">
+          {farmerId ? "Belum ada bale untuk petani ini." : "Pilih petani pada antrian untuk melihat bale."}
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <div className="space-y-4">
+        {purchases.map((purchase) => {
+          const hasWeighed = purchase.items.some((i) => i.status === "WEIGHED")
+          return (
+            <div key={purchase.id} className="rounded-xl border border-border bg-card p-4">
+              <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted-2">
+                    {purchase.transactionLabel} — {farmerName}
+                  </p>
+                  <p className="font-mono text-[10.5px] text-muted-2 mt-0.5">
+                    {purchase.transactionCode} · {purchase.items.length} bale
+                  </p>
+                </div>
+                {hasWeighed && (
+                  <button
+                    type="button"
+                    onClick={() => handleRequestFinish(purchase)}
+                    disabled={finishing === purchase.id}
+                    className="px-4 py-1.5 bg-amber hover:bg-amber/80 text-primary-foreground font-extrabold text-[11px] rounded-lg transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    {finishing === purchase.id ? "Memproses\u2026" : "Akhiri Sesi & Tutup"}
+                  </button>
+                )}
+              </div>
+              <div className="overflow-x-auto">
+              <table className="w-full min-w-[820px] border-collapse text-[12.5px]">
+                <thead>
+                  <tr>
+                    <th className="text-left text-[10.5px] uppercase tracking-[0.06em] font-bold text-muted-2 pb-2 pr-2 border-b border-border-soft">No</th>
+                    <th className="text-left text-[10.5px] uppercase tracking-[0.06em] font-bold text-muted-2 pb-2 px-2 border-b border-border-soft">Barcode</th>
+                    <th className="text-left text-[10.5px] uppercase tracking-[0.06em] font-bold text-muted-2 pb-2 px-2 border-b border-border-soft">Grade</th>
+                    <th className="text-left text-[10.5px] uppercase tracking-[0.06em] font-bold text-muted-2 pb-2 px-2 border-b border-border-soft">Customer</th>
+                    <th className="text-left text-[10.5px] uppercase tracking-[0.06em] font-bold text-muted-2 pb-2 px-2 border-b border-border-soft">Bruto</th>
+                    <th className="text-left text-[10.5px] uppercase tracking-[0.06em] font-bold text-muted-2 pb-2 px-2 border-b border-border-soft">Netto</th>
+                    <th className="text-left text-[10.5px] uppercase tracking-[0.06em] font-bold text-muted-2 pb-2 px-2 border-b border-border-soft">Subtotal</th>
+                    <th className="text-left text-[10.5px] uppercase tracking-[0.06em] font-bold text-muted-2 pb-2 px-2 border-b border-border-soft">Oleh</th>
+                    <th className="text-left text-[10.5px] uppercase tracking-[0.06em] font-bold text-muted-2 pb-2 pl-2 border-b border-border-soft">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {purchase.items.map((item, i) => (
+                    <tr
+                      key={item.id}
+                      onClick={() => onSelectItem?.(item.labelCode)}
+                      className="cursor-pointer transition-colors hover:bg-panel-alt/60"
+                    >
+                      <td className="py-2 pr-2 border-b border-border-soft font-mono text-foreground">{i + 1}</td>
+                      <td className="py-2 px-2 border-b border-border-soft font-mono text-foreground">{item.labelCode}</td>
+                      <td className="py-2 px-2 border-b border-border-soft font-mono text-foreground">{item.grade}</td>
+                      <td className="py-2 px-2 border-b border-border-soft text-foreground">
+                        {item.customerName ?? "\u2014"}
+                      </td>
+                      <td className="py-2 px-2 border-b border-border-soft font-mono text-foreground">
+                        {item.grossWeight != null ? `${item.grossWeight.toFixed(1)} kg` : "\u2014"}
+                      </td>
+                      <td className="py-2 px-2 border-b border-border-soft font-mono text-foreground">
+                        {item.netWeight != null ? `${item.netWeight.toFixed(1)} kg` : "\u2014"}
+                      </td>
+                      <td className="py-2 px-2 border-b border-border-soft font-mono text-foreground">
+                        {item.subtotal > 0 ? formatCurrency(item.subtotal) : "\u2014"}
+                      </td>
+                      <td className="py-2 px-2 border-b border-border-soft font-mono text-foreground">
+                        {item.weighedBy ?? "\u2014"}
+                      </td>
+                      <td className="py-2 pl-2 border-b border-border-soft">
+                        <StatusPill status={item.status as "GRADED" | "WEIGHED" | "CLOSED"} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Konfirmasi Akhiri Sesi */}
+      {confirmPurchase && (
+        <Dialog open onOpenChange={(open) => { if (!open) setConfirmPurchase(null) }}>
+          <DialogContent className="sm:max-w-md">
+            <DialogTitle>
+              {checking
+                ? "Memeriksa bale\u2026"
+                : sessionCheck && sessionCheck.unweighedCount === 0
+                ? "Akhiri Sesi Penimbangan?"
+                : "Belum Bisa Menutup Sesi"}
+            </DialogTitle>
+            <DialogDescription>
+              {checking
+                ? "Menghitung bale yang belum ditimbang\u2026"
+                : sessionCheck && sessionCheck.unweighedCount === 0
+                ? `Semua ${sessionCheck.totalBales} bale sudah ditimbang. Lanjut tutup transaksi? Nota sementara akan dicetak.`
+                : null}
+            </DialogDescription>
+
+            {!checking && sessionCheck && sessionCheck.unweighedCount > 0 && (
+              <div className="rounded-xl border border-red/35 bg-red/10 p-3">
+                <p className="text-[12.5px] font-bold text-red">
+                  Masih ada {sessionCheck.unweighedCount} bale belum ditimbang
+                </p>
+                <p className="text-[11.5px] text-muted-foreground mt-0.5">
+                  Sesi tidak dapat ditutup sebelum semua bale ditimbang. Klik bale di bawah untuk
+                  memuat ke form timbang.
+                </p>
+                <div className="mt-2.5 space-y-1.5">
+                  {sessionCheck.unweighedBales.map((bale) => (
+                    <button
+                      type="button"
+                      key={bale.labelCode}
+                      onClick={() => {
+                        onSelectItem?.(bale.labelCode)
+                        setConfirmPurchase(null)
+                      }}
+                      className="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-panel-alt border border-border-soft text-left hover:border-amber/40 transition-colors cursor-pointer"
+                    >
+                      <span className="font-mono text-[11.5px] text-foreground">{bale.labelCode}</span>
+                      <span className="flex items-center gap-2">
+                        <span className="text-[11px] font-mono text-muted-foreground">GRADE {bale.grade}</span>
+                        <span className="text-[10px] font-bold bg-amber/12 text-amber border border-amber/35 px-1.5 py-0.5 rounded">
+                          GRADED
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <DialogFooter>
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmPurchase(null)}
+                  className="px-4 py-1.5 bg-panel-alt text-foreground border border-border-soft font-bold text-[11.5px] rounded-lg cursor-pointer hover:bg-border/50"
+                >
+                  {sessionCheck && sessionCheck.unweighedCount > 0 ? "Tutup" : "Batal"}
+                </button>
+                {sessionCheck && sessionCheck.unweighedCount === 0 && !checking && (
+                  <button
+                    type="button"
+                    onClick={() => handleFinishSession(confirmPurchase.id)}
+                    disabled={finishing === confirmPurchase.id}
+                    className="px-4 py-1.5 bg-emerald hover:bg-emerald/80 text-primary-foreground font-extrabold text-[11.5px] rounded-lg transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    {finishing === confirmPurchase.id ? "Memproses\u2026" : "Akhiri & Tutup"}
+                  </button>
+                )}
+              </div>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Nota Dialog + Print */}
+      {notaData && (
+        <div className="nota-overlay" onClick={handleCloseNota}>
+          <div className="nota-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between gap-2 flex-wrap mb-4">
+              <p className="font-bold text-sm text-foreground">
+                Nota Timbangan — {notaData.farmerName}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handlePrintNota}
+                  className="px-4 py-2 bg-emerald text-primary-foreground font-bold text-xs rounded-lg cursor-pointer hover:bg-emerald/80"
+                >
+                  Cetak Nota
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCloseNota}
+                  className="px-4 py-2 bg-panel-alt text-foreground border border-border-soft font-bold text-xs rounded-lg cursor-pointer hover:bg-border/50"
+                >
+                  Tutup
+                </button>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl p-6">
+              <NotaTimbangan ref={notaRef} {...notaData} />
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}

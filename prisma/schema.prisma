@@ -1,0 +1,337 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model Farmer {
+  id        Int         @id @default(autoincrement())
+  name      String
+  nik       String?     @unique
+  phone     String?
+  address   String?     @db.Text
+  purchases Purchase[]
+  loan      FarmerLoan?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@map("farmers")
+}
+
+model Customer {
+  id            Int            @id @default(autoincrement())
+  name          String
+  phone         String?
+  address       String?        @db.Text
+  purchaseItems PurchaseItem[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@map("customers")
+}
+
+model PackingType {
+  id              Int            @id @default(autoincrement())
+  name            String
+  deductionWeight Float          @default(0)
+  purchaseItems   PurchaseItem[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@map("packing_types")
+}
+
+model TobaccoType {
+  id            Int            @id @default(autoincrement())
+  name          String
+  active        Boolean        @default(true)
+  grades        TobaccoGrade[]
+  purchaseItems PurchaseItem[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@map("tobacco_types")
+}
+
+model TobaccoGrade {
+  id            Int         @id @default(autoincrement())
+  name          String
+  defaultPrice  Decimal     @db.Decimal(15, 2)
+  tobaccoType   TobaccoType @relation(fields: [tobaccoTypeId], references: [id], onDelete: Cascade)
+  tobaccoTypeId Int
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@map("tobacco_grades")
+}
+
+model LeafType {
+  id            Int            @id @default(autoincrement())
+  name          String
+  active        Boolean        @default(true)
+  purchaseItems PurchaseItem[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@map("leaf_types")
+}
+
+model Warehouse {
+  id        Int      @id @default(autoincrement())
+  code      String   @unique
+  name      String
+  address   String?  @db.Text
+  active    Boolean  @default(true)
+  lanes     Lane[]
+  purchases Purchase[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("warehouses")
+}
+
+model Lane {
+  id          Int        @id @default(autoincrement())
+  code        String     @unique
+  name        String
+  warehouse   Warehouse  @relation(fields: [warehouseId], references: [id])
+  warehouseId Int
+  active      Boolean    @default(true)
+  purchases   Purchase[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@map("lanes")
+}
+
+model Purchase {
+  id               Int            @id @default(autoincrement())
+  transactionCode  String         @unique
+  farmer           Farmer         @relation(fields: [farmerId], references: [id])
+  farmerId         Int
+  warehouse        Warehouse?     @relation(fields: [warehouseId], references: [id])
+  warehouseId      Int?
+  lane             Lane?          @relation(fields: [laneId], references: [id])
+  laneId           Int?
+  transactionDate  DateTime       @default(now())
+  totalGrossWeight Float          @default(0)
+  totalNetWeight   Float          @default(0)
+  totalPrice       Decimal        @db.Decimal(15, 2)
+  totalItems       Int            @default(0)
+  status            PurchaseStatus @default(DRAFT)
+  notes             String?        @db.Text
+  createdBy         String?
+  weighedBy         String?
+  approvedBy        String?
+  paidBy            String?
+  taxRate           Float          @default(0)
+  taxAmount         Decimal        @default(0.00) @db.Decimal(15, 2)
+  netAmount         Decimal        @default(0.00) @db.Decimal(15, 2)
+  originalTotalPrice Decimal?       @db.Decimal(15, 2)
+  priceReviewNote   String?        @db.Text
+  paidAmount        Decimal        @default(0.00) @db.Decimal(15, 2)
+  items             PurchaseItem[]
+  payments          Payment[]
+  loanEntries       LoanEntry[]
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  @@map("tobacco_purchases")
+}
+
+model Payment {
+  id             Int           @id @default(autoincrement())
+  purchase       Purchase      @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  purchaseId     Int
+  amount         Decimal       @db.Decimal(15, 2)
+  method         PaymentMethod @default(TUNAI)
+  note           String?       @db.Text
+  paidBy         String?
+  paidAt         DateTime      @default(now())
+  loanDeduction  Decimal       @default(0.00) @db.Decimal(15, 2)
+  loanEntry      LoanEntry?
+
+  @@map("payments")
+}
+
+model PurchaseItem {
+  id            Int    @id @default(autoincrement())
+  purchase      Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  purchaseId    Int
+  inputOrder    Int
+  labelCode     String @unique
+
+  packingType   PackingType @relation(fields: [packingTypeId], references: [id])
+  packingTypeId Int
+  tobaccoType   TobaccoType @relation(fields: [tobaccoTypeId], references: [id])
+  tobaccoTypeId Int
+  leafType      LeafType    @relation(fields: [leafTypeId], references: [id])
+  leafTypeId    Int
+  grade         String
+  moisturePercent Float @default(0)
+  packingWeight   Float @default(0)
+
+  customer        Customer? @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  customerId      Int?
+
+  grossWeight        Float?
+  weightAfterPacking Float?
+  moistureDeduction  Float?
+  netWeight          Float?
+  pricePerKg         Decimal? @db.Decimal(15, 2)
+  priceAdjustment    Decimal  @default(0.00) @db.Decimal(15, 2)
+  subtotal           Decimal? @db.Decimal(15, 2)
+
+  status    PurchaseItemStatus @default(GRADED)
+  createdBy String?
+  weighedBy String?
+  closedBy  String?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  @@map("purchase_items")
+}
+
+model LabelSequence {
+  id      Int    @id @default(autoincrement())
+  scope   String
+  seqDate String
+  value   Int    @default(0)
+
+  @@unique([scope, seqDate])
+  @@map("label_sequences")
+}
+
+model FarmerLoan {
+  id        Int          @id @default(autoincrement())
+  farmer    Farmer       @relation(fields: [farmerId], references: [id])
+  farmerId  Int          @unique
+  status    LoanStatus   @default(ACTIVE)
+  openedAt  DateTime     @default(now())
+  settledAt DateTime?
+  notes     String?      @db.Text
+  entries   LoanEntry[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@map("farmer_loans")
+}
+
+model LoanEntry {
+  id         Int            @id @default(autoincrement())
+  loan       FarmerLoan     @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  loanId     Int
+  type       LoanEntryType
+  method     LoanMethod?
+  amount     Decimal        @db.Decimal(15, 2)
+  purchase   Purchase?      @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+  purchaseId Int?
+  payment    Payment?       @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  paymentId  Int?           @unique
+  note       String?        @db.Text
+  createdBy  String?
+  createdAt  DateTime       @default(now())
+
+  @@map("loan_entries")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model User {
+  id             String    @id @default(cuid())
+  name           String?
+  email          String?   @unique
+  emailVerified  DateTime?
+  image          String?
+  username       String?   @unique
+  password       String?
+  role           String    @default("GRADER")
+  accounts       Account[]
+  sessions       Session[]
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@map("users")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model SystemSetting {
+  key       String   @id
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("system_settings")
+}
+
+enum PurchaseStatus {
+  DRAFT
+  WEIGHED
+  APPROVED
+  PAID
+}
+
+enum PurchaseItemStatus {
+  GRADED
+  WEIGHED
+  CLOSED
+}
+
+enum PaymentMethod {
+  TUNAI
+  TRANSFER
+}
+
+enum LoanStatus {
+  ACTIVE
+  SETTLED
+}
+
+enum LoanEntryType {
+  DISBURSEMENT
+  REPAYMENT
+}
+
+enum LoanMethod {
+  TUNAI
+  POTONG_TRANSAKSI
+}

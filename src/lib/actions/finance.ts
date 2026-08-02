@@ -1,0 +1,380 @@
+"use server"
+
+import { revalidatePath } from "next/cache"
+import { prisma } from "@/lib/db"
+import { isMultipleOf100, negotiateItems, roundMoney, roundRupiah } from "@/lib/calculations"
+import { requireRoles } from "@/lib/roles"
+
+export type PaymentMethodValue = "TUNAI" | "TRANSFER"
+
+export interface ReviewInput {
+  newTotalPrice?: number | null
+  note?: string | null
+}
+
+export async function reviewAndApprove(purchaseId: number, input: ReviewInput) {
+  const actor = await requireRoles("ADMIN", "FINANCE")
+
+  const purchase = await prisma.purchase.findUnique({
+    where: { id: purchaseId },
+    include: {
+      items: {
+        where: { status: { in: ["GRADED", "WEIGHED", "CLOSED"] } },
+        orderBy: { inputOrder: "asc" },
+      },
+    },
+  })
+  if (!purchase) throw new Error("Transaksi tidak ditemukan")
+  if (purchase.status !== "WEIGHED") throw new Error("Transaksi harus berstatus WEIGHED untuk direview")
+  if (purchase.items.length === 0) throw new Error("Transaksi tidak memiliki bale")
+
+  const currentTotal = Number(purchase.totalPrice)
+  const note = input.note?.trim() || null
+  const hasNegotiation =
+    input.newTotalPrice != null &&
+    Math.abs(roundRupiah(input.newTotalPrice) - currentTotal) > 0.005
+
+  const result = await prisma.$transaction(async (tx) => {
+    if (hasNegotiation) {
+      const newTotal = roundMoney(input.newTotalPrice!)
+      const negotiated = negotiateItems(
+        purchase.items.map((i) => ({
+          netWeight: Number(i.netWeight ?? 0),
+          pricePerKg: Number(i.pricePerKg ?? 0),
+        })),
+        currentTotal,
+        newTotal
+      )
+
+      for (let i = 0; i < purchase.items.length; i++) {
+        const item = purchase.items[i]
+        await tx.purchaseItem.update({
+          where: { id: item.id },
+          data: {
+            priceAdjustment: negotiated.adjustmentsPerKg[i],
+            subtotal: negotiated.subtotals[i],
+          },
+        })
+      }
+
+      return tx.purchase.update({
+        where: { id: purchaseId },
+        data: {
+          status: "APPROVED",
+          approvedBy: actor,
+          originalTotalPrice: currentTotal,
+          priceReviewNote: note,
+          totalPrice: negotiated.exactTotal,
+        },
+      })
+    }
+
+    return tx.purchase.update({
+      where: { id: purchaseId },
+      data: {
+        status: "APPROVED",
+        approvedBy: actor,
+        priceReviewNote: note,
+      },
+    })
+  })
+
+  revalidatePath("/admin/transactions")
+  revalidatePath("/admin/debt")
+  return { ...result, totalPrice: Number(result.totalPrice) }
+}
+
+export interface PaymentInput {
+  amount: number
+  method: PaymentMethodValue
+  note?: string | null
+  loanDeduction?: number
+}
+
+export async function recordPayment(purchaseId: number, input: PaymentInput) {
+  const actor = await requireRoles("ADMIN", "FINANCE")
+
+  const amount = roundMoney(input.amount)
+  if (amount < 0) throw new Error("Jumlah pembayaran tidak boleh negatif")
+
+  const loanDeduction = input.loanDeduction ? roundMoney(input.loanDeduction) : 0
+  if (loanDeduction < 0) throw new Error("Potongan hutang tidak boleh negatif")
+
+  const result = await prisma.$transaction(async (tx) => {
+    const purchase = await tx.purchase.findUnique({
+      where: { id: purchaseId },
+      include: {
+        items: { where: { status: "WEIGHED" } },
+      },
+    })
+    if (!purchase) throw new Error("Transaksi tidak ditemukan")
+    if (purchase.status !== "APPROVED") throw new Error("Transaksi harus disetujui terlebih dahulu")
+
+    const totalPrice = Number(purchase.totalPrice)
+    const paidAmount = Number(purchase.paidAmount)
+    const remaining = roundMoney(totalPrice - paidAmount)
+    const credit = roundMoney(amount + loanDeduction)
+    if (credit <= 0.005) {
+      throw new Error("Kredit transaksi harus lebih dari 0")
+    }
+    if (loanDeduction > remaining + 0.005) {
+      throw new Error(`Potongan hutang melebihi sisa tagihan (sisa Rp ${remaining.toLocaleString("id-ID")})`)
+    }
+    if (credit > remaining + 0.005) {
+      throw new Error(`Kredit transaksi melebihi sisa tagihan (sisa Rp ${remaining.toLocaleString("id-ID")})`)
+    }
+    const isExactRemaining = Math.abs(credit - remaining) <= 0.005
+    if (!isExactRemaining && !isMultipleOf100(credit)) {
+      throw new Error("Kredit transaksi harus kelipatan 100 Rupiah")
+    }
+
+    let loan = null
+    let newLoanBalance: number | null = null
+    if (loanDeduction > 0.005) {
+      loan = await tx.farmerLoan.findUnique({
+        where: { farmerId: purchase.farmerId },
+        include: { entries: { select: { type: true, amount: true } } },
+      })
+      if (!loan || loan.status !== "ACTIVE") {
+        throw new Error("Petani tidak memiliki hutang modal aktif")
+      }
+      let totalBorrowed = 0
+      let totalRepaid = 0
+      for (const e of loan.entries) {
+        if (e.type === "DISBURSEMENT") totalBorrowed += Number(e.amount)
+        else totalRepaid += Number(e.amount)
+      }
+      const loanBalance = roundMoney(totalBorrowed - totalRepaid)
+      if (loanDeduction > loanBalance + 0.005) {
+        throw new Error(`Potongan hutang melebihi sisa hutang (sisa Rp ${loanBalance.toLocaleString("id-ID")})`)
+      }
+      const isLoanSettled = Math.abs(loanDeduction - loanBalance) <= 0.005
+      if (!isLoanSettled && !isMultipleOf100(loanDeduction)) {
+        throw new Error("Potongan hutang harus kelipatan 100 Rupiah")
+      }
+      newLoanBalance = roundMoney(loanBalance - loanDeduction)
+    }
+
+    const payment = await tx.payment.create({
+      data: {
+        purchaseId,
+        amount,
+        method: input.method,
+        note: input.note?.trim() || null,
+        paidBy: actor,
+        loanDeduction,
+      },
+    })
+
+    let loanEntryId: number | null = null
+    if (loanDeduction > 0.005) {
+      const totalBorrowed = loan!.entries
+        .filter((e) => e.type === "DISBURSEMENT")
+        .reduce((s, e) => s + Number(e.amount), 0)
+      const totalRepaid = loan!.entries
+        .filter((e) => e.type === "REPAYMENT")
+        .reduce((s, e) => s + Number(e.amount), 0)
+      const loanBalance = roundMoney(totalBorrowed - totalRepaid)
+      const isLoanSettled = Math.abs(loanDeduction - loanBalance) <= 0.005
+
+      const entry = await tx.loanEntry.create({
+        data: {
+          loanId: loan!.id,
+          type: "REPAYMENT",
+          method: "POTONG_TRANSAKSI",
+          amount: loanDeduction,
+          purchaseId,
+          paymentId: payment.id,
+          note: input.note?.trim() || null,
+          createdBy: actor,
+        },
+      })
+      loanEntryId = entry.id
+
+      await tx.farmerLoan.update({
+        where: { id: loan!.id },
+        data: {
+          ...(isLoanSettled ? { status: "SETTLED", settledAt: new Date() } : {}),
+          updatedAt: new Date(),
+        },
+      })
+    }
+
+    const newPaidAmount = roundMoney(paidAmount + credit)
+    const isPaidOff = newPaidAmount >= totalPrice - 0.005
+
+    await tx.purchase.update({
+      where: { id: purchaseId },
+      data: {
+        paidAmount: isPaidOff ? totalPrice : newPaidAmount,
+        ...(isPaidOff
+          ? { status: "PAID", paidBy: actor }
+          : {}),
+      },
+    })
+
+    if (isPaidOff) {
+      await tx.purchaseItem.updateMany({
+        where: { purchaseId, status: "WEIGHED" },
+        data: { status: "CLOSED", closedBy: actor },
+      })
+    }
+
+    const storedPaid = isPaidOff ? totalPrice : newPaidAmount
+    return {
+      payment: {
+        id: payment.id,
+        amount: Number(payment.amount),
+        method: payment.method,
+        note: payment.note,
+        paidBy: payment.paidBy,
+        paidAt: payment.paidAt,
+        loanDeduction: Number(payment.loanDeduction ?? 0),
+      },
+      paidOff: isPaidOff,
+      newPaidAmount: storedPaid,
+      remaining: roundMoney(totalPrice - storedPaid),
+      loanDeduction: loanDeduction > 0.005 ? loanDeduction : 0,
+      loanBalance: newLoanBalance,
+      loanEntryId,
+    }
+  })
+
+  revalidatePath("/admin/transactions")
+  revalidatePath("/admin/debt")
+  revalidatePath("/admin/loans")
+  return result
+}
+
+export async function reopenTransaction(purchaseId: number) {
+  await requireRoles("ADMIN", "FINANCE")
+
+  const purchase = await prisma.purchase.findUnique({
+    where: { id: purchaseId },
+    include: { payments: { select: { id: true } } },
+  })
+  if (!purchase) throw new Error("Transaksi tidak ditemukan")
+  if (purchase.status !== "APPROVED" && purchase.status !== "PAID")
+    throw new Error("Hanya transaksi APPROVED/PAID yang bisa dibuka kembali")
+  if (Number(purchase.paidAmount) > 0)
+    throw new Error("Transaksi sudah pernah dibayar — tidak bisa dibuka kembali")
+  if (purchase.payments.length > 0)
+    throw new Error("Transaksi sudah memiliki pembayaran — tidak bisa dibuka kembali")
+
+  await prisma.$transaction([
+    prisma.purchase.update({
+      where: { id: purchaseId },
+      data: { status: "WEIGHED", approvedBy: null, paidBy: null },
+    }),
+    prisma.purchaseItem.updateMany({
+      where: { purchaseId, status: "CLOSED" },
+      data: { status: "WEIGHED", closedBy: null },
+    }),
+  ])
+
+  revalidatePath("/admin/transactions")
+  revalidatePath("/admin/debt")
+  return purchase
+}
+
+export type DebtStatus = "HUTANG" | "DP" | "LUNAS"
+
+export interface DebtPayment {
+  id: number
+  amount: number
+  method: string
+  note: string | null
+  paidBy: string | null
+  paidAt: Date
+  loanDeduction: number
+}
+
+export interface DebtPurchase {
+  id: number
+  transactionCode: string
+  transactionDate: Date
+  totalPrice: number
+  paidAmount: number
+  remaining: number
+  status: string
+  derived: DebtStatus
+  itemCount: number
+  payments: DebtPayment[]
+}
+
+export interface DebtFarmer {
+  farmerId: number
+  farmerName: string
+  farmerNik: string | null
+  totalTagihan: number
+  totalDibayar: number
+  sisa: number
+  status: DebtStatus
+  purchases: DebtPurchase[]
+}
+
+export async function getDebtSummary(): Promise<DebtFarmer[]> {
+  await requireRoles("ADMIN", "FINANCE", "OWNER")
+  const purchases = await prisma.purchase.findMany({
+    where: { status: { in: ["APPROVED", "PAID"] } },
+    orderBy: [{ farmerId: "asc" }, { createdAt: "desc" }],
+    include: {
+      farmer: true,
+      payments: { orderBy: { paidAt: "asc" } },
+      _count: { select: { items: true } },
+    },
+  })
+
+  const farmers = new Map<number, DebtFarmer>()
+
+  for (const p of purchases) {
+    const totalPrice = Number(p.totalPrice)
+    const paidAmount = Number(p.paidAmount)
+    const remaining = roundMoney(totalPrice - paidAmount)
+    const derived: DebtStatus = remaining <= 0.005 ? "LUNAS" : paidAmount <= 0.005 ? "HUTANG" : "DP"
+
+    const farmer = farmers.get(p.farmerId) ?? {
+      farmerId: p.farmerId,
+      farmerName: p.farmer.name,
+      farmerNik: p.farmer.nik,
+      totalTagihan: 0,
+      totalDibayar: 0,
+      sisa: 0,
+      status: "LUNAS" as DebtStatus,
+      purchases: [],
+    }
+
+    farmer.totalTagihan += totalPrice
+    farmer.totalDibayar += paidAmount
+    farmer.sisa += remaining
+    farmer.purchases.push({
+      id: p.id,
+      transactionCode: p.transactionCode,
+      transactionDate: p.transactionDate,
+      totalPrice,
+      paidAmount,
+      remaining,
+      status: p.status,
+      derived,
+      itemCount: p._count.items,
+      payments: p.payments.map((pay) => ({
+        id: pay.id,
+        amount: Number(pay.amount),
+        method: pay.method,
+        note: pay.note,
+        paidBy: pay.paidBy,
+        paidAt: pay.paidAt,
+        loanDeduction: Number(pay.loanDeduction ?? 0),
+      })),
+    })
+
+    farmers.set(p.farmerId, farmer)
+  }
+
+  return Array.from(farmers.values()).map((f) => {
+    const sisa = roundMoney(f.sisa)
+    let status: DebtStatus = "LUNAS"
+    if (sisa > 0.005) status = f.totalDibayar <= 0.005 ? "HUTANG" : "DP"
+    return { ...f, sisa, status }
+  })
+}

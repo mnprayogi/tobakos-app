@@ -1,0 +1,145 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Farmer {
+  id        Int        @id @default(autoincrement())
+  name      String
+  nik       String?    @unique
+  phone     String?
+  address   String?    @db.Text
+  purchases Purchase[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@map("farmers")
+}
+
+model PackingType {
+  id              Int            @id @default(autoincrement())
+  name            String
+  deductionWeight Float          @default(0)
+  purchaseItems   PurchaseItem[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@map("packing_types")
+}
+
+model TobaccoType {
+  id            Int            @id @default(autoincrement())
+  name          String
+  active        Boolean        @default(true)
+  grades        TobaccoGrade[]
+  purchaseItems PurchaseItem[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@map("tobacco_types")
+}
+
+model TobaccoGrade {
+  id            Int         @id @default(autoincrement())
+  name          String
+  defaultPrice  Decimal     @db.Decimal(15, 2)
+  tobaccoType   TobaccoType @relation(fields: [tobaccoTypeId], references: [id], onDelete: Cascade)
+  tobaccoTypeId Int
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@map("tobacco_grades")
+}
+
+model LeafType {
+  id            Int            @id @default(autoincrement())
+  name          String
+  active        Boolean        @default(true)
+  purchaseItems PurchaseItem[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@map("leaf_types")
+}
+
+model Purchase {
+  id               Int            @id @default(autoincrement())
+  transactionCode  String         @unique
+  farmer           Farmer         @relation(fields: [farmerId], references: [id])
+  farmerId         Int
+  transactionDate  DateTime       @default(now())
+  totalGrossWeight Float          @default(0)
+  totalNetWeight   Float          @default(0)
+  totalPrice       Decimal        @db.Decimal(15, 2)
+  totalItems       Int            @default(0)
+  status           PurchaseStatus @default(DRAFT)
+  notes            String?        @db.Text
+  createdBy        String?
+  taxRate          Float          @default(0)
+  taxAmount        Decimal        @default(0.00) @db.Decimal(15, 2)
+  netAmount        Decimal        @default(0.00) @db.Decimal(15, 2)
+  items            PurchaseItem[]
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@map("tobacco_purchases")
+}
+
+model PurchaseItem {
+  id            Int    @id @default(autoincrement())
+  purchase      Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  purchaseId    Int
+  inputOrder    Int
+  labelCode     String @unique
+
+  // --- diisi Grader (tahap grading, sebelum barcode dicetak) ---
+  packingType   PackingType @relation(fields: [packingTypeId], references: [id])
+  packingTypeId Int
+  tobaccoType   TobaccoType @relation(fields: [tobaccoTypeId], references: [id])
+  tobaccoTypeId Int
+  leafType      LeafType    @relation(fields: [leafTypeId], references: [id])
+  leafTypeId    Int
+  grade         String
+  moisturePercent Float @default(0) // potongan MC (%)
+  packingWeight   Float @default(0) // potongan packing (kg)
+
+  // --- diisi Operator (tahap timbang, setelah scan barcode) ---
+  grossWeight        Float? // hasil timbangan (manual/otomatis/scan kamera)
+  weightAfterPacking Float? // grossWeight - packingWeight
+  moistureDeduction  Float? // hasil hitung dari moisturePercent
+  netWeight          Float? // weightAfterPacking - moistureDeduction
+  pricePerKg         Decimal? @db.Decimal(15, 2)
+  priceAdjustment    Decimal  @default(0.00) @db.Decimal(15, 2)
+  subtotal           Decimal? @db.Decimal(15, 2)
+
+  status    PurchaseItemStatus @default(GRADED)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  @@map("purchase_items")
+}
+
+model SystemSetting {
+  key       String   @id
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("system_settings")
+}
+
+enum PurchaseStatus {
+  DRAFT
+  APPROVED
+  PAID
+}
+
+enum PurchaseItemStatus {
+  GRADED
+  WEIGHED
+  CLOSED
+}
