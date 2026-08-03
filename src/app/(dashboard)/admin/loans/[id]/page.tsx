@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation"
 import { getLoanBook } from "@/lib/actions/loans"
 import { canAccess } from "@/lib/roles"
 import { LoanBookClient } from "./client"
+import { getSetting } from "@/lib/settings"
 
 export default async function LoanBookPage({ params }: { params: Promise<{ id: string }> }) {
   if (!(await canAccess(["ADMIN", "FINANCE", "OWNER"]))) redirect("/")
@@ -16,5 +17,7 @@ export default async function LoanBookPage({ params }: { params: Promise<{ id: s
     notFound()
   }
 
-  return <LoanBookClient book={book} />
+  const companyName = await getSetting("COMPANY_NAME", "TobakOS")
+
+  return <LoanBookClient book={book} companyName={companyName} />
 }

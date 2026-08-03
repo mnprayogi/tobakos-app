@@ -142,12 +142,14 @@ const navItems = [
 export function Sidebar({
   role,
   userName,
+  companyName,
   collapsed = false,
   mobileOpen = false,
   onNavigate,
 }: {
   role: string
   userName: string
+  companyName: string
   collapsed?: boolean
   mobileOpen?: boolean
   onNavigate?: () => void
@@ -167,7 +169,7 @@ export function Sidebar({
           🌿
         </div>
         <span className="font-extrabold text-[17px] tracking-tight text-foreground flex items-center">
-          TobakOS
+          {companyName}
           <span className="font-mono text-[9.5px] font-bold bg-border text-muted-2 px-1.5 py-0.5 rounded ml-1.5 align-middle">
             OS
           </span>
@@ -211,7 +213,7 @@ export function Sidebar({
 
       <div className="mt-auto pt-3.5 border-t border-border-soft text-[10.5px] text-muted-2 leading-relaxed">
         <div className="px-1.5">
-          {userName}<br />TobakOS · Gudang 01
+          {userName}<br />{companyName} · Gudang 01
         </div>
         <button
           type="button"

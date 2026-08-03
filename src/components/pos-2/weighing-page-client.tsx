@@ -40,13 +40,14 @@ interface ScannedItem {
 
 interface Props {
   laneId: number
+  defaultRoundingMode?: RoundMode
 }
 
-export function WeighingPageClient({ laneId }: Props) {
+export function WeighingPageClient({ laneId, defaultRoundingMode = "normal" }: Props) {
   const [scannedItem, setScannedItem] = useState<ScannedItem | null>(null)
   const [selectedFarmer, setSelectedFarmer] = useState<FarmerQueueItem | null>(null)
   const [scanValue, setScanValue] = useState("")
-  const [roundingMode, setRoundingMode] = useState<RoundMode>("normal")
+  const [roundingMode, setRoundingMode] = useState<RoundMode>(defaultRoundingMode)
   const [scanKey, setScanKey] = useState(0)
   const [historyRefreshKey, setHistoryRefreshKey] = useState(0)
   const [queueRefreshKey, setQueueRefreshKey] = useState(0)

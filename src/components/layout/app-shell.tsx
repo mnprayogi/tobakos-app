@@ -11,10 +11,12 @@ const STORAGE_KEY = "tobak:sidebar-collapsed"
 export function AppShell({
   role,
   userName,
+  companyName,
   children,
 }: {
   role: string
   userName: string
+  companyName: string
   children: React.ReactNode
 }) {
   const [collapsed, setCollapsed] = useState(false)
@@ -56,6 +58,7 @@ export function AppShell({
       <Sidebar
         role={role}
         userName={userName}
+        companyName={companyName}
         collapsed={collapsed}
         mobileOpen={mobileOpen}
         onNavigate={closeMobile}

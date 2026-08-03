@@ -2,6 +2,8 @@ import { auth } from "@/lib/auth"
 import { getActiveLanes, getLaneByCode } from "@/lib/actions/lanes"
 import { LanePicker } from "@/components/shared/lane-picker"
 import { WeighingPageClient } from "@/components/pos-2/weighing-page-client"
+import { getSetting } from "@/lib/settings"
+import type { RoundMode } from "@/lib/calculations"
 
 export default async function WeighingPage({ searchParams }: { searchParams: Promise<{ lane?: string }> }) {
   const session = await auth()
@@ -54,7 +56,7 @@ export default async function WeighingPage({ searchParams }: { searchParams: Pro
         </div>
       </div>
 
-      <WeighingPageClient laneId={lane.id} />
+      <WeighingPageClient laneId={lane.id} defaultRoundingMode={(await getSetting("WEIGHT_ROUND_MODE", "normal")) as RoundMode} />
     </div>
   )
 }

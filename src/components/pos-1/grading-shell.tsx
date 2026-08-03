@@ -68,9 +68,12 @@ interface Props {
   laneId: number
   todayDraftFarmerIds: number[]
   baleItems: BaleItem[]
+  maxMoisturePercent: number
+  defaultMoisturePercent: number
+  defaultWarehouseId: number
 }
 
-export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, customers, warehouse, warehouseName, laneCode, laneName, laneId, todayDraftFarmerIds, baleItems: initialBaleItems }: Props) {
+export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, customers, warehouse, warehouseName, laneCode, laneName, laneId, todayDraftFarmerIds, baleItems: initialBaleItems, maxMoisturePercent, defaultMoisturePercent, defaultWarehouseId }: Props) {
   const [baleItems, setBaleItems] = useState(initialBaleItems)
   const [draftFarmerIds, setDraftFarmerIds] = useState(todayDraftFarmerIds)
 
@@ -94,7 +97,7 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
   const [tobaccoTypeId, setTobaccoTypeId] = useState("")
   const [leafTypeId, setLeafTypeId] = useState("")
   const [packingTypeId, setPackingTypeId] = useState("")
-  const [moisturePercent, setMoisturePercent] = useState("3.00")
+  const [moisturePercent, setMoisturePercent] = useState(String(defaultMoisturePercent))
   const [packingWeight, setPackingWeight] = useState("2.00")
   const defaultCustomerId = customers.find((c) => c.name === "Gudang Sendiri")?.id ?? customers[0]?.id ?? 0
   const [customerId, setCustomerId] = useState(defaultCustomerId)
@@ -216,8 +219,8 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
     if (!leafTypeId) { toast.error("Pilih jenis daun"); return }
     if (!packingTypeId) { toast.error("Pilih jenis packing"); return }
     if (!selectedGrade) { toast.error("Pilih grade"); return }
-    if (moisturePercent.trim() === "" || isNaN(Number(moisturePercent)) || Number(moisturePercent) < 0 || Number(moisturePercent) > 20) {
-      toast.error("Isi potongan MC yang valid (0–20%)")
+    if (moisturePercent.trim() === "" || isNaN(Number(moisturePercent)) || Number(moisturePercent) < 0 || Number(moisturePercent) > maxMoisturePercent) {
+      toast.error(`Isi potongan MC yang valid (0–${maxMoisturePercent}%)`)
       return
     }
     if (packingWeight.trim() === "" || isNaN(Number(packingWeight)) || Number(packingWeight) < 0) {
@@ -492,7 +495,7 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
               <div>
                 <label className="field-wf-label">Potongan MC (%)</label>
                 <input
-                  type="number" step="0.5" min="0" max="20"
+                  type="number" step="0.5" min="0" max={maxMoisturePercent}
                   value={moisturePercent}
                   onChange={(e) => setMoisturePercent(e.target.value)}
                   className="field-input"

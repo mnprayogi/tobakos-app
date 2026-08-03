@@ -21,7 +21,7 @@ interface FarmerMeta { id: number; name: string; nik: string | null }
 
 type Tab = "farmer" | "period" | "transaction"
 
-export function ReportsClient({ warehouses, farmers }: { warehouses: WarehouseMeta[]; farmers: FarmerMeta[] }) {
+export function ReportsClient({ warehouses, farmers, companyName }: { warehouses: WarehouseMeta[]; farmers: FarmerMeta[]; companyName: string }) {
   const [tab, setTab] = useState<Tab>("farmer")
   const [from, setFrom] = useState("")
   const [to, setTo] = useState("")
@@ -382,6 +382,7 @@ export function ReportsClient({ warehouses, farmers }: { warehouses: WarehouseMe
           farmerRows={farmerRows}
           periodRows={periodRows}
           txRows={txRows}
+          companyName={companyName}
         />
       </div>
     </div>

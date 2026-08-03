@@ -14,7 +14,7 @@ function entryLabel(e: LoanEntryInfo): string {
   return "Bayar Tunai"
 }
 
-export function LoanBookClient({ book }: { book: LoanBook }) {
+export function LoanBookClient({ book, companyName }: { book: LoanBook; companyName: string }) {
   const [dialog, setDialog] = useState<LoanDialogState | null>(null)
   const printRef = useRef<HTMLDivElement>(null)
   const handlePrint = usePrintDocument(printRef, printBaseStyle, {
@@ -40,7 +40,7 @@ export function LoanBookClient({ book }: { book: LoanBook }) {
       </div>
 
       <div className="hidden" aria-hidden="true">
-        <LoanBookPrint ref={printRef} book={book} />
+        <LoanBookPrint ref={printRef} book={book} companyName={companyName} />
       </div>
 
       <div className="rounded-xl border border-border bg-card p-4 print:border-0 print:rounded-none print:p-0">

@@ -25,6 +25,7 @@ interface ReportPrintProps {
   farmerRows: FarmerSummaryRow[] | null
   periodRows: PeriodSummaryRow[] | null
   txRows: TransactionDetailRow[] | null
+  companyName?: string
 }
 
 const th: CSSProperties = {
@@ -45,7 +46,7 @@ const td: CSSProperties = {
 }
 
 export const ReportPrint = forwardRef<HTMLDivElement, ReportPrintProps>(function ReportPrint(
-  { tab, from, to, farmerRows, periodRows, txRows },
+  { tab, from, to, farmerRows, periodRows, txRows, companyName = "TobakOS" },
   ref
 ) {
   const title =
@@ -87,7 +88,7 @@ export const ReportPrint = forwardRef<HTMLDivElement, ReportPrintProps>(function
     <div ref={ref} style={{ width: "100%", maxWidth: "180mm", margin: "0 auto", fontFamily: "'Courier New', Courier, monospace" }}>
       <div style={{ textAlign: "center", marginBottom: "5mm", borderBottom: "2px solid #000", paddingBottom: "3mm" }}>
         <h1 style={{ fontSize: "15pt", fontWeight: 900, margin: "0 0 2mm", letterSpacing: "0.1em", color: "#000" }}>{title}</h1>
-        <p style={{ fontSize: "11pt", fontWeight: 600, margin: "0 0 1mm", color: "#000" }}>TobakOS · Gudang Tembakau</p>
+        <p style={{ fontSize: "11pt", fontWeight: 600, margin: "0 0 1mm", color: "#000" }}>{companyName} · Gudang Tembakau</p>
         <p style={{ fontSize: "9.5pt", color: "#222", margin: 0 }}>
           Periode: {dateLabel(from)} — {dateLabel(to)} · Daftar {rows.length}
         </p>
@@ -252,7 +253,7 @@ export const ReportPrint = forwardRef<HTMLDivElement, ReportPrintProps>(function
       </div>
 
       <div style={{ textAlign: "center", borderTop: "2.5px solid #000", paddingTop: "3mm", fontSize: "11pt", fontWeight: 700 }}>
-        <p style={{ color: "#000" }}>Dicetak dari TobakOS</p>
+        <p style={{ color: "#000" }}>Dicetak dari {companyName}</p>
       </div>
     </div>
   )

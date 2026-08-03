@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db"
 import { getActiveLanes, getLaneByCode } from "@/lib/actions/lanes"
 import { LanePicker } from "@/components/shared/lane-picker"
 import { GradingShell } from "@/components/pos-1/grading-shell"
+import { getSettingNumber } from "@/lib/settings"
 
 export default async function GradingPage({ searchParams }: { searchParams: Promise<{ lane?: string }> }) {
   const { lane: laneCode } = await searchParams
@@ -50,6 +51,12 @@ export default async function GradingPage({ searchParams }: { searchParams: Prom
     }),
   ])
 
+  const [maxMoisturePercent, defaultMoisturePercent, defaultWarehouseId] = await Promise.all([
+    getSettingNumber("MAX_MOISTURE_PERCENT", 20),
+    getSettingNumber("DEFAULT_MOISTURE_PERCENT", 3),
+    getSettingNumber("DEFAULT_WAREHOUSE_ID", 1),
+  ])
+
   const tobaccoTypes = rawTypes.map((t) => ({
     id: t.id,
     name: t.name,
@@ -93,6 +100,9 @@ export default async function GradingPage({ searchParams }: { searchParams: Prom
         laneId={lane.id}
         todayDraftFarmerIds={draftFarmerIds}
         baleItems={baleItems}
+        maxMoisturePercent={maxMoisturePercent}
+        defaultMoisturePercent={defaultMoisturePercent}
+        defaultWarehouseId={defaultWarehouseId}
       />
     </div>
   )

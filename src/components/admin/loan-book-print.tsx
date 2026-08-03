@@ -16,8 +16,8 @@ function entryLabel(type: string, method: string | null): string {
   return "BAYAR TUNAI"
 }
 
-export const LoanBookPrint = forwardRef<HTMLDivElement, { book: LoanBook }>(
-  function LoanBookPrint({ book }, ref) {
+export const LoanBookPrint = forwardRef<HTMLDivElement, { book: LoanBook; companyName?: string }>(
+  function LoanBookPrint({ book, companyName = "TobakOS" }, ref) {
     const opened = new Date(book.openedAt)
     const openedStr = opened.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })
 
@@ -25,7 +25,7 @@ export const LoanBookPrint = forwardRef<HTMLDivElement, { book: LoanBook }>(
       <div ref={ref} style={{ width: "100%", maxWidth: "180mm", margin: "0 auto", fontFamily: "'Courier New', Courier, monospace" }}>
         <div style={{ textAlign: "center", marginBottom: "5mm", borderBottom: "2px solid #000", paddingBottom: "3mm" }}>
           <h1 style={{ fontSize: "16pt", fontWeight: 900, margin: "0 0 2mm", letterSpacing: "0.1em", color: "#000" }}>BUKU HUTANG MODAL</h1>
-          <p style={{ fontSize: "11pt", fontWeight: 600, margin: "0 0 1mm", color: "#000" }}>TobakOS · Gudang Tembakau</p>
+          <p style={{ fontSize: "11pt", fontWeight: 600, margin: "0 0 1mm", color: "#000" }}>{companyName} · Gudang Tembakau</p>
           <p style={{ fontSize: "9pt", color: "#222", margin: 0 }}>Buku ini mencatat seluruh pinjaman modal &amp; pembayarannya per petani</p>
         </div>
 
@@ -121,7 +121,7 @@ export const LoanBookPrint = forwardRef<HTMLDivElement, { book: LoanBook }>(
         </div>
 
         <div style={{ textAlign: "center", borderTop: "2.5px solid #000", paddingTop: "3mm", fontSize: "11pt", fontWeight: 700 }}>
-          <p style={{ color: "#000" }}>Dicetak dari TobakOS</p>
+          <p style={{ color: "#000" }}>Dicetak dari {companyName}</p>
         </div>
       </div>
     )

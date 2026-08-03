@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/db"
+import { invalidateSetting } from "@/lib/settings"
 import {
   farmerSchema,
   customerSchema,
@@ -265,6 +266,7 @@ export async function updateSystemSetting(key: string, value: string) {
       update: { value },
       create: { key, value },
     })
+    invalidateSetting(key)
     revalidatePath("/admin/settings")
     return setting
   } catch (err) {
