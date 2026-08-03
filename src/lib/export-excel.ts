@@ -166,7 +166,7 @@ function buildTransactionSheets(rows: TransactionDetailRow[], from: string, to: 
           n(i.packingWeight, KG_FMT),
           n(i.netWeight, KG_FMT),
           n(i.pricePerKg, MONEY_FMT),
-          n(i.priceAdjustment, "#,##0"),
+          n(i.priceAdjustment, "#,##0.##"),
           n(i.subtotal, MONEY_FMT),
         ] as Row
       )
