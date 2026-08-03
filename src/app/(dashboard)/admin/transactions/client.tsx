@@ -13,6 +13,7 @@ import {
   type PayPurchase,
   type PaymentUpdate,
 } from "@/components/admin/payment-dialog"
+import { BuktiLunasDialog } from "@/components/admin/bukti-lunas-dialog"
 
 interface PurchaseItem {
   id: number
@@ -118,6 +119,7 @@ export function TransactionsClient({
   const [query, setQuery] = useState(q)
   const [statusFilter, setStatusFilter] = useState(status)
   const [payTarget, setPayTarget] = useState<PayPurchase | null>(null)
+  const [receiptTarget, setReceiptTarget] = useState<number | null>(null)
 
   useEffect(() => {
     if (query === q) return
@@ -141,6 +143,7 @@ export function TransactionsClient({
           : p
       )
     )
+    if (updated.paidOff) setReceiptTarget(updated.id)
   }
 
   async function handleReopen(id: number) {
@@ -300,7 +303,12 @@ export function TransactionsClient({
                         </div>
                       )}
                       {p.status === "PAID" && (
-                        <span className="text-[11px] text-muted-2">Selesai</span>
+                        <button
+                          onClick={() => setReceiptTarget(p.id)}
+                          className="text-[11px] font-bold text-emerald cursor-pointer hover:underline"
+                        >
+                          Cetak Bukti
+                        </button>
                       )}
                     </td>
                   </tr>
@@ -326,6 +334,11 @@ export function TransactionsClient({
         purchase={payTarget}
         onClose={() => setPayTarget(null)}
         onPaid={handlePaid}
+      />
+
+      <BuktiLunasDialog
+        purchaseId={receiptTarget}
+        onClose={() => setReceiptTarget(null)}
       />
     </div>
   )

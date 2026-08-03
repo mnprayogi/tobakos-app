@@ -6,6 +6,7 @@ import { requireRoles } from "@/lib/roles"
 import { getDebtSummary } from "@/lib/actions/finance"
 import { getLoansData } from "@/lib/actions/loans"
 import { getPeriodSummary } from "@/lib/actions/reports"
+import { toDateKey } from "@/lib/utils"
 
 function todayStart(): Date {
   const d = new Date()
@@ -267,7 +268,7 @@ export async function getOwnerDashboard(): Promise<OwnerDashboard> {
       }),
       prisma.purchase.groupBy({ by: ["status"], _count: { _all: true } }),
       prisma.purchaseItem.count(),
-      getPeriodSummary({ from: from.toISOString().slice(0, 10) }),
+      getPeriodSummary({ from: toDateKey(from) }),
       getDebtSummary(),
       getLoansData(),
       prisma.purchase.groupBy({
@@ -311,7 +312,7 @@ export async function getOwnerDashboard(): Promise<OwnerDashboard> {
         day: "2-digit",
         month: "2-digit",
       }).format(d),
-      date: d.toISOString().slice(0, 10),
+      date: toDateKey(d),
     })
   }
   const trendMap = new Map(trend.map((r) => [r.date, r]))

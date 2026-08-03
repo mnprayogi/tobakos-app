@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/db"
 import { requireRoles } from "@/lib/roles"
 import { roundMoney } from "@/lib/calculations"
+import { toDateKey } from "@/lib/utils"
 
 export interface ReportFilters {
   from?: string
@@ -62,7 +63,11 @@ export interface TransactionDetailRow {
     labelCode: string
     grade: string
     status: string
+    grossWeight: number | null
+    packingWeight: number
     netWeight: number | null
+    pricePerKg: number | null
+    priceAdjustment: number
     subtotal: number
     customerName: string | null
   }[]
@@ -92,6 +97,12 @@ function dateRange(filters: ReportFilters): { from: Date; to: Date } {
   return { from, to }
 }
 
+type ReportStatus = "DRAFT" | "WEIGHED" | "APPROVED" | "PAID"
+
+function statusWhere(status?: string | null): {} | { status: ReportStatus } {
+  return status ? { status: status as ReportStatus } : {}
+}
+
 export async function getFarmerSummary(filters: ReportFilters): Promise<FarmerSummaryRow[]> {
   await requireRoles("ADMIN", "FINANCE", "OWNER")
   const { from, to } = dateRange(filters)
@@ -101,6 +112,7 @@ export async function getFarmerSummary(filters: ReportFilters): Promise<FarmerSu
       transactionDate: { gte: from, lte: to },
       ...(filters.warehouseId ? { warehouseId: filters.warehouseId } : {}),
       ...(filters.farmerId ? { farmerId: filters.farmerId } : {}),
+      ...statusWhere(filters.status),
     },
     include: {
       farmer: true,
@@ -165,6 +177,7 @@ export async function getPeriodSummary(filters: ReportFilters): Promise<PeriodSu
     where: {
       transactionDate: { gte: from, lte: to },
       ...(filters.warehouseId ? { warehouseId: filters.warehouseId } : {}),
+      ...statusWhere(filters.status),
     },
     include: { _count: { select: { items: true } } },
     orderBy: { transactionDate: "asc" },
@@ -172,7 +185,7 @@ export async function getPeriodSummary(filters: ReportFilters): Promise<PeriodSu
 
   const map = new Map<string, PeriodSummaryRow>()
   for (const p of purchases) {
-    const label = new Date(p.transactionDate).toISOString().slice(0, 10)
+    const label = toDateKey(new Date(p.transactionDate))
     const existing = map.get(label)
     const totalPrice = Number(p.totalPrice)
     const paid = Number(p.paidAmount)
@@ -207,7 +220,7 @@ export async function getTransactionDetail(filters: ReportFilters): Promise<Tran
       transactionDate: { gte: from, lte: to },
       ...(filters.warehouseId ? { warehouseId: filters.warehouseId } : {}),
       ...(filters.farmerId ? { farmerId: filters.farmerId } : {}),
-      ...(filters.status ? { status: filters.status as "DRAFT" | "WEIGHED" | "APPROVED" | "PAID" } : {}),
+      ...statusWhere(filters.status),
     },
     include: {
       farmer: true,
@@ -250,7 +263,11 @@ export async function getTransactionDetail(filters: ReportFilters): Promise<Tran
         labelCode: i.labelCode,
         grade: i.grade,
         status: i.status,
+        grossWeight: i.grossWeight,
+        packingWeight: i.packingWeight,
         netWeight: i.netWeight,
+        pricePerKg: i.pricePerKg != null ? Number(i.pricePerKg) : null,
+        priceAdjustment: Number(i.priceAdjustment),
         subtotal: Number(i.subtotal ?? 0),
         customerName: i.customer?.name ?? null,
       })),

@@ -17,6 +17,7 @@ import {
 } from "@/lib/actions/grading"
 import { QRCodeSVG } from "qrcode.react"
 import { laneToken } from "@/lib/barcode"
+import { toDateKey } from "@/lib/utils"
 import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { StickerPreview } from "@/components/shared/sticker-preview"
 import { StatusPill } from "@/components/shared/status-pill"
@@ -127,7 +128,7 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
   )
 
   const shortLane = laneToken(laneCode, warehouse)
-  const todaySampleCode = `${warehouse}-${shortLane}-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-XXXX`
+  const todaySampleCode = `${warehouse}-${shortLane}-${toDateKey(new Date()).replace(/-/g, "")}-XXXX`
 
   function handleGradeSelect(name: string, price: number) {
     setSelectedGrade(name)
@@ -285,7 +286,7 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
   const previewLabelCode = lastItem
     ? lastItem.labelCode
     : selectedFarmer
-    ? `${warehouse}-${shortLane}-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-001`
+    ? `${warehouse}-${shortLane}-${toDateKey(new Date()).replace(/-/g, "")}-001`
     : todaySampleCode
 
   const previewFarmerName = lastItem

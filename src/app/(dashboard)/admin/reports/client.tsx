@@ -14,6 +14,7 @@ import { formatCurrency, formatDate } from "@/lib/utils"
 import { StatusPill } from "@/components/shared/status-pill"
 import { usePrintDocument, printBaseStyle } from "@/lib/print"
 import { ReportPrint } from "@/components/admin/report-print"
+import { exportReportExcel } from "@/lib/export-excel"
 
 interface WarehouseMeta { id: number; code: string; name: string }
 interface FarmerMeta { id: number; name: string; nik: string | null }
@@ -37,6 +38,10 @@ export function ReportsClient({ warehouses, farmers }: { warehouses: WarehouseMe
   const handlePrint = usePrintDocument(printRef, printBaseStyle, { documentTitle: "Laporan-TobakOS" })
 
   async function handleLoad() {
+    if (from && to && from > to) {
+      toast.error("Periode tidak valid — tanggal 'Dari' harus sebelum 'Sampai'")
+      return
+    }
     setLoading(true)
     try {
       const filters = {
@@ -49,6 +54,23 @@ export function ReportsClient({ warehouses, farmers }: { warehouses: WarehouseMe
       if (tab === "farmer") setFarmerRows(await getFarmerSummary(filters))
       if (tab === "period") setPeriodRows(await getPeriodSummary(filters))
       if (tab === "transaction") setTxRows(await getTransactionDetail(filters))
+    } catch (err) {
+      toast.error((err as Error).message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleExportExcel() {
+    setLoading(true)
+    try {
+      await exportReportExcel(
+        tab,
+        { farmerRows, periodRows, txRows },
+        from,
+        to
+      )
+      toast.success("File Excel berhasil diunduh")
     } catch (err) {
       toast.error((err as Error).message)
     } finally {
@@ -97,8 +119,15 @@ export function ReportsClient({ warehouses, farmers }: { warehouses: WarehouseMe
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <h1 className="text-lg font-bold text-foreground">Laporan</h1>
         <button
+          onClick={handleExportExcel}
+          disabled={loading || (farmerRows === null && periodRows === null && txRows === null)}
+          className="rounded-lg bg-panel-alt px-4 py-2 font-bold text-[12px] text-emerald border border-border-soft cursor-pointer hover:border-emerald/40 disabled:opacity-50"
+        >
+          Export Excel
+        </button>
+        <button
           onClick={handlePrint}
-          disabled={loading}
+          disabled={loading || (farmerRows === null && periodRows === null && txRows === null)}
           className="rounded-lg bg-emerald px-4 py-2 font-bold text-[12px] text-primary-foreground cursor-pointer hover:bg-emerald/90 disabled:opacity-50"
         >
           Cetak / Export PDF
@@ -131,18 +160,16 @@ export function ReportsClient({ warehouses, farmers }: { warehouses: WarehouseMe
               </select>
             </div>
           )}
-          {tab === "transaction" && (
-            <div>
-              <label className="text-[10.5px] uppercase font-bold text-muted-2 block mb-1">Status</label>
-              <select value={status} onChange={(e) => setStatus(e.target.value)} className="bg-panel-alt border border-border-soft text-foreground text-[13px] px-2.5 py-2 rounded-lg outline-none">
-                <option value="">Semua</option>
-                <option value="DRAFT">DRAFT</option>
-                <option value="WEIGHED">WEIGHED</option>
-                <option value="APPROVED">APPROVED</option>
-                <option value="PAID">PAID</option>
-              </select>
-            </div>
-          )}
+          <div>
+            <label className="text-[10.5px] uppercase font-bold text-muted-2 block mb-1">Status</label>
+            <select value={status} onChange={(e) => setStatus(e.target.value)} className="bg-panel-alt border border-border-soft text-foreground text-[13px] px-2.5 py-2 rounded-lg outline-none">
+              <option value="">Semua</option>
+              <option value="DRAFT">DRAFT</option>
+              <option value="WEIGHED">WEIGHED</option>
+              <option value="APPROVED">APPROVED</option>
+              <option value="PAID">PAID</option>
+            </select>
+          </div>
           <button
             onClick={handleLoad}
             disabled={loading}
@@ -158,7 +185,13 @@ export function ReportsClient({ warehouses, farmers }: { warehouses: WarehouseMe
             <button
               key={t.key}
               type="button"
-              onClick={() => { setTab(t.key); setFarmerRows(null); setPeriodRows(null); setTxRows(null) }}
+              onClick={() => {
+                setTab(t.key)
+                if (t.key === "period") setFarmerId("")
+                setFarmerRows(null)
+                setPeriodRows(null)
+                setTxRows(null)
+              }}
               className={`px-4 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap ${
                 tab === t.key ? "bg-emerald text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
               }`}
@@ -295,13 +328,18 @@ export function ReportsClient({ warehouses, farmers }: { warehouses: WarehouseMe
                       </div>
                     </div>
                     <div className="overflow-x-auto">
-                    <table className="w-full min-w-[560px] border-collapse text-[12px]">
+                    <table className="w-full min-w-[960px] border-collapse text-[12px]">
                       <thead>
                         <tr>
                           <th className="text-left text-[10px] uppercase font-bold text-muted-2 py-1.5 px-3">Barcode</th>
+                          <th className="text-left text-[10px] uppercase font-bold text-muted-2 py-1.5 px-2">Tanggal</th>
                           <th className="text-left text-[10px] uppercase font-bold text-muted-2 py-1.5 px-2">Grade</th>
                           <th className="text-left text-[10px] uppercase font-bold text-muted-2 py-1.5 px-2">Customer</th>
+                          <th className="text-right text-[10px] uppercase font-bold text-muted-2 py-1.5 px-2">Bruto</th>
+                          <th className="text-right text-[10px] uppercase font-bold text-muted-2 py-1.5 px-2">Tara</th>
                           <th className="text-right text-[10px] uppercase font-bold text-muted-2 py-1.5 px-2">Netto</th>
+                          <th className="text-right text-[10px] uppercase font-bold text-muted-2 py-1.5 px-2">Harga</th>
+                          <th className="text-right text-[10px] uppercase font-bold text-muted-2 py-1.5 px-2">Adj</th>
                           <th className="text-right text-[10px] uppercase font-bold text-muted-2 py-1.5 px-3">Subtotal</th>
                         </tr>
                       </thead>
@@ -309,9 +347,16 @@ export function ReportsClient({ warehouses, farmers }: { warehouses: WarehouseMe
                         {p.items.map((i) => (
                           <tr key={i.id}>
                             <td className="py-1.5 px-3 font-mono text-foreground">{i.labelCode}</td>
+                            <td className="py-1.5 px-2 font-mono text-muted-foreground">{formatDate(p.transactionDate)}</td>
                             <td className="py-1.5 px-2 font-mono text-foreground">{i.grade}</td>
                             <td className="py-1.5 px-2 text-muted-foreground">{i.customerName ?? "—"}</td>
+                            <td className="py-1.5 px-2 font-mono text-right text-foreground">{i.grossWeight != null ? i.grossWeight.toFixed(1) : "—"}</td>
+                            <td className="py-1.5 px-2 font-mono text-right text-foreground">{i.packingWeight.toFixed(1)}</td>
                             <td className="py-1.5 px-2 font-mono text-right text-foreground">{i.netWeight != null ? i.netWeight.toFixed(1) : "—"}</td>
+                            <td className="py-1.5 px-2 font-mono text-right text-foreground">{i.pricePerKg != null ? i.pricePerKg.toLocaleString("id-ID") : "—"}</td>
+                            <td className="py-1.5 px-2 font-mono text-right text-amber">
+                              {i.priceAdjustment > 0 ? `+${i.priceAdjustment}` : i.priceAdjustment}
+                            </td>
                             <td className="py-1.5 px-3 font-mono text-right text-foreground">{formatCurrency(i.subtotal)}</td>
                           </tr>
                         ))}

@@ -378,3 +378,83 @@ export async function getDebtSummary(): Promise<DebtFarmer[]> {
     return { ...f, sisa, status }
   })
 }
+
+export interface BuktiPayment {
+  id: number
+  amount: number
+  method: string
+  note: string | null
+  paidBy: string | null
+  paidAt: Date
+  loanDeduction: number
+}
+
+export interface BuktiData {
+  purchaseId: number
+  transactionCode: string
+  transactionDate: Date
+  farmerName: string
+  farmerNik: string | null
+  warehouseLabel: string | null
+  laneCode: string | null
+  totalItems: number
+  totalNetWeight: number
+  totalPrice: number
+  originalTotalPrice: number | null
+  paidAmount: number
+  totalLoanDeduction: number
+  remaining: number
+  paidBy: string | null
+  lastPaidAt: Date | null
+  payments: BuktiPayment[]
+}
+
+export async function getBuktiData(purchaseId: number): Promise<BuktiData> {
+  await requireRoles("ADMIN", "FINANCE", "OWNER")
+
+  const purchase = await prisma.purchase.findUnique({
+    where: { id: purchaseId },
+    include: {
+      farmer: true,
+      warehouse: true,
+      lane: true,
+      payments: { orderBy: { paidAt: "asc" } },
+    },
+  })
+  if (!purchase) throw new Error("Transaksi tidak ditemukan")
+  if (purchase.status !== "PAID") throw new Error("Transaksi belum lunas — tidak bisa mencetak bukti lunas")
+
+  const totalPrice = Number(purchase.totalPrice)
+  const paidAmount = Number(purchase.paidAmount)
+  const totalLoanDeduction = roundMoney(
+    purchase.payments.reduce((s, pay) => s + Number(pay.loanDeduction ?? 0), 0)
+  )
+
+  return {
+    purchaseId: purchase.id,
+    transactionCode: purchase.transactionCode,
+    transactionDate: purchase.transactionDate,
+    farmerName: purchase.farmer.name,
+    farmerNik: purchase.farmer.nik,
+    warehouseLabel: purchase.warehouse?.name ?? purchase.warehouse?.code ?? null,
+    laneCode: purchase.lane?.code ?? null,
+    totalItems: purchase.totalItems,
+    totalNetWeight: purchase.totalNetWeight,
+    totalPrice,
+    originalTotalPrice: purchase.originalTotalPrice != null ? Number(purchase.originalTotalPrice) : null,
+    paidAmount,
+    totalLoanDeduction,
+    remaining: roundMoney(totalPrice - paidAmount),
+    paidBy: purchase.paidBy,
+    lastPaidAt: purchase.payments.length > 0 ? purchase.payments[purchase.payments.length - 1].paidAt : null,
+    payments: purchase.payments.map((pay) => ({
+      id: pay.id,
+      amount: Number(pay.amount),
+      method: pay.method,
+      note: pay.note,
+      paidBy: pay.paidBy,
+      paidAt: pay.paidAt,
+      loanDeduction: Number(pay.loanDeduction ?? 0),
+    })),
+  }
+}

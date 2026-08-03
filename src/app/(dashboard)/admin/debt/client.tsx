@@ -4,6 +4,7 @@ import { Fragment, useState } from "react"
 import type { DebtFarmer, DebtStatus } from "@/lib/actions/finance"
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils"
 import { ChevronDown, ChevronRight } from "lucide-react"
+import { BuktiLunasDialog } from "@/components/admin/bukti-lunas-dialog"
 
 const statusStyle: Record<DebtStatus, string> = {
   HUTANG: "bg-amber/12 text-amber border border-amber/35",
@@ -19,6 +20,7 @@ const statusLabel: Record<DebtStatus, string> = {
 
 export function DebtClient({ farmers }: { farmers: DebtFarmer[] }) {
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
+  const [receiptTarget, setReceiptTarget] = useState<number | null>(null)
 
   const totalOutstanding = farmers.reduce((s, f) => s + f.sisa, 0)
   const totalPaid = farmers.reduce((s, f) => s + f.totalDibayar, 0)
@@ -97,14 +99,25 @@ export function DebtClient({ farmers }: { farmers: DebtFarmer[] }) {
                             {f.purchases.map((p) => (
                               <div key={p.id} className="rounded-lg border border-border-soft bg-panel-alt p-3">
                                 <div className="flex items-center justify-between flex-wrap gap-2">
-                                  <div className="flex items-center gap-3">
-                                    <span className="font-mono font-bold text-emerald text-xs">{p.transactionCode}</span>
-                                    <span className="text-[10.5px] text-muted-2 font-mono">{formatDate(p.transactionDate)}</span>
-                                    <span className="text-[10.5px] text-muted-2">({p.itemCount} bale)</span>
-                                  </div>
+                                <div className="flex items-center gap-3">
+                                  <span className="font-mono font-bold text-emerald text-xs">{p.transactionCode}</span>
+                                  <span className="text-[10.5px] text-muted-2 font-mono">{formatDate(p.transactionDate)}</span>
+                                  <span className="text-[10.5px] text-muted-2">({p.itemCount} bale)</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  {p.derived === "LUNAS" && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setReceiptTarget(p.id)}
+                                      className="text-[10.5px] font-bold text-emerald cursor-pointer hover:underline"
+                                    >
+                                      Cetak Bukti
+                                    </button>
+                                  )}
                                   <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${statusStyle[p.derived]}`}>
                                     {statusLabel[p.derived]}
                                   </span>
+                                </div>
                                 </div>
                                 <div className="flex gap-6 mt-2 text-[11.5px] flex-wrap">
                                   <span className="text-muted-foreground">Tagihan: <b className="font-mono text-foreground">{formatCurrency(p.totalPrice)}</b></span>
@@ -152,6 +165,11 @@ export function DebtClient({ farmers }: { farmers: DebtFarmer[] }) {
           </div>
         )}
       </div>
+
+      <BuktiLunasDialog
+        purchaseId={receiptTarget}
+        onClose={() => setReceiptTarget(null)}
+      />
     </div>
   )
 }

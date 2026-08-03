@@ -4,7 +4,6 @@ import { useState } from "react"
 import { toast } from "sonner"
 import { saveWeighData } from "@/lib/actions/weighing"
 import { useOfflineQueue, isNetworkError } from "@/hooks/useOfflineQueue"
-import { StickerPreview } from "@/components/shared/sticker-preview"
 import { StatusPill } from "@/components/shared/status-pill"
 import {
   calculateWeightAfterPacking,
@@ -110,14 +109,6 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
             <StatusPill status="WEIGHED" />
           </div>
         </div>
-
-        <StickerPreview
-          labelCode={item.labelCode}
-          grade={item.grade}
-          warehouse={item.labelCode.split("-")[0]}
-          lane={item.labelCode.split("-")[1]}
-          farmerName={item.farmerName}
-        />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
@@ -319,13 +310,6 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
           {item.labelCode}
         </span>
       </div>
-
-      <StickerPreview
-        labelCode={item.labelCode}
-        grade={item.grade}
-        warehouse={item.labelCode.split("-")[0]}
-        farmerName={item.farmerName}
-      />
 
       <div className="grid grid-cols-2 gap-3">
         <div>

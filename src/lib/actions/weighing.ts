@@ -128,6 +128,7 @@ export async function saveWeighData(data: WeighInput) {
   })
 
   revalidatePath("/pos-2/weighing")
+  revalidatePath("/pos-2/transactions")
   return {
     id: updated.id,
     grossWeight: updated.grossWeight,
@@ -309,6 +310,7 @@ export async function endWeighSession(purchaseId: number, laneId: number) {
   }
 
   revalidatePath("/pos-2/weighing")
+  revalidatePath("/pos-2/transactions")
   return {
     transactionCode: purchase.transactionCode,
     farmerName: purchase.farmer.name,
@@ -328,6 +330,66 @@ export interface FarmerQueueItem {
   primaryPurchaseId: number
   gradedCount: number
   transactionCount: number
+}
+
+export interface WeighedTransaction {
+  id: number
+  transactionCode: string
+  transactionLabel: string
+  laneCode: string
+  farmerName: string
+  farmerNik: string | null
+  transactionDate: Date
+  status: string
+  totalBales: number
+  weighedCount: number
+  unweighedCount: number
+  totalNetWeight: number
+  totalPrice: number
+  weighedBy: string | null
+  createdAt: Date
+}
+
+export async function getWeighedTransactions(laneId: number): Promise<WeighedTransaction[]> {
+  const purchases = await prisma.purchase.findMany({
+    where: {
+      laneId,
+      status: { in: ["DRAFT", "WEIGHED"] },
+      items: { some: { status: "WEIGHED" } },
+    },
+    orderBy: { createdAt: "desc" },
+    include: {
+      farmer: true,
+      lane: true,
+      items: {
+        where: { status: { in: ["GRADED", "WEIGHED"] } },
+        orderBy: { inputOrder: "asc" },
+        select: { labelCode: true, status: true },
+      },
+    },
+  })
+
+  return purchases.map((p, idx) => {
+    const weighedCount = p.items.filter((i) => i.status === "WEIGHED").length
+    const unweighedCount = p.items.filter((i) => i.status === "GRADED").length
+    return {
+      id: p.id,
+      transactionCode: p.transactionCode,
+      transactionLabel: `Transaksi #${idx + 1}`,
+      laneCode: p.lane?.code ?? "",
+      farmerName: p.farmer.name,
+      farmerNik: p.farmer.nik,
+      transactionDate: p.transactionDate,
+      status: p.status,
+      totalBales: p.totalItems,
+      weighedCount,
+      unweighedCount,
+      totalNetWeight: Number(p.totalNetWeight ?? 0),
+      totalPrice: Number(p.totalPrice ?? 0),
+      weighedBy: p.weighedBy,
+      createdAt: p.createdAt,
+    }
+  })
 }
 
 export async function getFarmersWithBales(laneId: number): Promise<FarmerQueueItem[]> {
