@@ -147,11 +147,11 @@ function buildTransactionSheets(rows: TransactionDetailRow[], from: string, to: 
     ]),
   ]
 
-  const itemWidths = [20, 12, 24, 22, 10, 20, 14, 12, 14, 14, 15, 16]
+  const itemWidths = [20, 12, 24, 22, 10, 20, 14, 12, 12, 14, 14, 15, 16]
   const itemColumns = itemWidths.map((width) => ({ width }))
   const itemData: SheetData = [
     titleRow(`RINCIAN BALE — ${from || "awal"} s/d ${to || "sekarang"}`, itemColumns.length),
-    headerRow(["Kode Transaksi", "Tanggal", "Barcode", "Petani", "Grade", "Customer", "Bruto (kg)", "Tara (kg)", "Netto (kg)", "Harga (Rp/kg)", "Adj Harga (Rp/kg)", "Subtotal"]),
+    headerRow(["Kode Transaksi", "Tanggal", "Barcode", "Petani", "Grade", "Customer", "Bruto (kg)", "Pot. MC (kg)", "Pot. Packing (kg)", "Netto (kg)", "Harga (Rp/kg)", "Adj Harga (Rp/kg)", "Subtotal"]),
     ...rows.flatMap((p) =>
       p.items.map((i) =>
         [
@@ -162,6 +162,7 @@ function buildTransactionSheets(rows: TransactionDetailRow[], from: string, to: 
           txt(i.grade),
           txt(i.customerName),
           n(i.grossWeight, KG_FMT),
+          n(i.moistureDeduction, KG_FMT),
           n(i.packingWeight, KG_FMT),
           n(i.netWeight, KG_FMT),
           n(i.pricePerKg, MONEY_FMT),
@@ -179,6 +180,12 @@ function buildTransactionSheets(rows: TransactionDetailRow[], from: string, to: 
       { value: "", ...border, backgroundColor: "#f2f2f2" },
       n(
         rows.reduce((s, p) => s + p.items.reduce((si, i) => si + (i.grossWeight ?? 0), 0), 0),
+        KG_FMT,
+        "right",
+        true
+      ),
+      n(
+        rows.reduce((s, p) => s + p.items.reduce((si, i) => si + (i.moistureDeduction ?? 0), 0), 0),
         KG_FMT,
         "right",
         true

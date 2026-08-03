@@ -290,7 +290,7 @@ export async function endWeighSession(purchaseId: number, laneId: number) {
     }
     existing.count++
     existing.totalGross += Number(item.grossWeight ?? 0)
-    existing.totalTara += Number(item.packingWeight ?? 0)
+    existing.totalTara += Number(item.packingWeight ?? 0) + Number(item.moistureDeduction ?? 0)
     existing.totalNet += Number(item.netWeight ?? 0)
     existing.totalSubtotal += Number(item.subtotal ?? 0)
     gradeMap.set(item.grade, existing)

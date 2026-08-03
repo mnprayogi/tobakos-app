@@ -65,6 +65,7 @@ export interface TransactionDetailRow {
     status: string
     grossWeight: number | null
     packingWeight: number
+    moistureDeduction: number | null
     netWeight: number | null
     pricePerKg: number | null
     priceAdjustment: number
@@ -265,6 +266,7 @@ export async function getTransactionDetail(filters: ReportFilters): Promise<Tran
         status: i.status,
         grossWeight: i.grossWeight,
         packingWeight: i.packingWeight,
+        moistureDeduction: i.moistureDeduction,
         netWeight: i.netWeight,
         pricePerKg: i.pricePerKg != null ? Number(i.pricePerKg) : null,
         priceAdjustment: Number(i.priceAdjustment),

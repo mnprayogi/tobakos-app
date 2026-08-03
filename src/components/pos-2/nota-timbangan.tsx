@@ -81,6 +81,7 @@ export const NotaTimbangan = forwardRef<HTMLDivElement, Props>(
               <th style={{ border: "1.5px solid #000", padding: "2.5mm 3mm", fontSize: "10pt", fontWeight: 800, textAlign: "center", background: "#e5e5e5", color: "#000" }}>Bruto (kg)</th>
               <th style={{ border: "1.5px solid #000", padding: "2.5mm 3mm", fontSize: "10pt", fontWeight: 800, textAlign: "center", background: "#e5e5e5", color: "#000" }}>Tara (kg)</th>
               <th style={{ border: "1.5px solid #000", padding: "2.5mm 3mm", fontSize: "10pt", fontWeight: 800, textAlign: "center", background: "#e5e5e5", color: "#000" }}>Netto (kg)</th>
+              <th style={{ border: "1.5px solid #000", padding: "2.5mm 3mm", fontSize: "10pt", fontWeight: 800, textAlign: "center", background: "#e5e5e5", color: "#000" }}>Komposisi (%)</th>
               <th style={{ border: "1.5px solid #000", padding: "2.5mm 3mm", fontSize: "10pt", fontWeight: 800, textAlign: "center", background: "#e5e5e5", color: "#000" }}>Subtotal</th>
             </tr>
           </thead>
@@ -91,8 +92,11 @@ export const NotaTimbangan = forwardRef<HTMLDivElement, Props>(
                 <td style={{ textAlign: "left", border: "1.5px solid #000", padding: "2mm 3mm", fontSize: "10pt", color: "#000" }}>{g.grade}</td>
                 <td style={{ textAlign: "right", border: "1.5px solid #000", padding: "2mm 3mm", fontSize: "10pt", color: "#000" }}>{g.count}</td>
                 <td style={{ textAlign: "right", border: "1.5px solid #000", padding: "2mm 3mm", fontSize: "10pt", color: "#000" }}>{g.totalGross.toFixed(1)}</td>
-                <td style={{ textAlign: "right", border: "1.5px solid #000", padding: "2mm 3mm", fontSize: "10pt", color: "#000" }}>{g.totalTara.toFixed(1)}</td>
+                <td style={{ textAlign: "right", border: "1.5px solid #000", padding: "2mm 3mm", fontSize: "10pt", color: "#000" }}>{g.totalTara > 0 ? g.totalTara.toFixed(1) : "\u2014"}</td>
                 <td style={{ textAlign: "right", border: "1.5px solid #000", padding: "2mm 3mm", fontSize: "10pt", color: "#000" }}>{g.totalNet.toFixed(1)}</td>
+                <td style={{ textAlign: "right", border: "1.5px solid #000", padding: "2mm 3mm", fontSize: "10pt", color: "#000" }}>
+                  {totals.totalNet > 0 ? `${((g.totalNet / totals.totalNet) * 100).toFixed(1)}%` : "\u2014"}
+                </td>
                 <td style={{ textAlign: "right", border: "1.5px solid #000", padding: "2mm 3mm", fontSize: "10pt", color: "#000", fontWeight: 700 }}>{fmtCurrency(g.totalSubtotal)}</td>
               </tr>
             ))}
@@ -102,8 +106,9 @@ export const NotaTimbangan = forwardRef<HTMLDivElement, Props>(
               <td colSpan={2} style={{ textAlign: "left", fontWeight: 900, border: "1.5px solid #000", padding: "2.5mm 3mm", fontSize: "11pt", borderTop: "2.5px solid #000", color: "#000", background: "#f5f5f5" }}>TOTAL</td>
               <td style={{ textAlign: "right", fontWeight: 900, border: "1.5px solid #000", padding: "2.5mm 3mm", fontSize: "11pt", borderTop: "2.5px solid #000", color: "#000", background: "#f5f5f5" }}>{totals.count}</td>
               <td style={{ textAlign: "right", fontWeight: 900, border: "1.5px solid #000", padding: "2.5mm 3mm", fontSize: "11pt", borderTop: "2.5px solid #000", color: "#000", background: "#f5f5f5" }}>{totals.totalGross.toFixed(1)}</td>
-              <td style={{ textAlign: "right", fontWeight: 900, border: "1.5px solid #000", padding: "2.5mm 3mm", fontSize: "11pt", borderTop: "2.5px solid #000", color: "#000", background: "#f5f5f5" }}>{totals.totalTara.toFixed(1)}</td>
+              <td style={{ textAlign: "right", fontWeight: 900, border: "1.5px solid #000", padding: "2.5mm 3mm", fontSize: "11pt", borderTop: "2.5px solid #000", color: "#000", background: "#f5f5f5" }}>{totals.totalTara > 0 ? totals.totalTara.toFixed(1) : "\u2014"}</td>
               <td style={{ textAlign: "right", fontWeight: 900, border: "1.5px solid #000", padding: "2.5mm 3mm", fontSize: "11pt", borderTop: "2.5px solid #000", color: "#000", background: "#f5f5f5" }}>{totals.totalNet.toFixed(1)}</td>
+              <td style={{ textAlign: "right", fontWeight: 900, border: "1.5px solid #000", padding: "2.5mm 3mm", fontSize: "11pt", borderTop: "2.5px solid #000", color: "#000", background: "#f5f5f5" }}>{totals.totalNet > 0 ? "100%" : "\u2014"}</td>
               <td style={{ textAlign: "right", fontWeight: 900, border: "1.5px solid #000", padding: "2.5mm 3mm", fontSize: "11pt", borderTop: "2.5px solid #000", color: "#000", background: "#f5f5f5" }}>{fmtCurrency(totals.totalSubtotal)}</td>
             </tr>
           </tfoot>

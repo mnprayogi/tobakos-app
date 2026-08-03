@@ -292,14 +292,18 @@ export function ReviewClient({ purchase }: { purchase: ReviewPurchase }) {
 
           {gradeSummary.length > 1 && (
             <div className="flex flex-wrap gap-2 mb-3">
-              {gradeSummary.map(([g, { count, net }]) => (
-                <span
-                  key={g}
-                  className="px-2 py-1 rounded-lg bg-panel-alt border border-border-soft text-[10.5px] font-mono text-muted-foreground"
-                >
-                  {g}: {count} bale · {net.toFixed(1)} kg
-                </span>
-              ))}
+              {(() => {
+                const totalNet = gradeSummary.reduce((s, [, v]) => s + v.net, 0)
+                return gradeSummary.map(([g, { count, net }]) => (
+                  <span
+                    key={g}
+                    className="px-2 py-1 rounded-lg bg-panel-alt border border-border-soft text-[10.5px] font-mono text-muted-foreground"
+                  >
+                    {g}: {count} bale · {net.toFixed(1)} kg
+                    {totalNet > 0 ? ` · ${((net / totalNet) * 100).toFixed(1)}%` : ""}
+                  </span>
+                ))
+              })()}
             </div>
           )}
 

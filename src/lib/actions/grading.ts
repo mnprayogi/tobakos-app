@@ -268,15 +268,17 @@ export async function saveGrade(data: GradeInput) {
 
 export async function deleteBale(id: number) {
   try {
-    const item = await prisma.purchaseItem.findUnique({ where: { id }, include: { purchase: true } })
-    if (!item) throw new Error("Bale tidak ditemukan")
-    if (item.status !== "GRADED") throw new Error("Hanya bale dengan status GRADED yang bisa dihapus")
+    await prisma.$transaction(async (tx) => {
+      const item = await tx.purchaseItem.findUnique({ where: { id }, include: { purchase: true } })
+      if (!item) throw new Error("Bale tidak ditemukan (mungkin sudah dihapus)")
+      if (item.status !== "GRADED") throw new Error("Hanya bale dengan status GRADED yang bisa dihapus")
 
-    await prisma.purchaseItem.delete({ where: { id } })
+      await tx.purchaseItem.delete({ where: { id } })
 
-    await prisma.purchase.update({
-      where: { id: item.purchaseId },
-      data: { totalItems: { decrement: 1 } },
+      await tx.purchase.update({
+        where: { id: item.purchaseId },
+        data: { totalItems: { decrement: 1 } },
+      })
     })
 
     revalidatePath("/pos-1/grading")

@@ -193,7 +193,8 @@ export const ReportPrint = forwardRef<HTMLDivElement, ReportPrintProps>(function
                     <th style={{ ...th, padding: "1.5mm 1.5mm", fontSize: "8.5pt" }}>Tanggal</th>
                     <th style={{ ...th, padding: "1.5mm 1.5mm", fontSize: "8.5pt" }}>Grade</th>
                     <th style={{ ...th, padding: "1.5mm 1.5mm", fontSize: "8.5pt" }}>Bruto</th>
-                    <th style={{ ...th, padding: "1.5mm 1.5mm", fontSize: "8.5pt" }}>Tara</th>
+                    <th style={{ ...th, padding: "1.5mm 1.5mm", fontSize: "8.5pt" }}>Pot. MC</th>
+                    <th style={{ ...th, padding: "1.5mm 1.5mm", fontSize: "8.5pt" }}>Pot. Packing</th>
                     <th style={{ ...th, padding: "1.5mm 1.5mm", fontSize: "8.5pt" }}>Netto</th>
                     <th style={{ ...th, padding: "1.5mm 1.5mm", fontSize: "8.5pt" }}>Harga</th>
                     <th style={{ ...th, padding: "1.5mm 1.5mm", fontSize: "8.5pt" }}>Adj</th>
@@ -207,7 +208,8 @@ export const ReportPrint = forwardRef<HTMLDivElement, ReportPrintProps>(function
                       <td style={{ ...td, padding: "1.2mm 1.5mm", fontSize: "8pt", textAlign: "center" }}>{new Date(p.transactionDate).toLocaleDateString("id-ID", { day: "2-digit", month: "2-digit", year: "numeric" })}</td>
                       <td style={{ ...td, padding: "1.2mm 1.5mm", fontSize: "8pt", textAlign: "center" }}>{i.grade}</td>
                       <td style={{ ...td, padding: "1.2mm 1.5mm", fontSize: "8pt", textAlign: "right" }}>{i.grossWeight != null ? i.grossWeight.toFixed(1) : "\u2014"}</td>
-                      <td style={{ ...td, padding: "1.2mm 1.5mm", fontSize: "8pt", textAlign: "right" }}>{i.packingWeight.toFixed(1)}</td>
+                      <td style={{ ...td, padding: "1.2mm 1.5mm", fontSize: "8pt", textAlign: "right" }}>{i.moistureDeduction != null ? i.moistureDeduction.toFixed(1) : "\u2014"}</td>
+                      <td style={{ ...td, padding: "1.2mm 1.5mm", fontSize: "8pt", textAlign: "right" }}>{i.packingWeight > 0 ? i.packingWeight.toFixed(1) : "\u2014"}</td>
                       <td style={{ ...td, padding: "1.2mm 1.5mm", fontSize: "8pt", textAlign: "right" }}>{i.netWeight != null ? i.netWeight.toFixed(1) : "\u2014"}</td>
                       <td style={{ ...td, padding: "1.2mm 1.5mm", fontSize: "8pt", textAlign: "right" }}>{i.pricePerKg != null ? i.pricePerKg.toLocaleString("id-ID") : "\u2014"}</td>
                       <td style={{ ...td, padding: "1.2mm 1.5mm", fontSize: "8pt", textAlign: "right" }}>{i.priceAdjustment > 0 ? `+${i.priceAdjustment}` : i.priceAdjustment}</td>

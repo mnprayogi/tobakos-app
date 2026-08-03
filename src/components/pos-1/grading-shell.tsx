@@ -27,6 +27,7 @@ import { SyncStatusBanner } from "@/components/shared/sync-status-banner"
 import { useThermalPrinter } from "@/hooks/useThermalPrinter"
 import { useOfflineQueue, isNetworkError } from "@/hooks/useOfflineQueue"
 import { usePolling } from "@/hooks/usePolling"
+import { useQueueStore } from "@/lib/queue"
 import { REALTIME_INTERVAL_MS } from "@/lib/realtime"
 import { Search, Info, Plus } from "lucide-react"
 
@@ -126,6 +127,24 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
     () => baleItems.filter((b) => (farmerId ? b.farmerId === farmerId && b.status === "GRADED" : true)),
     [baleItems, farmerId]
   )
+
+  const queuedPending = useQueueStore((s) => s.pending)
+
+  const pendingBaleItems = useMemo(() => {
+    const queued = queuedPending.filter((a) => a.type === "GRADE")
+    return queued
+      .filter((a) => (farmerId ? a.payload.farmerId === farmerId : true))
+      .map((a, i) => ({
+        id: -1 - i,
+        labelCode: `ANTRI #${i + 1}`,
+        grade: a.payload.grade,
+        status: "PENDING",
+        tobaccoType: tobaccoTypes.find((t) => t.id === a.payload.tobaccoTypeId)?.name ?? "—",
+        farmerName: farmers.find((f) => f.id === a.payload.farmerId)?.name ?? "—",
+        customerName: customers.find((c) => c.id === a.payload.customerId)?.name ?? "—",
+        createdBy: null,
+      }))
+  }, [queuedPending, farmerId, tobaccoTypes, farmers, customers])
 
   const shortLane = laneToken(laneCode, warehouse)
   const todaySampleCode = `${warehouse}-${shortLane}-${toDateKey(new Date()).replace(/-/g, "")}-XXXX`
@@ -586,6 +605,7 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
         {/* ===== TABLE: BALE HISTORY ===== */}
         <BaleHistoryTable
           items={farmerBaleItems}
+          pendingItems={pendingBaleItems}
           farmerName={selectedFarmer?.name ?? null}
           farmerNik={selectedFarmer?.nik ?? null}
           onDelete={(id) => setBaleItems((prev) => prev.filter((b) => b.id !== id))}

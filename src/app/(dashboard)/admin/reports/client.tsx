@@ -336,7 +336,8 @@ export function ReportsClient({ warehouses, farmers }: { warehouses: WarehouseMe
                           <th className="text-left text-[10px] uppercase font-bold text-muted-2 py-1.5 px-2">Grade</th>
                           <th className="text-left text-[10px] uppercase font-bold text-muted-2 py-1.5 px-2">Customer</th>
                           <th className="text-right text-[10px] uppercase font-bold text-muted-2 py-1.5 px-2">Bruto</th>
-                          <th className="text-right text-[10px] uppercase font-bold text-muted-2 py-1.5 px-2">Tara</th>
+                          <th className="text-right text-[10px] uppercase font-bold text-muted-2 py-1.5 px-2">Pot. MC</th>
+                          <th className="text-right text-[10px] uppercase font-bold text-muted-2 py-1.5 px-2">Pot. Packing</th>
                           <th className="text-right text-[10px] uppercase font-bold text-muted-2 py-1.5 px-2">Netto</th>
                           <th className="text-right text-[10px] uppercase font-bold text-muted-2 py-1.5 px-2">Harga</th>
                           <th className="text-right text-[10px] uppercase font-bold text-muted-2 py-1.5 px-2">Adj</th>
@@ -351,7 +352,8 @@ export function ReportsClient({ warehouses, farmers }: { warehouses: WarehouseMe
                             <td className="py-1.5 px-2 font-mono text-foreground">{i.grade}</td>
                             <td className="py-1.5 px-2 text-muted-foreground">{i.customerName ?? "—"}</td>
                             <td className="py-1.5 px-2 font-mono text-right text-foreground">{i.grossWeight != null ? i.grossWeight.toFixed(1) : "—"}</td>
-                            <td className="py-1.5 px-2 font-mono text-right text-foreground">{i.packingWeight.toFixed(1)}</td>
+                            <td className="py-1.5 px-2 font-mono text-right text-red-deduction">{i.moistureDeduction != null ? i.moistureDeduction.toFixed(1) : "—"}</td>
+                            <td className="py-1.5 px-2 font-mono text-right text-red-deduction">{i.packingWeight > 0 ? i.packingWeight.toFixed(1) : "—"}</td>
                             <td className="py-1.5 px-2 font-mono text-right text-foreground">{i.netWeight != null ? i.netWeight.toFixed(1) : "—"}</td>
                             <td className="py-1.5 px-2 font-mono text-right text-foreground">{i.pricePerKg != null ? i.pricePerKg.toLocaleString("id-ID") : "—"}</td>
                             <td className="py-1.5 px-2 font-mono text-right text-amber">

@@ -53,6 +53,7 @@ interface Props {
 export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, onRoundingModeChange, onReset, onSaved }: Props) {
   const [grossWeight, setGrossWeight] = useState("")
   const [weighing, setWeighing] = useState(false)
+  const [pendingSync, setPendingSync] = useState(false)
   const [lastWeighed, setLastWeighed] = useState<{
     netWeight: number
     subtotal: number
@@ -155,7 +156,7 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
           <div className="flex justify-between items-center py-2 text-[12.5px]">
             <span className="text-muted-foreground">Tara Packing</span>
             <span className="font-mono font-semibold text-red-deduction">
-              (-{item.packingWeight.toFixed(2)} KG)
+              {item.packingWeight > 0 ? `(-${item.packingWeight.toFixed(1)} KG)` : "\u2014"}
             </span>
           </div>
           <div className="flex justify-between items-center py-2 text-[12.5px]">
@@ -251,6 +252,7 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
         if (!isNetworkError(err)) throw err
         enqueue({ type: "WEIGH", payload })
         setLastWeighed({ netWeight, subtotal })
+        setPendingSync(true)
         onSaved?.()
         toast.info(`Offline — bale ${item.labelCode} masuk antrean sinkron`)
         return
@@ -259,6 +261,7 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
         netWeight: result.netWeight ?? 0,
         subtotal: result.subtotal ?? 0,
       })
+      setPendingSync(false)
       onSaved?.()
       toast.success(`Bale ${item.labelCode} — Netto ${(result.netWeight ?? 0).toFixed(weightDecimals)} KG`)
     } catch (err) {
@@ -272,6 +275,7 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
     if (!item) return
     setGrossWeight("")
     setLastWeighed(null)
+    setPendingSync(false)
     onReset()
   }
 
@@ -279,6 +283,11 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
     return (
       <div className="rounded-xl border border-border bg-card p-4">
         <div className="text-center py-6">
+          {pendingSync && (
+            <span className="inline-block text-[10px] font-bold text-amber bg-amber/12 border border-amber/35 px-2.5 py-1 rounded-full mb-3">
+              MENUNGGU SINKRON — otomatis saat koneksi pulih
+            </span>
+          )}
           <p className="text-sm text-muted-foreground mb-1">
             Bale {item.labelCode} berhasil ditimbang
           </p>
@@ -386,7 +395,7 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
         <div className="flex justify-between items-center py-2 text-[12.5px]">
           <span className="text-muted-foreground">Tara Packing</span>
           <span className="font-mono font-semibold text-red-deduction">
-            (-{item.packingWeight.toFixed(2)} KG)
+            {item.packingWeight > 0 ? `(-${item.packingWeight.toFixed(1)} KG)` : "\u2014"}
           </span>
         </div>
         <div className="flex justify-between items-center py-2 text-[12.5px]">
