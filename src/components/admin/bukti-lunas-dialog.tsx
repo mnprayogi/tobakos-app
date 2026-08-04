@@ -13,20 +13,22 @@ interface Props {
 
 export function BuktiLunasDialog({ purchaseId, onClose }: Props) {
   const [data, setData] = useState<BuktiData | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const printRef = useRef<HTMLDivElement>(null)
   const handlePrint = usePrintDocument(printRef, printBaseStyle, {
     documentTitle: () => (data ? `Bukti-Lunas-${data.transactionCode}` : "Bukti-Lunas"),
   })
 
-  useEffect(() => {
-    if (purchaseId == null) {
-      setData(null)
-      return
-    }
-    let cancelled = false
-    setLoading(true)
+  const [prevPurchaseId, setPrevPurchaseId] = useState(purchaseId)
+  if (prevPurchaseId !== purchaseId) {
+    setPrevPurchaseId(purchaseId)
     setData(null)
+    setLoading(true)
+  }
+
+  useEffect(() => {
+    if (purchaseId == null) return
+    let cancelled = false
     getBuktiData(purchaseId)
       .then((d) => {
         if (!cancelled) setData(d)

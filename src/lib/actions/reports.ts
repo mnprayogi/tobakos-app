@@ -100,7 +100,7 @@ function dateRange(filters: ReportFilters): { from: Date; to: Date } {
 
 type ReportStatus = "DRAFT" | "WEIGHED" | "APPROVED" | "PAID"
 
-function statusWhere(status?: string | null): {} | { status: ReportStatus } {
+function statusWhere(status?: string | null) {
   return status ? { status: status as ReportStatus } : {}
 }
 

@@ -5,6 +5,7 @@ import Link from "next/link"
 import { formatCurrency } from "@/lib/utils"
 import { getLoansData, type LoanAccount } from "@/lib/actions/loans"
 import { LoanDialog, type LoanDialogState, type LoanFarmer } from "@/components/admin/loan-dialog"
+import { useSse } from "@/hooks/useSse"
 
 export function LoansClient({ loans: initial, farmers }: { loans: LoanAccount[]; farmers: LoanFarmer[] }) {
   const [loans, setLoans] = useState(initial)
@@ -13,6 +14,12 @@ export function LoansClient({ loans: initial, farmers }: { loans: LoanAccount[];
   async function refresh() {
     setLoans(await getLoansData())
   }
+
+  useSse(null, (event) => {
+    if (event.type === "loan.updated" || event.type === "payment.recorded") {
+      refresh()
+    }
+  })
 
   const totalBalance = loans.reduce((s, l) => s + l.balance, 0)
   const totalBorrowed = loans.reduce((s, l) => s + l.totalBorrowed, 0)

@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogFooter } f
 import { formatCurrency } from "@/lib/utils"
 import { StatusPill } from "@/components/shared/status-pill"
 import { usePolling } from "@/hooks/usePolling"
+import { useSse } from "@/hooks/useSse"
 import { REALTIME_INTERVAL_MS } from "@/lib/realtime"
 import type { NotaItem, HistoryPurchase, SessionCheckResult } from "@/lib/actions/weighing"
 
@@ -58,6 +59,12 @@ export function WeighedHistory({ laneId, farmerId, farmerName, refreshKey = 0, o
   }, [farmerId, laneId])
 
   usePolling(loadHistory, REALTIME_INTERVAL_MS, [loadHistory, refreshKey])
+
+  useSse(laneId, (event) => {
+    if (event.type === "bale.weighed" || event.type === "session.ended") {
+      loadHistory()
+    }
+  })
 
   async function handleRequestFinish(purchase: HistoryPurchase) {
     setConfirmPurchase(purchase)

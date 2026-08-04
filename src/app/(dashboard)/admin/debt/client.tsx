@@ -1,10 +1,12 @@
 "use client"
 
 import { Fragment, useState } from "react"
+import { useRouter } from "next/navigation"
 import type { DebtFarmer, DebtStatus } from "@/lib/actions/finance"
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils"
 import { ChevronDown, ChevronRight } from "lucide-react"
 import { BuktiLunasDialog } from "@/components/admin/bukti-lunas-dialog"
+import { useSse } from "@/hooks/useSse"
 
 const statusStyle: Record<DebtStatus, string> = {
   HUTANG: "bg-amber/12 text-amber border border-amber/35",
@@ -19,8 +21,20 @@ const statusLabel: Record<DebtStatus, string> = {
 }
 
 export function DebtClient({ farmers }: { farmers: DebtFarmer[] }) {
+  const router = useRouter()
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
   const [receiptTarget, setReceiptTarget] = useState<number | null>(null)
+
+  useSse(null, (event) => {
+    if (
+      event.type === "purchase.approved" ||
+      event.type === "payment.recorded" ||
+      event.type === "purchase.reopened" ||
+      event.type === "loan.updated"
+    ) {
+      router.refresh()
+    }
+  })
 
   const totalOutstanding = farmers.reduce((s, f) => s + f.sisa, 0)
   const totalPaid = farmers.reduce((s, f) => s + f.totalDibayar, 0)

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/db"
 import { isMultipleOf100, roundMoney } from "@/lib/calculations"
 import { requireRoles } from "@/lib/roles"
+import { publishEvent } from "@/lib/events"
 
 export type LoanStatusValue = "ACTIVE" | "SETTLED"
 export type LoanEntryTypeValue = "DISBURSEMENT" | "REPAYMENT"
@@ -130,6 +131,7 @@ export async function disburseLoan(input: DisburseInput) {
 
   revalidatePath("/admin/loans")
   revalidatePath("/admin/transactions")
+  publishEvent("loan.updated")
   return result
 }
 
@@ -190,6 +192,7 @@ export async function repayLoanCash(input: RepayInput) {
 
   revalidatePath("/admin/loans")
   revalidatePath("/admin/transactions")
+  publishEvent("loan.updated")
   return result
 }
 

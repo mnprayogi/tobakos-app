@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { toast } from "sonner"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { recordPayment } from "@/lib/actions/finance"
@@ -53,12 +53,14 @@ export function PaymentDialog({ purchase, onClose, onPaid }: Props) {
   const loanBalance = purchase?.loanBalance ?? 0
   const hasActiveLoan = loanBalance > 0.005
 
-  useEffect(() => {
+  const [prevPurchaseId, setPrevPurchaseId] = useState(purchase?.id ?? null)
+  if ((purchase?.id ?? null) !== prevPurchaseId) {
+    setPrevPurchaseId(purchase?.id ?? null)
     setTotal("")
     setLoanDeduction("")
     setNote("")
     setMethod("TUNAI")
-  }, [purchase?.id])
+  }
 
   async function handleSubmit() {
     if (!purchase) return

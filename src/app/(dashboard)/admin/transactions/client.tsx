@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { reopenTransaction } from "@/lib/actions/finance"
+import { useSse } from "@/hooks/useSse"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { StatusPill } from "@/components/shared/status-pill"
 import { Pagination } from "@/components/shared/pagination"
@@ -120,6 +121,18 @@ export function TransactionsClient({
   const [statusFilter, setStatusFilter] = useState(status)
   const [payTarget, setPayTarget] = useState<PayPurchase | null>(null)
   const [receiptTarget, setReceiptTarget] = useState<number | null>(null)
+
+  useSse(null, (event) => {
+    if (
+      event.type === "purchase.approved" ||
+      event.type === "payment.recorded" ||
+      event.type === "purchase.reopened" ||
+      event.type === "session.ended" ||
+      event.type === "bale.weighed"
+    ) {
+      router.refresh()
+    }
+  })
 
   useEffect(() => {
     if (query === q) return

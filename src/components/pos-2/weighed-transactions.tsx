@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogFooter } f
 import { formatCurrency, formatDateTime } from "@/lib/utils"
 import { StatusPill } from "@/components/shared/status-pill"
 import { usePolling } from "@/hooks/usePolling"
+import { useSse } from "@/hooks/useSse"
 import { REALTIME_INTERVAL_MS } from "@/lib/realtime"
 
 interface NotaData {
@@ -50,6 +51,12 @@ export function WeighedTransactions({ laneId }: Props) {
   }, [laneId])
 
   usePolling(loadTransactions, REALTIME_INTERVAL_MS, [loadTransactions])
+
+  useSse(laneId, (event) => {
+    if (event.type === "bale.weighed" || event.type === "session.ended") {
+      loadTransactions()
+    }
+  })
 
   async function handleRequestFinish(txn: WeighedTransaction) {
     setConfirmTxn(txn)

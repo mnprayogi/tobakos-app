@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/db"
 import { isMultipleOf100, negotiateItems, roundMoney, roundRupiah } from "@/lib/calculations"
 import { requireRoles } from "@/lib/roles"
+import { publishEvent } from "@/lib/events"
 
 export type PaymentMethodValue = "TUNAI" | "TRANSFER"
 
@@ -81,6 +82,7 @@ export async function reviewAndApprove(purchaseId: number, input: ReviewInput) {
 
   revalidatePath("/admin/transactions")
   revalidatePath("/admin/debt")
+  publishEvent("purchase.approved", purchase.laneId)
   return { ...result, totalPrice: Number(result.totalPrice) }
 }
 
@@ -100,6 +102,8 @@ export async function recordPayment(purchaseId: number, input: PaymentInput) {
   const loanDeduction = input.loanDeduction ? roundMoney(input.loanDeduction) : 0
   if (loanDeduction < 0) throw new Error("Potongan hutang tidak boleh negatif")
 
+  let purchaseLaneId: number | null = null
+
   const result = await prisma.$transaction(async (tx) => {
     const purchase = await tx.purchase.findUnique({
       where: { id: purchaseId },
@@ -109,6 +113,7 @@ export async function recordPayment(purchaseId: number, input: PaymentInput) {
     })
     if (!purchase) throw new Error("Transaksi tidak ditemukan")
     if (purchase.status !== "APPROVED") throw new Error("Transaksi harus disetujui terlebih dahulu")
+    purchaseLaneId = purchase.laneId
 
     const totalPrice = Number(purchase.totalPrice)
     const paidAmount = Number(purchase.paidAmount)
@@ -243,6 +248,7 @@ export async function recordPayment(purchaseId: number, input: PaymentInput) {
   revalidatePath("/admin/transactions")
   revalidatePath("/admin/debt")
   revalidatePath("/admin/loans")
+  publishEvent("payment.recorded", purchaseLaneId)
   return result
 }
 
@@ -274,6 +280,7 @@ export async function reopenTransaction(purchaseId: number) {
 
   revalidatePath("/admin/transactions")
   revalidatePath("/admin/debt")
+  publishEvent("purchase.reopened", purchase.laneId)
   return purchase
 }
 
