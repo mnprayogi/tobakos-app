@@ -1,31 +1,25 @@
 import { prisma } from "@/lib/db"
+import { auth } from "@/lib/auth"
 import { getActiveLanes, getLaneByCode } from "@/lib/actions/lanes"
+import { getCurrentUserLane } from "@/lib/lane-resolution"
 import { LanePicker } from "@/components/shared/lane-picker"
 import { GradingShell } from "@/components/pos-1/grading-shell"
 import { getSettingNumber } from "@/lib/settings"
 
 export default async function GradingPage({ searchParams }: { searchParams: Promise<{ lane?: string }> }) {
+  const session = await auth()
   const { lane: laneCode } = await searchParams
+  const assignedLane = await getCurrentUserLane()
 
-  if (!laneCode) {
+  const lane = assignedLane ?? (laneCode ? await getLaneByCode(laneCode) : null)
+
+  if (!lane) {
     const lanes = await getActiveLanes()
     return (
       <LanePicker
         lanes={lanes}
         title="Pos 1 · Pilih Jalur Kerja"
         subtitle="Tentukan jalur grading yang dipakai perangkat ini."
-      />
-    )
-  }
-
-  const lane = await getLaneByCode(laneCode)
-  if (!lane) {
-    const lanes = await getActiveLanes()
-    return (
-      <LanePicker
-        lanes={lanes}
-        title="Jalur tidak ditemukan"
-        subtitle="Pilih jalur kerja yang tersedia."
       />
     )
   }
@@ -43,6 +37,7 @@ export default async function GradingPage({ searchParams }: { searchParams: Prom
     prisma.purchaseItem.findMany({
       take: 50,
       orderBy: { createdAt: "desc" },
+      where: { purchase: { laneId: lane.id } },
       include: {
         purchase: { include: { farmer: true } },
         tobaccoType: true,
@@ -103,6 +98,7 @@ export default async function GradingPage({ searchParams }: { searchParams: Prom
         maxMoisturePercent={maxMoisturePercent}
         defaultMoisturePercent={defaultMoisturePercent}
         defaultWarehouseId={defaultWarehouseId}
+        userName={session?.user.name ?? "Operator"}
       />
     </div>
   )

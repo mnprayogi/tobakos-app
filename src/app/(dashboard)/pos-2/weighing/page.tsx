@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth"
 import { getActiveLanes, getLaneByCode } from "@/lib/actions/lanes"
+import { getCurrentUserLane } from "@/lib/lane-resolution"
 import { LanePicker } from "@/components/shared/lane-picker"
 import { WeighingPageClient } from "@/components/pos-2/weighing-page-client"
 import { getSetting } from "@/lib/settings"
@@ -8,26 +9,17 @@ import type { RoundMode } from "@/lib/calculations"
 export default async function WeighingPage({ searchParams }: { searchParams: Promise<{ lane?: string }> }) {
   const session = await auth()
   const { lane: laneCode } = await searchParams
+  const assignedLane = await getCurrentUserLane()
 
-  if (!laneCode) {
+  const lane = assignedLane ?? (laneCode ? await getLaneByCode(laneCode) : null)
+
+  if (!lane) {
     const lanes = await getActiveLanes()
     return (
       <LanePicker
         lanes={lanes}
         title="Pos 2 · Pilih Jalur Kerja"
         subtitle="Tentukan jalur penimbangan yang dipakai perangkat ini."
-      />
-    )
-  }
-
-  const lane = await getLaneByCode(laneCode)
-  if (!lane) {
-    const lanes = await getActiveLanes()
-    return (
-      <LanePicker
-        lanes={lanes}
-        title="Jalur tidak ditemukan"
-        subtitle="Pilih jalur kerja yang tersedia."
       />
     )
   }
@@ -47,11 +39,7 @@ export default async function WeighingPage({ searchParams }: { searchParams: Pro
             user: <span className="font-semibold text-foreground">{session?.user?.name}</span>
           </div>
           <div>
-            Live Timbangan (COM3):{" "}
-            <span className="font-semibold text-emerald">
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald mr-1.5 shadow-[0_0_6px_#22c98d]" />
-              Connected
-            </span>
+            <span className="text-muted-2">Timbang bale yang sudah di-grade di Pos 1</span>
           </div>
         </div>
       </div>

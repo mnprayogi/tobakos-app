@@ -11,7 +11,9 @@ import {
   type RoundMode,
 } from "@/lib/calculations"
 import { getActorName } from "@/lib/actor"
+import { resolveActorLane } from "@/lib/lane-resolution"
 import { parseLabelCode } from "@/lib/barcode"
+import { publishEvent } from "@/lib/events"
 
 export interface WeighInput {
   labelCode: string
@@ -22,6 +24,8 @@ export interface WeighInput {
 
 export async function lookupItem(labelCode: string, laneId: number) {
   if (!parseLabelCode(labelCode.trim())) throw new Error("Format barcode tidak valid")
+
+  const lane = await resolveActorLane({ laneId })
 
   const item = await prisma.purchaseItem.findUnique({
     where: { labelCode },
@@ -34,7 +38,7 @@ export async function lookupItem(labelCode: string, laneId: number) {
     },
   })
   if (!item) return null
-  if (item.purchase.laneId !== laneId) {
+  if (item.purchase.laneId !== lane.id) {
     throw new Error(`Bale milik jalur ${item.purchase.lane?.code ?? "-"} — gunakan stasiun jalur tersebut`)
   }
   return {
@@ -66,6 +70,8 @@ export async function lookupItem(labelCode: string, laneId: number) {
 export async function saveWeighData(data: WeighInput) {
   if (!parseLabelCode(data.labelCode.trim())) throw new Error("Format barcode tidak valid")
 
+  const lane = await resolveActorLane({ laneId: data.laneId })
+
   const updated = await prisma.$transaction(async (tx) => {
     const item = await tx.purchaseItem.findUnique({
       where: { labelCode: data.labelCode },
@@ -73,7 +79,7 @@ export async function saveWeighData(data: WeighInput) {
     })
 
     if (!item) throw new Error("Bale tidak ditemukan")
-    if (item.purchase.laneId !== data.laneId) throw new Error("Bale milik jalur lain")
+    if (item.purchase.laneId !== lane.id) throw new Error("Bale milik jalur lain")
     if (item.purchase.status !== "DRAFT") throw new Error("Transaksi sudah ditutup")
     if (item.status !== "GRADED") throw new Error("Bale sudah ditimbang")
     if (data.grossWeight <= 0) throw new Error("Berat harus lebih dari 0")
@@ -129,6 +135,7 @@ export async function saveWeighData(data: WeighInput) {
 
   revalidatePath("/pos-2/weighing")
   revalidatePath("/pos-2/transactions")
+  publishEvent("bale.weighed", lane.id)
   return {
     id: updated.id,
     grossWeight: updated.grossWeight,
@@ -164,6 +171,7 @@ export interface HistoryPurchase {
 }
 
 export async function getWeighedHistory(farmerId: number, laneId: number) {
+  const lane = await resolveActorLane({ laneId })
   const todayStart = new Date()
   todayStart.setHours(0, 0, 0, 0)
 
@@ -184,12 +192,12 @@ export async function getWeighedHistory(farmerId: number, laneId: number) {
     },
   })
 
-  const byLane = allToday.filter((p) => p.laneId === laneId)
+  const byLane = allToday.filter((p) => p.laneId === lane.id)
 
-  return byLane.map((p) => ({
+  return byLane.map((p, laneIdx) => ({
     id: p.id,
     transactionCode: p.transactionCode,
-    transactionLabel: `Transaksi #${allToday.indexOf(p) + 1}`,
+    transactionLabel: `Transaksi #${laneIdx + 1}`,
     laneCode: p.lane?.code ?? "",
     items: p.items.map((item) => ({
       id: item.id,
@@ -225,6 +233,7 @@ export interface SessionCheckResult {
 }
 
 export async function getSessionUnweighed(purchaseId: number, laneId: number): Promise<SessionCheckResult> {
+  const lane = await resolveActorLane({ laneId })
   const purchase = await prisma.purchase.findUnique({
     where: { id: purchaseId },
     include: {
@@ -236,7 +245,7 @@ export async function getSessionUnweighed(purchaseId: number, laneId: number): P
     },
   })
   if (!purchase) throw new Error("Transaksi tidak ditemukan")
-  if (purchase.laneId !== laneId) throw new Error("Transaksi bukan milik jalur ini")
+  if (purchase.laneId !== lane.id) throw new Error("Transaksi bukan milik jalur ini")
   if (purchase.status !== "DRAFT") throw new Error("Transaksi sudah ditutup")
 
   const unweighedBales = purchase.items
@@ -252,12 +261,13 @@ export async function getSessionUnweighed(purchaseId: number, laneId: number): P
 }
 
 export async function endWeighSession(purchaseId: number, laneId: number) {
+  const lane = await resolveActorLane({ laneId })
   const purchase = await prisma.purchase.findUnique({
     where: { id: purchaseId },
     include: { farmer: true, items: true, warehouse: true },
   })
   if (!purchase) throw new Error("Transaksi tidak ditemukan")
-  if (purchase.laneId !== laneId) throw new Error("Transaksi bukan milik jalur ini")
+  if (purchase.laneId !== lane.id) throw new Error("Transaksi bukan milik jalur ini")
   if (purchase.status !== "DRAFT") throw new Error("Transaksi sudah ditutup")
 
   const unweighedItems = purchase.items.filter((i) => i.status === "GRADED")
@@ -311,6 +321,7 @@ export async function endWeighSession(purchaseId: number, laneId: number) {
 
   revalidatePath("/pos-2/weighing")
   revalidatePath("/pos-2/transactions")
+  publishEvent("session.ended", lane.id)
   return {
     transactionCode: purchase.transactionCode,
     farmerName: purchase.farmer.name,
@@ -329,6 +340,7 @@ export interface FarmerQueueItem {
   purchaseIds: number[]
   primaryPurchaseId: number
   gradedCount: number
+  weighedCount: number
   transactionCount: number
 }
 
@@ -351,9 +363,10 @@ export interface WeighedTransaction {
 }
 
 export async function getWeighedTransactions(laneId: number): Promise<WeighedTransaction[]> {
+  const lane = await resolveActorLane({ laneId })
   const purchases = await prisma.purchase.findMany({
     where: {
-      laneId,
+      laneId: lane.id,
       status: { in: ["DRAFT", "WEIGHED"] },
       items: { some: { status: "WEIGHED" } },
     },
@@ -393,27 +406,29 @@ export async function getWeighedTransactions(laneId: number): Promise<WeighedTra
 }
 
 export async function getFarmersWithBales(laneId: number): Promise<FarmerQueueItem[]> {
+  const lane = await resolveActorLane({ laneId })
   const purchases = await prisma.purchase.findMany({
     where: {
       status: "DRAFT",
-      laneId,
-      items: { some: { status: "GRADED" } },
+      laneId: lane.id,
+      items: { some: { status: { in: ["GRADED", "WEIGHED"] } } },
     },
     include: {
       farmer: true,
-      _count: {
-        select: { items: { where: { status: "GRADED" } } },
-      },
+      items: { select: { status: true } },
     },
     orderBy: { updatedAt: "desc" },
   })
 
   const map = new Map<number, FarmerQueueItem>()
   for (const p of purchases) {
+    const gradedCount = p.items.filter((i) => i.status === "GRADED").length
+    const weighedCount = p.items.filter((i) => i.status === "WEIGHED").length
     const existing = map.get(p.farmerId)
     if (existing) {
       existing.purchaseIds.push(p.id)
-      existing.gradedCount += p._count.items
+      existing.gradedCount += gradedCount
+      existing.weighedCount += weighedCount
       existing.transactionCount += 1
     } else {
       map.set(p.farmerId, {
@@ -422,7 +437,8 @@ export async function getFarmersWithBales(laneId: number): Promise<FarmerQueueIt
         farmerNik: p.farmer.nik,
         purchaseIds: [p.id],
         primaryPurchaseId: p.id,
-        gradedCount: p._count.items,
+        gradedCount,
+        weighedCount,
         transactionCount: 1,
       })
     }

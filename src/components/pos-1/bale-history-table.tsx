@@ -86,19 +86,23 @@ export function BaleHistoryTable({
                     <StatusPill status={item.status as "GRADED" | "WEIGHED" | "CLOSED"} />
                   </td>
                   <td className="wf-table-td">
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(item.id)}
-                      disabled={deletingId === item.id}
-                      className="p-1 text-red-deduction hover:bg-red-deduction/10 rounded-lg cursor-pointer disabled:opacity-50"
-                      title="Hapus"
-                    >
-                      {deletingId === item.id ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Trash2 className="w-3.5 h-3.5" />
-                      )}
-                    </button>
+                    {item.status === "GRADED" ? (
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(item.id)}
+                        disabled={deletingId === item.id}
+                        className="p-1 text-red-deduction hover:bg-red-deduction/10 rounded-lg cursor-pointer disabled:opacity-50"
+                        title="Hapus"
+                      >
+                        {deletingId === item.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    ) : (
+                      <span className="text-muted-2">—</span>
+                    )}
                   </td>
                 </tr>
               ))}

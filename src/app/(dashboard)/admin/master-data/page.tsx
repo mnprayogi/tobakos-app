@@ -11,7 +11,7 @@ export default async function MasterDataPage() {
       orderBy: [{ tobaccoTypeId: "asc" }, { name: "asc" }],
       include: { tobaccoType: true },
     }),
-    prisma.user.findMany({ orderBy: { name: "asc" } }),
+    prisma.user.findMany({ orderBy: { name: "asc" }, include: { lane: { include: { warehouse: true } } } }),
     prisma.warehouse.findMany({ orderBy: { code: "asc" } }),
     prisma.lane.findMany({
       orderBy: [{ warehouseId: "asc" }, { code: "asc" }],

@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth"
 import { getActiveLanes, getLaneByCode } from "@/lib/actions/lanes"
+import { getCurrentUserLane } from "@/lib/lane-resolution"
 import { LanePicker } from "@/components/shared/lane-picker"
 import { WeighedTransactions } from "@/components/pos-2/weighed-transactions"
 
@@ -10,26 +11,17 @@ export default async function Pos2TransactionsPage({
 }) {
   const session = await auth()
   const { lane: laneCode } = await searchParams
+  const assignedLane = await getCurrentUserLane()
 
-  if (!laneCode) {
+  const lane = assignedLane ?? (laneCode ? await getLaneByCode(laneCode) : null)
+
+  if (!lane) {
     const lanes = await getActiveLanes()
     return (
       <LanePicker
         lanes={lanes}
         title="Pos 2 · Transaksi Ditimbang"
         subtitle="Pilih jalur untuk melihat transaksi yang sudah ditimbang."
-      />
-    )
-  }
-
-  const lane = await getLaneByCode(laneCode)
-  if (!lane) {
-    const lanes = await getActiveLanes()
-    return (
-      <LanePicker
-        lanes={lanes}
-        title="Jalur tidak ditemukan"
-        subtitle="Pilih jalur kerja yang tersedia."
       />
     )
   }

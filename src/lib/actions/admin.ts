@@ -228,9 +228,18 @@ export async function deleteGrade(id: number) {
 
 // ─── User ────────────────────────────────────────────
 
-export async function createUser(data: { name: string; username: string; email?: string; password?: string; role: string }) {
+export async function createUser(data: {
+  name: string
+  username: string
+  email?: string
+  password?: string
+  role: string
+  laneId?: number | null
+}) {
   try {
-    const user = await prisma.user.create({ data })
+    const user = await prisma.user.create({
+      data: { ...data, laneId: data.laneId ?? null },
+    })
     revalidatePath("/admin/master-data")
     return user
   } catch (err) {
@@ -238,9 +247,15 @@ export async function createUser(data: { name: string; username: string; email?:
   }
 }
 
-export async function updateUser(id: string, data: { name: string; username: string; email?: string; role: string }) {
+export async function updateUser(
+  id: string,
+  data: { name: string; username: string; email?: string; role: string; laneId?: number | null }
+) {
   try {
-    const user = await prisma.user.update({ where: { id }, data })
+    const user = await prisma.user.update({
+      where: { id },
+      data: { ...data, laneId: data.laneId ?? null },
+    })
     revalidatePath("/admin/master-data")
     return user
   } catch (err) {

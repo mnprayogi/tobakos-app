@@ -27,6 +27,7 @@ export function useScale() {
   const clearReadings = useCallback(() => {
     readingsRef.current = []
     stableRef.current = false
+    lastStableRef.current = null
     setState((prev) => ({ ...prev, stable: false }))
   }, [])
 
@@ -45,9 +46,11 @@ export function useScale() {
             const isStable =
               window.length >= STABLE_WINDOW &&
               window.every((w) => Math.abs(w - window[0]) < 0.05)
-            if (isStable && !stableRef.current) {
+            if (isStable) {
               lastStableRef.current = window[window.length - 1]
               stableRef.current = true
+            } else {
+              stableRef.current = false
             }
             setState((prev) => ({ ...prev, weight, stable: isStable }))
           }

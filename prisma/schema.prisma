@@ -101,6 +101,7 @@ model Lane {
   warehouseId Int
   active      Boolean    @default(true)
   purchases   Purchase[]
+  users       User[]
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
@@ -277,6 +278,8 @@ model User {
   username       String?   @unique
   password       String?
   role           String    @default("GRADER")
+  lane           Lane?     @relation(fields: [laneId], references: [id], onDelete: SetNull)
+  laneId         Int?
   accounts       Account[]
   sessions       Session[]
   createdAt      DateTime  @default(now())

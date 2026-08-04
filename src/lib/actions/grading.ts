@@ -5,8 +5,9 @@ import { format } from "date-fns"
 import { prisma } from "@/lib/db"
 import { generateLabelCode } from "@/lib/barcode"
 import { nextSequence } from "@/lib/sequences"
-import { getLaneByCode } from "@/lib/actions/lanes"
+import { resolveActorLane } from "@/lib/lane-resolution"
 import { getActorName } from "@/lib/actor"
+import { publishEvent } from "@/lib/events"
 
 export async function getTodayDraftFarmerIds(laneId: number): Promise<number[]> {
   const todayStart = new Date()
@@ -63,13 +64,14 @@ export interface TransactionOption {
   totalItems: number
   warehouseCode: string
   laneCode: string
+  status: string
 }
 
 export async function getFarmerTodayTransactions(farmerId: number): Promise<TransactionOption[]> {
   const todayStart = new Date()
   todayStart.setHours(0, 0, 0, 0)
   const purchases = await prisma.purchase.findMany({
-    where: { farmerId, status: "DRAFT", transactionDate: { gte: todayStart } },
+    where: { farmerId, transactionDate: { gte: todayStart } },
     orderBy: { createdAt: "asc" },
     include: {
       warehouse: true,
@@ -84,6 +86,7 @@ export async function getFarmerTodayTransactions(farmerId: number): Promise<Tran
     totalItems: p._count.items,
     warehouseCode: p.warehouse?.code ?? "—",
     laneCode: p.lane?.code ?? "—",
+    status: p.status,
   }))
 }
 
@@ -99,7 +102,7 @@ export async function getFarmerLaneTodayTransactions(
   farmerId: number,
   laneCode: string
 ): Promise<LaneTransactionOption[]> {
-  const lane = await getLaneByCode(laneCode)
+  const lane = await resolveActorLane({ laneCode })
   if (!lane) throw new Error("Jalur tidak ditemukan")
 
   const todayStart = new Date()
@@ -126,8 +129,7 @@ export async function getFarmerLaneTodayTransactions(
 }
 
 export async function startNewTransaction(farmerId: number, laneCode: string) {
-  const lane = await getLaneByCode(laneCode)
-  if (!lane) throw new Error("Jalur tidak ditemukan")
+  const lane = await resolveActorLane({ laneCode })
 
   const txSeq = await nextSequence(lane.code)
   const txDate = format(new Date(), "yyyyMMdd")
@@ -160,8 +162,7 @@ export interface GradeInput {
 }
 
 export async function saveGrade(data: GradeInput) {
-  const lane = await getLaneByCode(data.laneCode)
-  if (!lane) throw new Error("Jalur tidak ditemukan")
+  const lane = await resolveActorLane({ laneCode: data.laneCode })
 
   if (!data.customerId) throw new Error("Pilih alokasi customer")
 
@@ -223,6 +224,11 @@ export async function saveGrade(data: GradeInput) {
 
     const itemCount = await tx.purchaseItem.count({ where: { purchaseId } })
 
+    await tx.purchase.update({
+      where: { id: purchaseId },
+      data: { totalItems: { increment: 1 } },
+    })
+
     return tx.purchaseItem.create({
       data: {
         purchaseId,
@@ -246,12 +252,8 @@ export async function saveGrade(data: GradeInput) {
     })
   })
 
-  await prisma.purchase.update({
-    where: { id: item.purchaseId },
-    data: { totalItems: { increment: 1 } },
-  })
-
   revalidatePath("/pos-1/grading")
+  publishEvent("bale.created", lane.id)
   return {
     id: item.id,
     labelCode: item.labelCode,
@@ -268,10 +270,13 @@ export async function saveGrade(data: GradeInput) {
 
 export async function deleteBale(id: number) {
   try {
+    let laneId: number | null = null
     await prisma.$transaction(async (tx) => {
       const item = await tx.purchaseItem.findUnique({ where: { id }, include: { purchase: true } })
       if (!item) throw new Error("Bale tidak ditemukan (mungkin sudah dihapus)")
       if (item.status !== "GRADED") throw new Error("Hanya bale dengan status GRADED yang bisa dihapus")
+
+      laneId = item.purchase.laneId
 
       await tx.purchaseItem.delete({ where: { id } })
 
@@ -282,6 +287,7 @@ export async function deleteBale(id: number) {
     })
 
     revalidatePath("/pos-1/grading")
+    if (laneId != null) publishEvent("bale.deleted", laneId)
   } catch (err) {
     if (err instanceof Error) throw new Error(err.message)
     throw new Error("Gagal menghapus bale")

@@ -27,6 +27,7 @@ import { SyncStatusBanner } from "@/components/shared/sync-status-banner"
 import { useThermalPrinter } from "@/hooks/useThermalPrinter"
 import { useOfflineQueue, isNetworkError } from "@/hooks/useOfflineQueue"
 import { usePolling } from "@/hooks/usePolling"
+import { useSse } from "@/hooks/useSse"
 import { useQueueStore } from "@/lib/queue"
 import { REALTIME_INTERVAL_MS } from "@/lib/realtime"
 import { Search, Info, Plus } from "lucide-react"
@@ -71,11 +72,36 @@ interface Props {
   maxMoisturePercent: number
   defaultMoisturePercent: number
   defaultWarehouseId: number
+  userName: string
 }
 
-export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, customers, warehouse, warehouseName, laneCode, laneName, laneId, todayDraftFarmerIds, baleItems: initialBaleItems, maxMoisturePercent, defaultMoisturePercent, defaultWarehouseId }: Props) {
+export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, customers, warehouse, warehouseName, laneCode, laneName, laneId, todayDraftFarmerIds, baleItems: initialBaleItems, maxMoisturePercent, defaultMoisturePercent, userName }: Props) {
   const [baleItems, setBaleItems] = useState(initialBaleItems)
   const [draftFarmerIds, setDraftFarmerIds] = useState(todayDraftFarmerIds)
+  const [farmerId, setFarmerId] = useState<number | null>(null)
+  const [selectedPurchaseId, setSelectedPurchaseId] = useState<number | null>(null)
+
+  const [purchases, setPurchases] = useState<TransactionOption[]>([])
+  const purchasesRef = useRef<TransactionOption[]>([])
+
+  const refreshPurchases = useCallback(async () => {
+    if (farmerId == null) return
+    const all = await getFarmerTodayTransactions(farmerId)
+    const inLane = all.filter((p) => p.laneCode === laneCode)
+    const drafts = inLane.filter((p) => p.status === "DRAFT")
+    const prevDraftIds = new Set(purchasesRef.current.filter((p) => p.status === "DRAFT").map((p) => p.id))
+    const nowDraftIds = new Set(drafts.map((d) => d.id))
+    const closedSome = [...prevDraftIds].some((id) => !nowDraftIds.has(id))
+    purchasesRef.current = inLane
+    setPurchases(inLane)
+    if (closedSome) {
+      toast.info("Transaksi yang dipilih sudah ditimbang/ditutup — bale baru akan masuk transaksi baru.", { id: "tx-closed" })
+    }
+    setSelectedPurchaseId((prev) => {
+      if (prev == null) return drafts.length > 0 ? drafts[drafts.length - 1].id : null
+      return drafts.some((d) => d.id === prev) ? prev : drafts.length > 0 ? drafts[drafts.length - 1].id : null
+    })
+  }, [farmerId, laneCode])
 
   const realtimeRefetch = useCallback(async () => {
     try {
@@ -88,12 +114,27 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
     } catch {
       // biarkan data lama; polling akan mencoba lagi
     }
-  }, [laneId])
+    try {
+      await refreshPurchases()
+    } catch {
+      // abaikan; polling akan mencoba lagi
+    }
+  }, [laneId, refreshPurchases])
 
   usePolling(realtimeRefetch, REALTIME_INTERVAL_MS, [realtimeRefetch])
 
+  useSse(laneId, (event) => {
+    if (
+      event.type === "bale.created" ||
+      event.type === "bale.deleted" ||
+      event.type === "bale.weighed" ||
+      event.type === "session.ended"
+    ) {
+      realtimeRefetch()
+    }
+  })
+
   const [searchTerm, setSearchTerm] = useState("")
-  const [farmerId, setFarmerId] = useState<number | null>(null)
   const [tobaccoTypeId, setTobaccoTypeId] = useState("")
   const [leafTypeId, setLeafTypeId] = useState("")
   const [packingTypeId, setPackingTypeId] = useState("")
@@ -106,8 +147,6 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
   const [selectedPrice, setSelectedPrice] = useState<number | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  const [purchases, setPurchases] = useState<TransactionOption[]>([])
-  const [selectedPurchaseId, setSelectedPurchaseId] = useState<number | null>(null)
   const [startingNew, setStartingNew] = useState(false)
   const [txDialogOpen, setTxDialogOpen] = useState(false)
   const [txOptions, setTxOptions] = useState<LaneTransactionOption[]>([])
@@ -166,8 +205,13 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
   async function loadPurchases(farmerId: number) {
     const all = await getFarmerTodayTransactions(farmerId)
     const inLane = all.filter((p) => p.laneCode === laneCode)
+    const drafts = inLane.filter((p) => p.status === "DRAFT")
+    purchasesRef.current = inLane
     setPurchases(inLane)
-    setSelectedPurchaseId(inLane.length > 0 ? inLane[inLane.length - 1].id : null)
+    setSelectedPurchaseId((prev) => {
+      if (prev == null) return drafts.length > 0 ? drafts[drafts.length - 1].id : null
+      return drafts.some((p) => p.id === prev) ? prev : drafts.length > 0 ? drafts[drafts.length - 1].id : null
+    })
   }
 
   async function handleSelectFarmer(id: number) {
@@ -227,7 +271,7 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
       toast.error("Isi potongan packing yang valid")
       return
     }
-    if (purchases.length > 0 && !selectedPurchaseId) {
+    if (purchases.some((p) => p.status === "DRAFT") && !selectedPurchaseId) {
       toast.error("Pilih transaksi terlebih dahulu")
       return
     }
@@ -299,7 +343,11 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
         handlePrintSticker()
       }
     } catch (err) {
-      toast.error((err as Error).message)
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes("ditimbang") || msg.includes("ditutup")) {
+        realtimeRefetch()
+      }
+      toast.error(msg)
     } finally {
       setSubmitting(false)
     }
@@ -338,7 +386,7 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
           <div className="flex items-center justify-end gap-2">
             <SyncStatusBanner />
             <span className="text-muted-2 text-[11.5px]">user:</span>
-            <b className="font-semibold text-foreground">Operator 1 (Grader)</b>
+            <b className="font-semibold text-foreground">{userName}</b>
           </div>
           <div className="mt-1">
             <PrinterManager
@@ -419,10 +467,10 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
                     onChange={(e) => setSelectedPurchaseId(e.target.value ? Number(e.target.value) : null)}
                     className="field-input flex-1"
                   >
-                    {purchases.length === 0 && <option value="">Transaksi baru otomatis…</option>}
+                    {!purchases.some((p) => p.status === "DRAFT") && <option value="">Transaksi baru otomatis…</option>}
                     {purchases.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.label} · {p.totalItems} bale
+                      <option key={p.id} value={p.id} disabled={p.status !== "DRAFT"}>
+                        {p.label} · {p.totalItems} bale{p.status !== "DRAFT" ? " · ditutup" : ""}
                       </option>
                     ))}
                   </select>
@@ -436,9 +484,11 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
                     <Plus className="w-3.5 h-3.5" />
                   </button>
                 </div>
-                {purchases.length === 0 && (
+                {!purchases.some((p) => p.status === "DRAFT") && (
                   <p className="text-[10.5px] text-muted-2 mt-1">
-                    Belum ada transaksi hari ini di {laneCode} — akan dibuat otomatis saat bale pertama disimpan.
+                    {purchases.length > 0
+                      ? `Transaksi hari ini di ${laneCode} sudah ditutup — bale baru akan dibuat transaksi baru.`
+                      : `Belum ada transaksi hari ini di ${laneCode} — akan dibuat otomatis saat bale pertama disimpan.`}
                   </p>
                 )}
               </div>

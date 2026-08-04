@@ -4,6 +4,7 @@ import { useState } from "react"
 import { toast } from "sonner"
 import { saveWeighData } from "@/lib/actions/weighing"
 import { useOfflineQueue, isNetworkError } from "@/hooks/useOfflineQueue"
+import { useQueueStore } from "@/lib/queue"
 import { StatusPill } from "@/components/shared/status-pill"
 import {
   calculateWeightAfterPacking,
@@ -250,11 +251,18 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
         result = await saveWeighData(payload)
       } catch (err) {
         if (!isNetworkError(err)) throw err
-        enqueue({ type: "WEIGH", payload })
+        const alreadyQueued = useQueueStore.getState().pending.some(
+          (a) => a.type === "WEIGH" && a.payload.labelCode === item.labelCode
+        )
+        if (!alreadyQueued) {
+          enqueue({ type: "WEIGH", payload })
+          toast.info(`Offline — bale ${item.labelCode} masuk antrean sinkron`)
+        } else {
+          toast.info(`Bale ${item.labelCode} sudah ada di antrean sinkron`)
+        }
         setLastWeighed({ netWeight, subtotal })
         setPendingSync(true)
         onSaved?.()
-        toast.info(`Offline — bale ${item.labelCode} masuk antrean sinkron`)
         return
       }
       setLastWeighed({
@@ -265,7 +273,12 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
       onSaved?.()
       toast.success(`Bale ${item.labelCode} — Netto ${(result.netWeight ?? 0).toFixed(weightDecimals)} KG`)
     } catch (err) {
-      toast.error((err as Error).message)
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes("ditutup")) {
+        onSaved?.()
+        onReset()
+      }
+      toast.error(msg)
     } finally {
       setWeighing(false)
     }

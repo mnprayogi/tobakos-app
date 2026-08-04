@@ -78,6 +78,7 @@ export function WeighingPageClient({ laneId, defaultRoundingMode = "normal" }: P
         purchaseIds: [item.purchaseId],
         primaryPurchaseId: item.purchaseId,
         gradedCount: 0,
+        weighedCount: item.status === "WEIGHED" ? 1 : 0,
         transactionCount: 1,
       })
       setScanValue("")

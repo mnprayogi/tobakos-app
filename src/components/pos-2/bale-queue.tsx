@@ -4,6 +4,7 @@ import { useState, useCallback } from "react"
 import { getFarmersWithBales } from "@/lib/actions/weighing"
 import type { FarmerQueueItem } from "@/lib/actions/weighing"
 import { usePolling } from "@/hooks/usePolling"
+import { useSse } from "@/hooks/useSse"
 import { REALTIME_INTERVAL_MS } from "@/lib/realtime"
 
 interface Props {
@@ -29,6 +30,17 @@ export function BaleQueue({ laneId, selectedFarmerId, refreshKey, onSelectFarmer
   }, [laneId])
 
   usePolling(loadQueue, REALTIME_INTERVAL_MS, [loadQueue, refreshKey])
+
+  useSse(laneId, (event) => {
+    if (
+      event.type === "bale.created" ||
+      event.type === "bale.deleted" ||
+      event.type === "bale.weighed" ||
+      event.type === "session.ended"
+    ) {
+      loadQueue()
+    }
+  })
 
   return (
     <div className="w-full lg:w-[240px] lg:shrink-0 rounded-xl border border-border bg-card p-4 pb-[18px] flex flex-col">
@@ -77,15 +89,28 @@ export function BaleQueue({ laneId, selectedFarmerId, refreshKey, onSelectFarmer
                   <span className="font-bold text-foreground truncate">
                     {farmer.farmerName}
                   </span>
-                  <span
-                    className={`text-[10px] font-bold shrink-0 rounded px-1.5 py-0.5 border ${
-                      isActive
-                        ? "bg-emerald/12 text-emerald border-emerald/35"
-                        : "bg-amber/12 text-amber border-amber/35"
-                    }`}
-                  >
-                    {farmer.gradedCount} bale
-                  </span>
+                  {farmer.gradedCount === 0 && farmer.weighedCount > 0 ? (
+                    <span
+                      className={`text-[10px] font-bold shrink-0 rounded px-1.5 py-0.5 border ${
+                        isActive
+                          ? "bg-emerald/12 text-emerald border-emerald/35"
+                          : "bg-emerald/10 text-emerald border-emerald/35"
+                      }`}
+                      title="Semua bale sudah ditimbang — siap ditutup"
+                    >
+                      siap ditutup
+                    </span>
+                  ) : (
+                    <span
+                      className={`text-[10px] font-bold shrink-0 rounded px-1.5 py-0.5 border ${
+                        isActive
+                          ? "bg-emerald/12 text-emerald border-emerald/35"
+                          : "bg-amber/12 text-amber border-amber/35"
+                      }`}
+                    >
+                      {farmer.gradedCount} bale
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 mt-1">
                   <span className="text-muted-2">Antrian:</span>
