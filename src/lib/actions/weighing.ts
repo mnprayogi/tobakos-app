@@ -13,6 +13,7 @@ import {
 import { getActorName } from "@/lib/actor"
 import { resolveActorLane } from "@/lib/lane-resolution"
 import { parseLabelCode } from "@/lib/barcode"
+import { requireRoles } from "@/lib/roles"
 import { publishEvent } from "@/lib/events"
 
 export interface WeighInput {
@@ -23,6 +24,7 @@ export interface WeighInput {
 }
 
 export async function lookupItem(labelCode: string, laneId: number) {
+  await requireRoles("OPERATOR", "ADMIN")
   if (!parseLabelCode(labelCode.trim())) throw new Error("Format barcode tidak valid")
 
   const lane = await resolveActorLane({ laneId })
@@ -68,6 +70,7 @@ export async function lookupItem(labelCode: string, laneId: number) {
 }
 
 export async function saveWeighData(data: WeighInput) {
+  await requireRoles("OPERATOR", "ADMIN")
   if (!parseLabelCode(data.labelCode.trim())) throw new Error("Format barcode tidak valid")
 
   const lane = await resolveActorLane({ laneId: data.laneId })
@@ -182,6 +185,7 @@ export interface HistoryPurchase {
 }
 
 export async function getWeighedHistory(farmerId: number, laneId: number) {
+  await requireRoles("OPERATOR", "ADMIN")
   const lane = await resolveActorLane({ laneId })
   const todayStart = new Date()
   todayStart.setHours(0, 0, 0, 0)
@@ -245,6 +249,7 @@ export interface SessionCheckResult {
 }
 
 export async function getSessionUnweighed(purchaseId: number, laneId: number): Promise<SessionCheckResult> {
+  await requireRoles("OPERATOR", "ADMIN")
   const lane = await resolveActorLane({ laneId })
   const purchase = await prisma.purchase.findUnique({
     where: { id: purchaseId },
@@ -344,6 +349,7 @@ function buildNotaData(purchase: NotaPurchase) {
 }
 
 export async function getNotaData(purchaseId: number, laneId: number) {
+  await requireRoles("OPERATOR", "ADMIN")
   const lane = await resolveActorLane({ laneId })
   const purchase = await prisma.purchase.findUnique({
     where: { id: purchaseId },
@@ -357,6 +363,7 @@ export async function getNotaData(purchaseId: number, laneId: number) {
 }
 
 export async function endWeighSession(purchaseId: number, laneId: number) {
+  await requireRoles("OPERATOR", "ADMIN")
   const lane = await resolveActorLane({ laneId })
   const purchase = await prisma.purchase.findUnique({
     where: { id: purchaseId },
@@ -422,6 +429,7 @@ export interface WeighedTransaction {
 }
 
 export async function getWeighedTransactions(laneId: number): Promise<WeighedTransaction[]> {
+  await requireRoles("OPERATOR", "ADMIN")
   const lane = await resolveActorLane({ laneId })
   const purchases = await prisma.purchase.findMany({
     where: {
@@ -465,6 +473,7 @@ export async function getWeighedTransactions(laneId: number): Promise<WeighedTra
 }
 
 export async function getFarmersWithBales(laneId: number): Promise<FarmerQueueItem[]> {
+  await requireRoles("OPERATOR", "ADMIN")
   const lane = await resolveActorLane({ laneId })
   const purchases = await prisma.purchase.findMany({
     where: {

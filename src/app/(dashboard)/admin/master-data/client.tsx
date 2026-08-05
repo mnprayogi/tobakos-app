@@ -1062,7 +1062,7 @@ function UsersTab({ users: initial, lanes }: { users: User[]; lanes: LaneData[] 
               </div>
               <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                  u.role === "ADMIN" ? "bg-amber/12 text-amber" : u.role === "OPERATOR" ? "bg-emerald/12 text-emerald" : u.role === "FINANCE" ? "bg-amber/12 text-amber" : "bg-muted text-muted-foreground"
+                  u.role === "ADMIN" ? "bg-amber/12 text-amber" : u.role === "SUPER_ADMIN" ? "bg-emerald/12 text-emerald" : u.role === "OPERATOR" ? "bg-emerald/12 text-emerald" : u.role === "FINANCE" ? "bg-amber/12 text-amber" : "bg-muted text-muted-foreground"
                 }`}>
                   {u.role}
                 </span>

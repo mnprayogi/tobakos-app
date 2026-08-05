@@ -8,9 +8,11 @@ import { nextSequence } from "@/lib/sequences"
 import { resolveActorLane } from "@/lib/lane-resolution"
 import { getActorName } from "@/lib/actor"
 import { getSettingNumber } from "@/lib/settings"
+import { requireRoles } from "@/lib/roles"
 import { publishEvent } from "@/lib/events"
 
 export async function getTodayDraftFarmerIds(laneId: number): Promise<number[]> {
+  await requireRoles("GRADER", "ADMIN")
   const todayStart = new Date()
   todayStart.setHours(0, 0, 0, 0)
   const purchases = await prisma.purchase.findMany({
@@ -34,6 +36,7 @@ export interface RecentBaleItem {
 }
 
 export async function getRecentBales(laneId: number, take = 50): Promise<RecentBaleItem[]> {
+  await requireRoles("GRADER", "ADMIN")
   const items = await prisma.purchaseItem.findMany({
     take,
     orderBy: { createdAt: "desc" },
@@ -69,6 +72,7 @@ export interface TransactionOption {
 }
 
 export async function getFarmerTodayTransactions(farmerId: number): Promise<TransactionOption[]> {
+  await requireRoles("GRADER", "ADMIN")
   const todayStart = new Date()
   todayStart.setHours(0, 0, 0, 0)
   const purchases = await prisma.purchase.findMany({
@@ -103,6 +107,7 @@ export async function getFarmerLaneTodayTransactions(
   farmerId: number,
   laneCode: string
 ): Promise<LaneTransactionOption[]> {
+  await requireRoles("GRADER", "ADMIN")
   const lane = await resolveActorLane({ laneCode })
   if (!lane) throw new Error("Jalur tidak ditemukan")
 
@@ -130,6 +135,7 @@ export async function getFarmerLaneTodayTransactions(
 }
 
 export async function startNewTransaction(farmerId: number, laneCode: string) {
+  await requireRoles("GRADER", "ADMIN")
   const lane = await resolveActorLane({ laneCode })
 
   const txSeq = await nextSequence(lane.code)
@@ -163,6 +169,7 @@ export interface GradeInput {
 }
 
 export async function saveGrade(data: GradeInput) {
+  await requireRoles("GRADER", "ADMIN")
   const lane = await resolveActorLane({ laneCode: data.laneCode })
 
   if (!data.customerId) throw new Error("Pilih alokasi customer")
@@ -286,6 +293,7 @@ export async function saveGrade(data: GradeInput) {
 }
 
 export async function deleteBale(id: number) {
+  await requireRoles("GRADER", "ADMIN")
   try {
     let laneId: number | null = null
     await prisma.$transaction(async (tx) => {

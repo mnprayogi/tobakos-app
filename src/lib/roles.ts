@@ -20,5 +20,5 @@ export async function requireRoles(...roles: string[]): Promise<string> {
 
 export async function canAccess(roles: string[]): Promise<boolean> {
   const role = await getSessionRole()
-  return role !== null && roles.includes(role)
+  return role === "SUPER_ADMIN" || (role !== null && roles.includes(role))
 }

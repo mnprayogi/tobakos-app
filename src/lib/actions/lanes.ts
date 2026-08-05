@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/db"
+import { requireRoles } from "@/lib/roles"
 import { warehouseSchema, laneSchema } from "@/lib/validations"
 
 type ActionError = { error: string }
@@ -14,6 +15,7 @@ function handleError(err: unknown): ActionError {
 // ─── Reads ────────────────────────────────────────────
 
 export async function getActiveLanes() {
+  await requireRoles("GRADER", "OPERATOR", "ADMIN")
   return prisma.lane.findMany({
     where: { active: true },
     include: { warehouse: true },
@@ -22,6 +24,7 @@ export async function getActiveLanes() {
 }
 
 export async function getLaneByCode(code: string) {
+  await requireRoles("GRADER", "OPERATOR", "ADMIN")
   return prisma.lane.findUnique({
     where: { code },
     include: { warehouse: true },
@@ -31,6 +34,7 @@ export async function getLaneByCode(code: string) {
 // ─── Warehouse ────────────────────────────────────────
 
 export async function createWarehouse(data: { code: string; name: string; address?: string }) {
+  await requireRoles("ADMIN")
   try {
     const parsed = warehouseSchema.parse(data)
     const warehouse = await prisma.warehouse.create({ data: parsed })
@@ -42,6 +46,7 @@ export async function createWarehouse(data: { code: string; name: string; addres
 }
 
 export async function updateWarehouse(id: number, data: { code: string; name: string; address?: string }) {
+  await requireRoles("ADMIN")
   try {
     const parsed = warehouseSchema.parse(data)
     const warehouse = await prisma.warehouse.update({ where: { id }, data: parsed })
@@ -53,6 +58,7 @@ export async function updateWarehouse(id: number, data: { code: string; name: st
 }
 
 export async function toggleWarehouse(id: number, active: boolean) {
+  await requireRoles("ADMIN")
   try {
     const warehouse = await prisma.warehouse.update({ where: { id }, data: { active } })
     revalidatePath("/admin/master-data")
@@ -63,6 +69,7 @@ export async function toggleWarehouse(id: number, active: boolean) {
 }
 
 export async function deleteWarehouse(id: number) {
+  await requireRoles("ADMIN")
   try {
     const count = await prisma.purchase.count({ where: { warehouseId: id } })
     if (count > 0) throw new Error("Gudang tidak bisa dihapus karena sudah memiliki transaksi")
@@ -76,6 +83,7 @@ export async function deleteWarehouse(id: number) {
 // ─── Lane ─────────────────────────────────────────────
 
 export async function createLane(data: { code: string; name: string; warehouseId: number }) {
+  await requireRoles("ADMIN")
   try {
     const parsed = laneSchema.parse(data)
     const lane = await prisma.lane.create({ data: parsed })
@@ -87,6 +95,7 @@ export async function createLane(data: { code: string; name: string; warehouseId
 }
 
 export async function updateLane(id: number, data: { code: string; name: string; warehouseId: number }) {
+  await requireRoles("ADMIN")
   try {
     const parsed = laneSchema.parse(data)
     const lane = await prisma.lane.update({ where: { id }, data: parsed })
@@ -98,6 +107,7 @@ export async function updateLane(id: number, data: { code: string; name: string;
 }
 
 export async function toggleLane(id: number, active: boolean) {
+  await requireRoles("ADMIN")
   try {
     const lane = await prisma.lane.update({ where: { id }, data: { active } })
     revalidatePath("/admin/master-data")
@@ -108,6 +118,7 @@ export async function toggleLane(id: number, active: boolean) {
 }
 
 export async function deleteLane(id: number) {
+  await requireRoles("ADMIN")
   try {
     const count = await prisma.purchase.count({ where: { laneId: id } })
     if (count > 0) throw new Error("Jalur tidak bisa dihapus karena sudah memiliki transaksi")

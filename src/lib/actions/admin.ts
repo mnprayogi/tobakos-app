@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/db"
 import { invalidateSetting } from "@/lib/settings"
+import { requireRoles } from "@/lib/roles"
 import {
   farmerSchema,
   customerSchema,
@@ -22,6 +23,7 @@ function handleError(err: unknown): ActionError {
 // ─── Farmer ──────────────────────────────────────────
 
 export async function createFarmer(data: { name: string; nik?: string; phone?: string; address?: string }) {
+  await requireRoles("ADMIN")
   try {
     const parsed = farmerSchema.parse(data)
     const farmer = await prisma.farmer.create({ data: parsed })
@@ -33,6 +35,7 @@ export async function createFarmer(data: { name: string; nik?: string; phone?: s
 }
 
 export async function updateFarmer(id: number, data: { name: string; nik?: string; phone?: string; address?: string }) {
+  await requireRoles("ADMIN")
   try {
     const parsed = farmerSchema.parse(data)
     const farmer = await prisma.farmer.update({ where: { id }, data: parsed })
@@ -44,6 +47,7 @@ export async function updateFarmer(id: number, data: { name: string; nik?: strin
 }
 
 export async function deleteFarmer(id: number) {
+  await requireRoles("ADMIN")
   try {
     await prisma.farmer.delete({ where: { id } })
     revalidatePath("/admin/farmers")
@@ -55,6 +59,7 @@ export async function deleteFarmer(id: number) {
 // ─── Customer ────────────────────────────────────────
 
 export async function createCustomer(data: { name: string; phone?: string; address?: string }) {
+  await requireRoles("ADMIN")
   try {
     const parsed = customerSchema.parse(data)
     const customer = await prisma.customer.create({ data: parsed })
@@ -66,6 +71,7 @@ export async function createCustomer(data: { name: string; phone?: string; addre
 }
 
 export async function updateCustomer(id: number, data: { name: string; phone?: string; address?: string }) {
+  await requireRoles("ADMIN")
   try {
     const parsed = customerSchema.parse(data)
     const customer = await prisma.customer.update({ where: { id }, data: parsed })
@@ -77,6 +83,7 @@ export async function updateCustomer(id: number, data: { name: string; phone?: s
 }
 
 export async function deleteCustomer(id: number) {
+  await requireRoles("ADMIN")
   try {
     await prisma.customer.delete({ where: { id } })
     revalidatePath("/admin/master-data")
@@ -90,6 +97,7 @@ export async function deleteCustomer(id: number) {
 // ─── Tobacco Type ────────────────────────────────────
 
 export async function createTobaccoType(data: { name: string }) {
+  await requireRoles("ADMIN")
   try {
     const parsed = tobaccoTypeSchema.parse(data)
     const type = await prisma.tobaccoType.create({ data: parsed })
@@ -101,6 +109,7 @@ export async function createTobaccoType(data: { name: string }) {
 }
 
 export async function updateTobaccoType(id: number, data: { name: string }) {
+  await requireRoles("ADMIN")
   try {
     const parsed = tobaccoTypeSchema.parse(data)
     const type = await prisma.tobaccoType.update({ where: { id }, data: parsed })
@@ -112,6 +121,7 @@ export async function updateTobaccoType(id: number, data: { name: string }) {
 }
 
 export async function toggleTobaccoType(id: number, active: boolean) {
+  await requireRoles("ADMIN")
   try {
     const type = await prisma.tobaccoType.update({ where: { id }, data: { active } })
     revalidatePath("/admin/tobacco-types")
@@ -124,6 +134,7 @@ export async function toggleTobaccoType(id: number, active: boolean) {
 // ─── Leaf Type ───────────────────────────────────────
 
 export async function createLeafType(data: { name: string }) {
+  await requireRoles("ADMIN")
   try {
     const parsed = leafTypeSchema.parse(data)
     const type = await prisma.leafType.create({ data: parsed })
@@ -135,6 +146,7 @@ export async function createLeafType(data: { name: string }) {
 }
 
 export async function updateLeafType(id: number, data: { name: string }) {
+  await requireRoles("ADMIN")
   try {
     const parsed = leafTypeSchema.parse(data)
     const type = await prisma.leafType.update({ where: { id }, data: parsed })
@@ -146,6 +158,7 @@ export async function updateLeafType(id: number, data: { name: string }) {
 }
 
 export async function toggleLeafType(id: number, active: boolean) {
+  await requireRoles("ADMIN")
   try {
     const type = await prisma.leafType.update({ where: { id }, data: { active } })
     revalidatePath("/admin/leaf-types")
@@ -158,6 +171,7 @@ export async function toggleLeafType(id: number, active: boolean) {
 // ─── Packing Type ────────────────────────────────────
 
 export async function createPackingType(data: { name: string; deductionWeight: number }) {
+  await requireRoles("ADMIN")
   try {
     const parsed = packingTypeSchema.parse(data)
     const type = await prisma.packingType.create({ data: parsed })
@@ -169,6 +183,7 @@ export async function createPackingType(data: { name: string; deductionWeight: n
 }
 
 export async function updatePackingType(id: number, data: { name: string; deductionWeight: number }) {
+  await requireRoles("ADMIN")
   try {
     const parsed = packingTypeSchema.parse(data)
     const type = await prisma.packingType.update({ where: { id }, data: parsed })
@@ -180,6 +195,7 @@ export async function updatePackingType(id: number, data: { name: string; deduct
 }
 
 export async function deletePackingType(id: number) {
+  await requireRoles("ADMIN")
   try {
     await prisma.packingType.delete({ where: { id } })
     revalidatePath("/admin/packing-types")
@@ -191,6 +207,7 @@ export async function deletePackingType(id: number) {
 // ─── Tobacco Grade ───────────────────────────────────
 
 export async function createGrade(data: { name: string; defaultPrice: number; tobaccoTypeId: number }) {
+  await requireRoles("ADMIN")
   try {
     const parsed = gradeSchema.parse(data)
     const grade = await prisma.tobaccoGrade.create({
@@ -204,6 +221,7 @@ export async function createGrade(data: { name: string; defaultPrice: number; to
 }
 
 export async function updateGrade(id: number, data: { name: string; defaultPrice: number; tobaccoTypeId: number }) {
+  await requireRoles("ADMIN")
   try {
     const parsed = gradeSchema.parse(data)
     const grade = await prisma.tobaccoGrade.update({
@@ -218,6 +236,7 @@ export async function updateGrade(id: number, data: { name: string; defaultPrice
 }
 
 export async function deleteGrade(id: number) {
+  await requireRoles("ADMIN")
   try {
     await prisma.tobaccoGrade.delete({ where: { id } })
     revalidatePath("/admin/grades")
@@ -236,6 +255,7 @@ export async function createUser(data: {
   role: string
   laneId?: number | null
 }) {
+  await requireRoles("ADMIN")
   try {
     const user = await prisma.user.create({
       data: { ...data, laneId: data.laneId ?? null },
@@ -251,6 +271,7 @@ export async function updateUser(
   id: string,
   data: { name: string; username: string; email?: string; role: string; laneId?: number | null }
 ) {
+  await requireRoles("ADMIN")
   try {
     const user = await prisma.user.update({
       where: { id },
@@ -264,6 +285,7 @@ export async function updateUser(
 }
 
 export async function deleteUser(id: string) {
+  await requireRoles("ADMIN")
   try {
     await prisma.user.delete({ where: { id } })
     revalidatePath("/admin/master-data")
@@ -275,6 +297,7 @@ export async function deleteUser(id: string) {
 // ─── System Settings ─────────────────────────────────
 
 export async function updateSystemSetting(key: string, value: string) {
+  await requireRoles("ADMIN")
   try {
     const setting = await prisma.systemSetting.upsert({
       where: { key },
