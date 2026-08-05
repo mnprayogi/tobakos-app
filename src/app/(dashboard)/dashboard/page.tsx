@@ -34,6 +34,9 @@ export default async function DashboardPage() {
     case "ADMIN":
       view = { role, data: await getAdminDashboard() }
       break
+    case "SUPER_ADMIN":
+      view = { role, data: await getOwnerDashboard() }
+      break
     default:
       redirect("/login")
   }

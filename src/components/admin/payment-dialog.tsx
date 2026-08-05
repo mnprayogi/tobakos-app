@@ -1,9 +1,10 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { recordPayment } from "@/lib/actions/finance"
+import { recordPayment, voidPayment } from "@/lib/actions/finance"
 import { isMultipleOf100, roundMoney } from "@/lib/calculations"
 import { formatCurrency, formatDateTime } from "@/lib/utils"
 
@@ -15,6 +16,8 @@ export interface PaymentInfo {
   paidBy: string | null
   paidAt: Date
   loanDeduction: number
+  voidedAt?: Date | null
+  voidedBy?: string | null
 }
 
 export interface PayPurchase {
@@ -41,9 +44,11 @@ interface Props {
   purchase: PayPurchase | null
   onClose: () => void
   onPaid: (updated: PaymentUpdate) => void
+  canVoid?: boolean
 }
 
-export function PaymentDialog({ purchase, onClose, onPaid }: Props) {
+export function PaymentDialog({ purchase, onClose, onPaid, canVoid = false }: Props) {
+  const router = useRouter()
   const [total, setTotal] = useState("")
   const [method, setMethod] = useState<"TUNAI" | "TRANSFER">("TUNAI")
   const [note, setNote] = useState("")
@@ -124,6 +129,19 @@ export function PaymentDialog({ purchase, onClose, onPaid }: Props) {
     }
   }
 
+  async function handleVoid(paymentId: number) {
+    if (!purchase) return
+    if (!confirm("Batalkan pembayaran ini? (butuh hak Super Admin/Owner — akan dihitung ulang status transaksi)")) return
+    try {
+      await voidPayment(purchase.id, paymentId)
+      toast.success("Pembayaran dibatalkan")
+      router.refresh()
+      onClose()
+    } catch (err) {
+      toast.error((err as Error).message)
+    }
+  }
+
   const parsedTotal = purchase && total !== "" ? Number(total) : NaN
   const parsedDeduction = purchase && loanDeduction !== "" ? Number(loanDeduction) : 0
   const parsedCash = !Number.isNaN(parsedTotal) ? roundMoney(parsedTotal - parsedDeduction) : NaN
@@ -173,7 +191,7 @@ export function PaymentDialog({ purchase, onClose, onPaid }: Props) {
                 <label className="block text-[11px] font-bold text-muted-foreground">Total Pembayaran Transaksi (Rp) *</label>
                 <button
                   type="button"
-                  onClick={() => setTotal(String(Math.floor(purchase.remaining / 100) * 100))}
+                  onClick={() => setTotal(String(roundMoney(purchase.remaining)))}
                   className="px-2.5 py-1 rounded-md bg-emerald/12 text-emerald border border-emerald/35 text-[10.5px] font-bold cursor-pointer hover:bg-emerald/20"
                 >
                   Lunasi
@@ -301,26 +319,45 @@ export function PaymentDialog({ purchase, onClose, onPaid }: Props) {
               <div className="rounded-lg border border-border-soft overflow-hidden">
                 <p className="text-[10px] uppercase font-bold text-muted-2 px-2.5 py-1.5 bg-panel-alt">Riwayat Pembayaran ({purchase.payments.length})</p>
                 <div className="max-h-40 overflow-y-auto">
-                  {purchase.payments.map((pay) => (
-                    <div key={pay.id} className="flex items-center justify-between gap-2 flex-wrap px-2.5 py-1.5 border-t border-border-soft text-[11.5px]">
-                      <div>
-                        <span className="font-mono font-bold text-foreground">{formatCurrency(pay.amount)}</span>
-                        <span className={`ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold ${pay.method === "TUNAI" ? "bg-emerald/12 text-emerald" : "bg-amber/12 text-amber"}`}>
-                          {pay.method}
-                        </span>
-                        {pay.loanDeduction != null && pay.loanDeduction > 0 && (
-                          <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-deduction/12 text-red-deduction">
-                            Hutang −{formatCurrency(pay.loanDeduction)}
+                  {purchase.payments.map((pay) => {
+                    const isVoided = !!pay.voidedAt
+                    return (
+                      <div key={pay.id} className={`flex items-center justify-between gap-2 flex-wrap px-2.5 py-1.5 border-t border-border-soft text-[11.5px] ${isVoided ? "opacity-50" : ""}`}>
+                        <div>
+                          <span className={`font-mono font-bold text-foreground ${isVoided ? "line-through" : ""}`}>{formatCurrency(pay.amount)}</span>
+                          <span className={`ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold ${pay.method === "TUNAI" ? "bg-emerald/12 text-emerald" : "bg-amber/12 text-amber"}`}>
+                            {pay.method}
                           </span>
-                        )}
-                        {pay.note && <p className="text-muted-2 text-[10px] mt-0.5">{pay.note}</p>}
+                          {pay.loanDeduction != null && pay.loanDeduction > 0 && (
+                            <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-deduction/12 text-red-deduction">
+                              Hutang −{formatCurrency(pay.loanDeduction)}
+                            </span>
+                          )}
+                          {isVoided && (
+                            <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-deduction/12 text-red-deduction border border-red-deduction/35">
+                              DIBATALKAN{pay.voidedBy ? ` · ${pay.voidedBy}` : ""}
+                            </span>
+                          )}
+                          {pay.note && <p className="text-muted-2 text-[10px] mt-0.5">{pay.note}</p>}
+                        </div>
+                        <div className="flex items-center gap-2.5">
+                          <div className="text-right text-muted-2 text-[10px]">
+                            <p>{formatDateTime(pay.paidAt)}</p>
+                            <p>{pay.paidBy ?? "—"}</p>
+                          </div>
+                          {canVoid && !isVoided && (
+                            <button
+                              type="button"
+                              onClick={() => handleVoid(pay.id)}
+                              className="text-[10px] font-bold text-red-deduction cursor-pointer hover:underline"
+                            >
+                              Batalkan
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <div className="text-right text-muted-2 text-[10px]">
-                        <p>{formatDateTime(pay.paidAt)}</p>
-                        <p>{pay.paidBy ?? "—"}</p>
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
             )}

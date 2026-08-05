@@ -5,6 +5,8 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { reopenTransaction } from "@/lib/actions/finance"
+import { getTransactionsExport } from "@/lib/actions/transactions"
+import { exportTransactionsExcel } from "@/lib/export-excel"
 import { useSse } from "@/hooks/useSse"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { StatusPill } from "@/components/shared/status-pill"
@@ -34,6 +36,8 @@ interface Payment {
   paidBy: string | null
   paidAt: Date
   loanDeduction: number
+  voidedAt?: Date | null
+  voidedBy?: string | null
 }
 
 interface Purchase {
@@ -65,6 +69,7 @@ interface TransactionsClientProps {
   q: string
   status: string
   statusCounts: Record<string, number>
+  role: string
 }
 
 const STATUS_FILTERS: { key: string; label: string }[] = [
@@ -109,6 +114,7 @@ export function TransactionsClient({
   q,
   status,
   statusCounts,
+  role,
 }: TransactionsClientProps) {
   const router = useRouter()
   const [purchases, setPurchases] = useState(initial)
@@ -121,11 +127,13 @@ export function TransactionsClient({
   const [statusFilter, setStatusFilter] = useState(status)
   const [payTarget, setPayTarget] = useState<PayPurchase | null>(null)
   const [receiptTarget, setReceiptTarget] = useState<number | null>(null)
+  const [exporting, setExporting] = useState(false)
 
   useSse(null, (event) => {
     if (
       event.type === "purchase.approved" ||
       event.type === "payment.recorded" ||
+      event.type === "payment.voided" ||
       event.type === "purchase.reopened" ||
       event.type === "session.ended" ||
       event.type === "bale.weighed"
@@ -177,6 +185,20 @@ export function TransactionsClient({
     router.replace(buildTxnUrl({ q: query, status: next, page: 1, pageSize }))
   }
 
+  async function handleExport() {
+    setExporting(true)
+    try {
+      const rows = await getTransactionsExport(query, statusFilter)
+      if (rows.length === 0) throw new Error("Tidak ada transaksi untuk diekspor")
+      await exportTransactionsExcel(rows)
+      toast.success(`Export ${rows.length} transaksi berhasil`)
+    } catch (err) {
+      toast.error((err as Error).message)
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <div className="space-y-5">
       <h1 className="text-lg font-bold text-foreground">Transaksi</h1>
@@ -189,6 +211,14 @@ export function TransactionsClient({
           onChange={(e) => setQuery(e.target.value)}
           className="h-9 flex-1 min-w-[200px] px-3 bg-panel-alt border border-border-soft text-foreground text-[12px] rounded-lg outline-none placeholder:text-muted-2"
         />
+        <button
+          type="button"
+          onClick={handleExport}
+          disabled={exporting}
+          className="h-9 px-3 rounded-lg border border-emerald/35 bg-emerald/12 text-emerald text-[12px] font-bold cursor-pointer flex items-center gap-1.5 hover:bg-emerald/20 disabled:opacity-50"
+        >
+          {exporting ? "Mengekspor…" : "Export Excel"}
+        </button>
         <div className="flex flex-wrap gap-1.5">
           {STATUS_FILTERS.map((f) => {
             const active = statusFilter === f.key
@@ -347,6 +377,7 @@ export function TransactionsClient({
         purchase={payTarget}
         onClose={() => setPayTarget(null)}
         onPaid={handlePaid}
+        canVoid={role === "SUPER_ADMIN" || role === "OWNER"}
       />
 
       <BuktiLunasDialog

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation"
+import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
 import { canAccess } from "@/lib/roles"
 import { TransactionsClient } from "./client"
@@ -19,6 +20,9 @@ export default async function TransactionsPage({
   searchParams?: Promise<TransactionsSearchParams>
 }) {
   if (!(await canAccess(["ADMIN", "FINANCE"]))) redirect("/")
+
+  const session = await auth()
+  const role = session?.user?.role ?? ""
 
   const sp = searchParams ? await searchParams : {}
   const q = (sp.q ?? "").trim()
@@ -113,6 +117,8 @@ export default async function TransactionsPage({
       paidBy: pay.paidBy,
       paidAt: pay.paidAt,
       loanDeduction: Number(pay.loanDeduction ?? 0),
+      voidedAt: pay.voidedAt,
+      voidedBy: pay.voidedBy,
     })),
     loanBalance: loanBalanceByFarmer.get(p.farmerId) ?? 0,
   }))
@@ -126,6 +132,7 @@ export default async function TransactionsPage({
       q={q}
       status={status}
       statusCounts={statusCounts}
+      role={role}
     />
   )
 }

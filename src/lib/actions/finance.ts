@@ -105,6 +105,8 @@ export async function recordPayment(purchaseId: number, input: PaymentInput) {
   let purchaseLaneId: number | null = null
 
   const result = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM tobacco_purchases WHERE id = ${purchaseId} FOR UPDATE`
+
     const purchase = await tx.purchase.findUnique({
       where: { id: purchaseId },
       include: {
@@ -136,6 +138,8 @@ export async function recordPayment(purchaseId: number, input: PaymentInput) {
     let loan = null
     let newLoanBalance: number | null = null
     if (loanDeduction > 0.005) {
+      await tx.$queryRaw`SELECT id FROM farmer_loans WHERE farmer_id = ${purchase.farmerId} FOR UPDATE`
+
       loan = await tx.farmerLoan.findUnique({
         where: { farmerId: purchase.farmerId },
         include: { entries: { select: { type: true, amount: true } } },
@@ -252,12 +256,120 @@ export async function recordPayment(purchaseId: number, input: PaymentInput) {
   return result
 }
 
+export async function voidPayment(purchaseId: number, paymentId: number) {
+  const actor = await requireRoles("SUPER_ADMIN", "OWNER")
+
+  let purchaseLaneId: number | null = null
+  let loanTouched = false
+
+  const result = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM tobacco_purchases WHERE id = ${purchaseId} FOR UPDATE`
+
+    const purchase = await tx.purchase.findUnique({
+      where: { id: purchaseId },
+      include: {
+        items: { where: { status: "CLOSED" } },
+        payments: { orderBy: { paidAt: "asc" } },
+      },
+    })
+    if (!purchase) throw new Error("Transaksi tidak ditemukan")
+    if (purchase.status !== "APPROVED" && purchase.status !== "PAID")
+      throw new Error("Hanya transaksi APPROVED/PAID yang bisa dikoreksi pembayarannya")
+    purchaseLaneId = purchase.laneId
+
+    const payment = purchase.payments.find((p) => p.id === paymentId)
+    if (!payment) throw new Error("Pembayaran tidak ditemukan pada transaksi ini")
+    if (payment.voidedAt) throw new Error("Pembayaran ini sudah dibatalkan")
+
+    if (Number(payment.loanDeduction ?? 0) > 0.005) {
+      await tx.$queryRaw`SELECT id FROM farmer_loans WHERE farmer_id = ${purchase.farmerId} FOR UPDATE`
+      loanTouched = true
+      await tx.loanEntry.deleteMany({ where: { paymentId } })
+    }
+
+    await tx.payment.update({
+      where: { id: paymentId },
+      data: { voidedAt: new Date(), voidedBy: actor },
+    })
+
+    const validPayments = purchase.payments.filter(
+      (p) => p.id !== paymentId && !p.voidedAt
+    )
+    let paidAmount = 0
+    for (const p of validPayments) {
+      paidAmount += Number(p.amount) + Number(p.loanDeduction ?? 0)
+    }
+    paidAmount = roundMoney(paidAmount)
+
+    const totalPrice = Number(purchase.totalPrice)
+    const isPaidOff = paidAmount >= totalPrice - 0.005
+    const finalPaid = isPaidOff ? totalPrice : paidAmount
+    const lastPayment = validPayments[validPayments.length - 1]
+
+    await tx.purchase.update({
+      where: { id: purchaseId },
+      data: {
+        paidAmount: finalPaid,
+        status: isPaidOff ? "PAID" : "APPROVED",
+        paidBy: isPaidOff ? (lastPayment?.paidBy ?? null) : null,
+      },
+    })
+
+    if (!isPaidOff) {
+      await tx.purchaseItem.updateMany({
+        where: { purchaseId, status: "CLOSED" },
+        data: { status: "WEIGHED", closedBy: null },
+      })
+    }
+
+    if (loanTouched) {
+      const loan = await tx.farmerLoan.findUnique({
+        where: { farmerId: purchase.farmerId },
+        include: { entries: { select: { type: true, amount: true } } },
+      })
+      if (loan) {
+        let borrowed = 0
+        let repaid = 0
+        for (const e of loan.entries) {
+          if (e.type === "DISBURSEMENT") borrowed += Number(e.amount)
+          else repaid += Number(e.amount)
+        }
+        const balance = roundMoney(borrowed - repaid)
+        const isSettled = balance <= 0.005
+        await tx.farmerLoan.update({
+          where: { id: loan.id },
+          data: {
+            status: isSettled ? "SETTLED" : "ACTIVE",
+            ...(isSettled ? { settledAt: new Date() } : { settledAt: null }),
+            updatedAt: new Date(),
+          },
+        })
+      }
+    }
+
+    return {
+      paymentId: payment.id,
+      paidOff: isPaidOff,
+      paidAmount: finalPaid,
+      remaining: roundMoney(totalPrice - finalPaid),
+      loanTouched,
+    }
+  })
+
+  revalidatePath("/admin/transactions")
+  revalidatePath("/admin/debt")
+  if (result.loanTouched) revalidatePath("/admin/loans")
+  publishEvent("payment.voided", purchaseLaneId)
+  if (result.loanTouched) publishEvent("loan.updated")
+  return result
+}
+
 export async function reopenTransaction(purchaseId: number) {
   await requireRoles("ADMIN", "FINANCE")
 
   const purchase = await prisma.purchase.findUnique({
     where: { id: purchaseId },
-    include: { payments: { select: { id: true } } },
+    include: { payments: { where: { voidedAt: null }, select: { id: true } } },
   })
   if (!purchase) throw new Error("Transaksi tidak ditemukan")
   if (purchase.status !== "APPROVED" && purchase.status !== "PAID")
@@ -317,6 +429,7 @@ export interface DebtFarmer {
   totalDibayar: number
   sisa: number
   status: DebtStatus
+  loanBalance: number
   purchases: DebtPurchase[]
 }
 
@@ -327,10 +440,26 @@ export async function getDebtSummary(): Promise<DebtFarmer[]> {
     orderBy: [{ farmerId: "asc" }, { createdAt: "desc" }],
     include: {
       farmer: true,
-      payments: { orderBy: { paidAt: "asc" } },
+      payments: { where: { voidedAt: null }, orderBy: { paidAt: "asc" } },
       _count: { select: { items: true } },
     },
   })
+
+  const farmerIds = [...new Set(purchases.map((p) => p.farmerId))]
+  const loans = await prisma.farmerLoan.findMany({
+    where: { farmerId: { in: farmerIds }, status: "ACTIVE" },
+    include: { entries: { select: { type: true, amount: true } } },
+  })
+  const loanBalanceByFarmer = new Map<number, number>()
+  for (const loan of loans) {
+    let borrowed = 0
+    let repaid = 0
+    for (const e of loan.entries) {
+      if (e.type === "DISBURSEMENT") borrowed += Number(e.amount)
+      else repaid += Number(e.amount)
+    }
+    loanBalanceByFarmer.set(loan.farmerId, roundMoney(borrowed - repaid))
+  }
 
   const farmers = new Map<number, DebtFarmer>()
 
@@ -348,6 +477,7 @@ export async function getDebtSummary(): Promise<DebtFarmer[]> {
       totalDibayar: 0,
       sisa: 0,
       status: "LUNAS" as DebtStatus,
+      loanBalance: loanBalanceByFarmer.get(p.farmerId) ?? 0,
       purchases: [],
     }
 
@@ -426,7 +556,7 @@ export async function getBuktiData(purchaseId: number): Promise<BuktiData> {
       farmer: true,
       warehouse: true,
       lane: true,
-      payments: { orderBy: { paidAt: "asc" } },
+      payments: { where: { voidedAt: null }, orderBy: { paidAt: "asc" } },
     },
   })
   if (!purchase) throw new Error("Transaksi tidak ditemukan")

@@ -974,7 +974,7 @@ function UsersTab({ users: initial, lanes }: { users: User[]; lanes: LaneData[] 
     } catch (err) { toast.error((err as Error).message) }
   }
 
-  const roleOptions = ["GRADER", "OPERATOR", "FINANCE", "ADMIN", "OWNER"]
+  const roleOptions = ["GRADER", "OPERATOR", "FINANCE", "ADMIN", "OWNER", "SUPER_ADMIN"]
 
   const lanesByWarehouse = lanes.reduce<Record<string, LaneData[]>>((acc, lane) => {
     const key = lane.warehouse.code

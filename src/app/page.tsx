@@ -14,6 +14,7 @@ export default async function Home() {
   if (role === "OPERATOR") redirect("/dashboard")
   if (role === "FINANCE") redirect("/dashboard")
   if (role === "OWNER") redirect("/dashboard")
+  if (role === "SUPER_ADMIN") redirect("/dashboard")
 
   redirect("/login")
 }

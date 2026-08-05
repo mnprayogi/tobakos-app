@@ -153,6 +153,8 @@ model Payment {
   paidBy         String?
   paidAt         DateTime      @default(now())
   loanDeduction  Decimal       @default(0.00) @db.Decimal(15, 2)
+  voidedAt       DateTime?
+  voidedBy       String?
   loanEntry      LoanEntry?
 
   @@map("payments")

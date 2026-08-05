@@ -1,5 +1,6 @@
 import writeExcelFile, { type CellObject, type Row, type SheetData } from "write-excel-file/browser"
 import type { FarmerSummaryRow, PeriodSummaryRow, TransactionDetailRow } from "@/lib/actions/reports"
+import type { TxnExportRow } from "@/lib/actions/transactions"
 
 const MONEY_FMT = "#,##0.##"
 const KG_FMT = "#,##0.00"
@@ -241,4 +242,75 @@ export async function exportReportExcel(
   await writeExcelFile(sheets, { fontFamily: "Calibri", fontSize: 11 }).toFile(
     `Laporan-${fileLabel}_${range}.xlsx`
   )
+}
+
+export async function exportTransactionsExcel(rows: TxnExportRow[]): Promise<void> {
+  const widths = [20, 22, 14, 12, 12, 14, 8, 12, 16, 16, 16, 16, 12, 14, 16, 16, 16]
+  const columns = widths.map((width) => ({ width }))
+  const data: SheetData = [
+    titleRow(`EXPORT TRANSAKSI — ${new Date().toLocaleDateString("id-ID")}`, columns.length),
+    headerRow([
+      "Kode",
+      "Petani",
+      "NIK",
+      "Tanggal",
+      "Gudang",
+      "Jalur",
+      "Bale",
+      "Netto (kg)",
+      "Harga Asli",
+      "Total Final",
+      "Dibayar",
+      "Sisa",
+      "Status",
+      "Status Hutang",
+      "Grader",
+      "Operator",
+      "Approver",
+    ]),
+    ...rows.map((p) => [
+      txt(p.transactionCode, { fontWeight: "bold" }),
+      txt(p.farmerName),
+      txt(p.farmerNik),
+      txt(fmtDate(p.transactionDate)),
+      txt(p.warehouseCode),
+      txt(p.laneCode),
+      n(p.totalItems, COUNT_FMT, "center"),
+      n(p.totalNetWeight, KG_FMT),
+      p.originalTotalPrice != null ? n(p.originalTotalPrice, MONEY_FMT) : { value: "", ...border },
+      n(p.totalPrice, MONEY_FMT),
+      n(p.paidAmount, MONEY_FMT),
+      n(p.remaining, MONEY_FMT),
+      txt(p.status),
+      txt(p.derived),
+      txt(p.createdBy),
+      txt(p.weighedBy),
+      txt(p.approvedBy),
+    ] as Row),
+    totalRow([
+      txt("TOTAL", { backgroundColor: "#f2f2f2" }),
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
+      n(sum((r) => r.totalItems, rows), COUNT_FMT, "center", true),
+      n(sum((r) => r.totalNetWeight, rows), KG_FMT, "right", true),
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
+      n(sum((r) => r.totalPrice, rows), MONEY_FMT, "right", true),
+      n(sum((r) => r.paidAmount, rows), MONEY_FMT, "right", true),
+      n(sum((r) => r.remaining, rows), MONEY_FMT, "right", true),
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
+    ]),
+  ]
+
+  const dateLabel = new Date().toISOString().slice(0, 10).replace(/-/g, "")
+  await writeExcelFile(
+    [{ sheet: "Transaksi", columns, data, stickyRowsCount: 2, showGridLines: false }],
+    { fontFamily: "Calibri", fontSize: 11 }
+  ).toFile(`Transaksi_${dateLabel}.xlsx`)
 }

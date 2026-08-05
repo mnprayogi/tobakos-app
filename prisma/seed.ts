@@ -15,6 +15,7 @@ async function main() {
     { username: "operator", password, name: "Budi Utama (Operator 2)", role: "OPERATOR" },
     { username: "finance", password, name: "Admin Keuangan", role: "FINANCE" },
     { username: "owner", password, name: "Owner / Pemilik", role: "OWNER" },
+    { username: "superadmin", password, name: "Super Admin", role: "SUPER_ADMIN" },
   ]
 
   for (const u of users) {

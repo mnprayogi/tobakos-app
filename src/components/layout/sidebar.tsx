@@ -6,7 +6,7 @@ import { signOut } from "next-auth/react"
 
 import { cn } from "@/lib/utils"
 
-const ALL_ROLES = ["GRADER", "OPERATOR", "FINANCE", "ADMIN", "OWNER"]
+const ALL_ROLES = ["GRADER", "OPERATOR", "FINANCE", "ADMIN", "OWNER", "SUPER_ADMIN"]
 
 const navItems = [
   {
@@ -178,7 +178,7 @@ export function Sidebar({
 
       {navItems.map((section) => {
         const visibleItems = section.items.filter((item) =>
-          item.roles.includes(role)
+          role === "SUPER_ADMIN" || item.roles.includes(role)
         )
         if (visibleItems.length === 0) return null
 

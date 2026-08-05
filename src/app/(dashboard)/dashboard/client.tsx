@@ -19,6 +19,7 @@ export type DashboardView =
   | { role: "FINANCE"; data: FinanceDashboard }
   | { role: "OWNER"; data: OwnerDashboard }
   | { role: "ADMIN"; data: AdminDashboard }
+  | { role: "SUPER_ADMIN"; data: OwnerDashboard }
 
 type KpiTone = "default" | "emerald" | "amber" | "red"
 
@@ -50,6 +51,7 @@ export function DashboardClient({
       {view.role === "FINANCE" && <FinanceView data={view.data} />}
       {view.role === "OWNER" && <OwnerView data={view.data} />}
       {view.role === "ADMIN" && <AdminView data={view.data} />}
+      {view.role === "SUPER_ADMIN" && <OwnerView data={view.data} />}
     </div>
   )
 }

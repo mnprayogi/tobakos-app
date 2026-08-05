@@ -6,6 +6,7 @@ export async function getSessionRole(): Promise<string | null> {
 }
 
 export function assertRole(role: string | null, allowed: string[]): void {
+  if (role === "SUPER_ADMIN") return
   if (!role || !allowed.includes(role)) {
     throw new Error("Anda tidak memiliki akses untuk aksi ini")
   }

@@ -11,6 +11,10 @@ export const proxy = auth((req) => {
 
   const role = session?.user?.role
 
+  if (role === "SUPER_ADMIN") {
+    return NextResponse.next()
+  }
+
   if (pathname.startsWith("/pos-1") && role !== "GRADER" && role !== "ADMIN") {
     return NextResponse.redirect(new URL("/login", req.url))
   }
