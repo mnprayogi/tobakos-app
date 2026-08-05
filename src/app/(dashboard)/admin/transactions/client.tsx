@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { reopenTransaction } from "@/lib/actions/finance"
 import { getTransactionsExport } from "@/lib/actions/transactions"
-import { exportTransactionsExcel } from "@/lib/export-excel"
 import { useSse } from "@/hooks/useSse"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { StatusPill } from "@/components/shared/status-pill"
@@ -190,6 +189,7 @@ export function TransactionsClient({
     try {
       const rows = await getTransactionsExport(query, statusFilter)
       if (rows.length === 0) throw new Error("Tidak ada transaksi untuk diekspor")
+      const { exportTransactionsExcel } = await import("@/lib/export-excel")
       await exportTransactionsExcel(rows)
       toast.success(`Export ${rows.length} transaksi berhasil`)
     } catch (err) {

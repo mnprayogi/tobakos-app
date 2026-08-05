@@ -4,7 +4,11 @@ import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { getBuktiData, type BuktiData } from "@/lib/actions/finance"
 import { usePrintDocument, printBaseStyle } from "@/lib/print"
-import { BuktiLunasPrint } from "@/components/admin/bukti-lunas-print"
+import { lazyPrint } from "@/components/shared/lazy-print"
+
+const BuktiLunasPrint = lazyPrint(() =>
+  import("@/components/admin/bukti-lunas-print").then((m) => m.BuktiLunasPrint)
+)
 
 interface Props {
   purchaseId: number | null

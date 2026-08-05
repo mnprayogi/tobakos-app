@@ -1,17 +1,19 @@
 "use client"
 
-import { useState, useRef, useCallback } from "react"
+import { useState, useRef, useCallback, useEffect } from "react"
 import { toast } from "sonner"
 import { getWeighedHistory, endWeighSession, getSessionUnweighed, getNotaData } from "@/lib/actions/weighing"
 import { usePrintDocument, printBaseStyle } from "@/lib/print"
-import { NotaTimbangan } from "@/components/pos-2/nota-timbangan"
+import { lazyPrint } from "@/components/shared/lazy-print"
+
+const NotaTimbangan = lazyPrint(() =>
+  import("@/components/pos-2/nota-timbangan").then((m) => m.NotaTimbangan)
+)
 import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { formatCurrency } from "@/lib/utils"
 import { cn } from "@/lib/utils"
 import { StatusPill } from "@/components/shared/status-pill"
-import { usePolling } from "@/hooks/usePolling"
-import { useSse } from "@/hooks/useSse"
-import { REALTIME_INTERVAL_MS } from "@/lib/realtime"
+import { useRealtime } from "@/hooks/useRealtime"
 import { ChevronDown } from "lucide-react"
 import type { NotaItem, HistoryPurchase, SessionCheckResult } from "@/lib/actions/weighing"
 
@@ -85,18 +87,13 @@ export function WeighedHistory({ laneId, farmerId, farmerName, refreshKey = 0, o
     }
   }, [farmerId, laneId])
 
-  usePolling(loadHistory, REALTIME_INTERVAL_MS, [loadHistory, refreshKey])
+  useRealtime(laneId, [loadHistory])
 
-  useSse(laneId, (event) => {
-    if (
-      event.type === "bale.created" ||
-      event.type === "bale.deleted" ||
-      event.type === "bale.weighed" ||
-      event.type === "session.ended"
-    ) {
-      loadHistory()
-    }
-  })
+  useEffect(() => {
+    // reload when the weighing page signals a new save via refreshKey
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- prop-key fetch; setState happens after await
+    loadHistory()
+  }, [loadHistory, refreshKey])
 
   function handleActiveScroll() {
     const el = activeBodyRef.current

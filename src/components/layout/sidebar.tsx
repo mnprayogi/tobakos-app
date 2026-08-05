@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { useMemo } from "react"
 import { usePathname } from "next/navigation"
 import { signOut } from "next-auth/react"
 
@@ -156,6 +157,19 @@ export function Sidebar({
 }) {
   const pathname = usePathname()
 
+  const navItemsForRole = useMemo(
+    () =>
+      navItems
+        .map((section) => ({
+          ...section,
+          items: section.items.filter(
+            (item) => role === "SUPER_ADMIN" || item.roles.includes(role)
+          ),
+        }))
+        .filter((section) => section.items.length > 0),
+    [role]
+  )
+
   return (
     <aside
       className={cn(
@@ -176,19 +190,14 @@ export function Sidebar({
         </span>
       </div>
 
-      {navItems.map((section) => {
-        const visibleItems = section.items.filter((item) =>
-          role === "SUPER_ADMIN" || item.roles.includes(role)
-        )
-        if (visibleItems.length === 0) return null
-
+      {navItemsForRole.map((section) => {
         return (
           <div key={section.section} className="mb-5">
             <p className="text-[10px] uppercase tracking-[0.1em] font-bold text-muted-2 px-2.5 mb-2">
               {section.section}
             </p>
             <div className="flex flex-col gap-0.5">
-              {visibleItems.map((item) => {
+              {section.items.map((item) => {
                 const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
                 return (
                   <Link

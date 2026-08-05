@@ -1,8 +1,13 @@
 "use client"
 
 import { useCallback, useState } from "react"
+import dynamic from "next/dynamic"
 import { useAutoFocus } from "@/hooks/useAutoFocus"
-import { CameraScanner } from "@/components/shared/camera-scanner"
+
+const CameraScanner = dynamic(
+  () => import("@/components/shared/camera-scanner").then((m) => m.CameraScanner),
+  { ssr: false, loading: () => null }
+)
 
 interface ScanInputProps {
   value: string

@@ -439,8 +439,20 @@ export async function getDebtSummary(): Promise<DebtFarmer[]> {
     where: { status: { in: ["APPROVED", "PAID"] } },
     orderBy: [{ farmerId: "asc" }, { createdAt: "desc" }],
     include: {
-      farmer: true,
-      payments: { where: { voidedAt: null }, orderBy: { paidAt: "asc" } },
+      farmer: { select: { name: true, nik: true } },
+      payments: {
+        select: {
+          id: true,
+          amount: true,
+          method: true,
+          note: true,
+          paidBy: true,
+          paidAt: true,
+          loanDeduction: true,
+        },
+        where: { voidedAt: null },
+        orderBy: { paidAt: "asc" },
+      },
       _count: { select: { items: true } },
     },
   })

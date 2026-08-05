@@ -1,11 +1,9 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect, useRef } from "react"
 import { getFarmersWithBales } from "@/lib/actions/weighing"
 import type { FarmerQueueItem } from "@/lib/actions/weighing"
-import { usePolling } from "@/hooks/usePolling"
-import { useSse } from "@/hooks/useSse"
-import { REALTIME_INTERVAL_MS } from "@/lib/realtime"
+import { useRealtime } from "@/hooks/useRealtime"
 
 interface Props {
   laneId: number
@@ -17,6 +15,7 @@ interface Props {
 export function BaleQueue({ laneId, selectedFarmerId, refreshKey, onSelectFarmer }: Props) {
   const [farmers, setFarmers] = useState<FarmerQueueItem[]>([])
   const [loading, setLoading] = useState(true)
+  const firstRefresh = useRef(true)
 
   const loadQueue = useCallback(async () => {
     try {
@@ -29,18 +28,15 @@ export function BaleQueue({ laneId, selectedFarmerId, refreshKey, onSelectFarmer
     }
   }, [laneId])
 
-  usePolling(loadQueue, REALTIME_INTERVAL_MS, [loadQueue, refreshKey])
+  useRealtime(laneId, [loadQueue])
 
-  useSse(laneId, (event) => {
-    if (
-      event.type === "bale.created" ||
-      event.type === "bale.deleted" ||
-      event.type === "bale.weighed" ||
-      event.type === "session.ended"
-    ) {
-      loadQueue()
+  useEffect(() => {
+    if (firstRefresh.current) {
+      firstRefresh.current = false
+      return
     }
-  })
+    loadQueue()
+  }, [refreshKey, loadQueue])
 
   return (
     <div className="w-full lg:w-[240px] lg:shrink-0 rounded-xl border border-border bg-card p-4 pb-[18px] flex flex-col">

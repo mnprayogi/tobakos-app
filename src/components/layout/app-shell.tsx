@@ -21,16 +21,15 @@ export function AppShell({
 }) {
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [hydrated, setHydrated] = useState(false)
 
-  if (!hydrated && typeof window !== "undefined") {
+  useEffect(() => {
     try {
       if (window.localStorage.getItem(STORAGE_KEY) === "1") {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time mount hydration of persisted preference
         setCollapsed(true)
       }
     } catch {}
-    setHydrated(true)
-  }
+  }, [])
 
   useEffect(() => {
     if (!mobileOpen) return

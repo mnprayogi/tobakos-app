@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { toast } from "sonner"
 import { saveWeighData } from "@/lib/actions/weighing"
 import { useOfflineQueue, isNetworkError } from "@/hooks/useOfflineQueue"
@@ -61,7 +61,7 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
     netWeight: number
     subtotal: number
   } | null>(null)
-  const [prevCaptured, setPrevCaptured] = useState<number | null>(null)
+  const prevCapturedRef = useRef<number | null>(null)
   const { enqueue } = useOfflineQueue()
 
   useEffect(() => {
@@ -76,10 +76,12 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastWeighed])
 
-  if (item && capturedWeight !== prevCaptured && capturedWeight != null) {
-    setPrevCaptured(capturedWeight)
-    setGrossWeight(String(capturedWeight))
-  }
+  useEffect(() => {
+    if (item && capturedWeight != null && capturedWeight !== prevCapturedRef.current) {
+      prevCapturedRef.current = capturedWeight
+      setGrossWeight(String(capturedWeight))
+    }
+  }, [item, capturedWeight])
 
   if (!item) {
     return (

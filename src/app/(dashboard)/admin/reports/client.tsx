@@ -13,8 +13,11 @@ import {
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { StatusPill } from "@/components/shared/status-pill"
 import { usePrintDocument, printBaseStyle } from "@/lib/print"
-import { ReportPrint } from "@/components/admin/report-print"
-import { exportReportExcel } from "@/lib/export-excel"
+import { lazyPrint } from "@/components/shared/lazy-print"
+
+const ReportPrint = lazyPrint(() =>
+  import("@/components/admin/report-print").then((m) => m.ReportPrint)
+)
 
 interface WarehouseMeta { id: number; code: string; name: string }
 interface FarmerMeta { id: number; name: string; nik: string | null }
@@ -64,6 +67,7 @@ export function ReportsClient({ warehouses, farmers, companyName }: { warehouses
   async function handleExportExcel() {
     setLoading(true)
     try {
+      const { exportReportExcel } = await import("@/lib/export-excel")
       await exportReportExcel(
         tab,
         { farmerRows, periodRows, txRows },

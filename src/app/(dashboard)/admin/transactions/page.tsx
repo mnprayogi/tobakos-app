@@ -55,9 +55,33 @@ export default async function TransactionsPage({
     skip: (page - 1) * pageSize,
     take: pageSize,
     include: {
-      farmer: true,
-      items: { orderBy: { inputOrder: "asc" } },
-      payments: { orderBy: { paidAt: "asc" } },
+      farmer: { select: { name: true } },
+      items: {
+        select: {
+          id: true,
+          status: true,
+          labelCode: true,
+          grade: true,
+          netWeight: true,
+          pricePerKg: true,
+          subtotal: true,
+        },
+        orderBy: { inputOrder: "asc" },
+      },
+      payments: {
+        select: {
+          id: true,
+          amount: true,
+          method: true,
+          note: true,
+          paidBy: true,
+          paidAt: true,
+          loanDeduction: true,
+          voidedAt: true,
+          voidedBy: true,
+        },
+        orderBy: { paidAt: "asc" },
+      },
     },
   })
 

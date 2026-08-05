@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
+import type { Session } from "next-auth"
 import type { Prisma } from "@/generated/prisma/client"
 
 const laneInclude = {
@@ -8,11 +9,11 @@ const laneInclude = {
 
 export type LaneWithWarehouse = Prisma.LaneGetPayload<{ include: typeof laneInclude }>
 
-export async function getCurrentUserLane(): Promise<LaneWithWarehouse | null> {
-  const session = await auth()
-  if (!session?.user?.id) return null
+export async function getCurrentUserLane(session?: Session | null): Promise<LaneWithWarehouse | null> {
+  const s = session ?? (await auth())
+  if (!s?.user?.id) return null
   const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
+    where: { id: s.user.id },
     select: { laneId: true },
   })
   if (user?.laneId == null) return null

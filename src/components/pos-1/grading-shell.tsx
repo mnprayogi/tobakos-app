@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useRef, useMemo, useCallback } from "react"
+import { useState, useRef, useMemo, useCallback, useEffect } from "react"
 import { flushSync } from "react-dom"
+import dynamic from "next/dynamic"
 import { usePrintDocument, thermalStickerPageStyle } from "@/lib/print"
 import { toast } from "sonner"
 import {
@@ -15,22 +16,37 @@ import {
   type LaneTransactionOption,
   type RecentBaleItem,
 } from "@/lib/actions/grading"
-import { QRCodeSVG } from "qrcode.react"
 import { laneToken } from "@/lib/barcode"
-import { toDateKey } from "@/lib/utils"
+import { toDateKey, cn } from "@/lib/utils"
 import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
-import { StickerPreview } from "@/components/shared/sticker-preview"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { InputGroup, InputGroupInput, InputGroupAddon } from "@/components/ui/input-group"
+import { Skeleton } from "@/components/ui/skeleton"
 import { StatusPill } from "@/components/shared/status-pill"
 import { PrinterManager } from "@/components/shared/printer-manager"
 import { BaleHistoryTable } from "@/components/pos-1/bale-history-table"
 import { SyncStatusBanner } from "@/components/shared/sync-status-banner"
 import { useThermalPrinter } from "@/hooks/useThermalPrinter"
 import { useOfflineQueue, isNetworkError } from "@/hooks/useOfflineQueue"
-import { usePolling } from "@/hooks/usePolling"
-import { useSse } from "@/hooks/useSse"
+import { useRealtime } from "@/hooks/useRealtime"
 import { useQueueStore } from "@/lib/queue"
-import { REALTIME_INTERVAL_MS } from "@/lib/realtime"
-import { Search, Info, Plus } from "lucide-react"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { Search, Info, Plus, MousePointerClick, Printer } from "lucide-react"
+
+const StickerPreview = dynamic(
+  () => import("@/components/shared/sticker-preview").then((m) => m.StickerPreview),
+  {
+    loading: () => (
+      <Skeleton className="rounded-lg" style={{ height: 170 }} />
+    ),
+  }
+)
+
+const QRCodeSVG = dynamic(() => import("qrcode.react").then((m) => m.QRCodeSVG), {
+  ssr: false,
+  loading: () => null,
+})
 
 interface Grade { id: number; name: string; defaultPrice: number }
 interface TobaccoType { id: number; name: string; grades: Grade[] }
@@ -42,6 +58,8 @@ interface BaleItem {
   customerName: string | null
   createdBy: string | null
 }
+
+type PrintMode = "manual" | "auto"
 
 let tempBaleId = 0
 function nextTempBaleId() {
@@ -110,35 +128,16 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
   }, [farmerId, laneCode])
 
   const realtimeRefetch = useCallback(async () => {
-    try {
-      const [ids, recent] = await Promise.all([
-        getTodayDraftFarmerIds(laneId),
-        getRecentBales(laneId),
-      ])
-      setDraftFarmerIds(ids)
-      setBaleItems((prev) => mergeRecentBales(prev, recent))
-    } catch {
-      // biarkan data lama; polling akan mencoba lagi
-    }
-    try {
-      await refreshPurchases()
-    } catch {
-      // abaikan; polling akan mencoba lagi
-    }
+    const [idsRes, recentRes] = await Promise.allSettled([
+      getTodayDraftFarmerIds(laneId),
+      getRecentBales(laneId),
+      refreshPurchases(),
+    ])
+    if (idsRes.status === "fulfilled") setDraftFarmerIds(idsRes.value)
+    if (recentRes.status === "fulfilled") setBaleItems((prev) => mergeRecentBales(prev, recentRes.value))
   }, [laneId, refreshPurchases])
 
-  usePolling(realtimeRefetch, REALTIME_INTERVAL_MS, [realtimeRefetch])
-
-  useSse(laneId, (event) => {
-    if (
-      event.type === "bale.created" ||
-      event.type === "bale.deleted" ||
-      event.type === "bale.weighed" ||
-      event.type === "session.ended"
-    ) {
-      realtimeRefetch()
-    }
-  })
+  useRealtime(laneId, [realtimeRefetch])
 
   const [searchTerm, setSearchTerm] = useState("")
   const [tobaccoTypeId, setTobaccoTypeId] = useState("")
@@ -153,6 +152,22 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
   const [selectedPrice, setSelectedPrice] = useState<number | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
+  const [printMode, setPrintMode] = useState<PrintMode>(() => {
+    try {
+      return window.localStorage.getItem("tobak:print-mode") === "auto" ? "auto" : "manual"
+    } catch {
+      return "manual"
+    }
+  })
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("tobak:print-mode", printMode)
+    } catch {
+      // penyimpanan preferensi diabaikan jika gagal
+    }
+  }, [printMode])
+
   const [startingNew, setStartingNew] = useState(false)
   const [txDialogOpen, setTxDialogOpen] = useState(false)
   const [txOptions, setTxOptions] = useState<LaneTransactionOption[]>([])
@@ -164,12 +179,16 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
 
   const selectedFarmer = farmers.find((f) => f.id === farmerId)
   const currentGrades = tobaccoTypes.find((t) => t.id === Number(tobaccoTypeId))?.grades ?? []
-  const filteredFarmers = farmers.filter(
-    (f) =>
-      f.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (f.nik && f.nik.includes(searchTerm)) ||
-      (f.address && f.address.toLowerCase().includes(searchTerm.toLowerCase()))
-  )
+  const filteredFarmers = useMemo(() => {
+    const q = searchTerm.toLowerCase()
+    if (!q) return farmers
+    return farmers.filter(
+      (f) =>
+        f.name.toLowerCase().includes(q) ||
+        (f.nik && f.nik.includes(searchTerm)) ||
+        (f.address && f.address.toLowerCase().includes(q))
+    )
+  }, [farmers, searchTerm])
 
   const farmerBaleItems = useMemo(
     () => baleItems.filter((b) => (farmerId ? b.farmerId === farmerId && b.status === "GRADED" : true)),
@@ -350,21 +369,22 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
       flushSync(() => {
         setLastItem(newItem)
       })
-      if (printer.connected) {
-        try {
-          await printer.printLabel({
-            labelCode: result.labelCode,
-            farmerName: result.farmerName,
-            grade: result.grade,
-            warehouse,
-            lane: shortLane,
-          })
-        } catch (err) {
-          toast.error(`Cetak thermal gagal (${(err as Error).message}) — cetak browser dibuka`)
-          handlePrintSticker()
+      if (printMode === "auto") {
+        if (printer.connected) {
+          try {
+            await printer.printLabel({
+              labelCode: result.labelCode,
+              farmerName: result.farmerName,
+              grade: result.grade,
+              warehouse,
+              lane: shortLane,
+            })
+          } catch (err) {
+            toast.error(`Cetak thermal gagal (${(err as Error).message})`)
+          }
+        } else {
+          toast.info("Printer thermal belum terhubung — bale tersimpan tanpa cetak")
         }
-      } else {
-        handlePrintSticker()
       }
     } catch (err) {
       setOptimisticBales((prev) => prev.filter((b) => b.id !== tempId))
@@ -442,41 +462,46 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
 
             {/* Search */}
             <div className="field-wf">
-              <div className="relative">
-                <input
+              <InputGroup>
+                <InputGroupInput
                   type="text"
                   placeholder="Cari Nama, NIK..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="field-input pl-8"
                 />
-                <Search className="w-3.5 h-3.5 text-muted-foreground absolute left-2.5 top-2.5" />
-              </div>
+                <InputGroupAddon>
+                  <Search />
+                </InputGroupAddon>
+              </InputGroup>
             </div>
 
             {/* Farmer List */}
-            <div className="max-h-40 overflow-y-auto space-y-1 mb-3 pr-1 no-scrollbar">
+            <div className="max-h-40 overflow-y-auto flex flex-col gap-1 mb-3 pr-1 no-scrollbar">
               {filteredFarmers.map((f) => {
                 const isSelected = f.id === farmerId
                 const hasOpen = draftFarmerIds.includes(f.id)
                 return (
-                  <div
+                  <button
                     key={f.id}
+                    type="button"
                     onClick={() => handleSelectFarmer(f.id)}
-                    className={`p-2 rounded-lg border text-[12px] transition-all cursor-pointer ${
+                    className={cn(
+                      "p-2 rounded-lg border text-[12px] transition-all cursor-pointer text-left",
                       isSelected
                         ? "bg-panel-alt border-emerald ring-1 ring-emerald"
                         : "bg-panel-alt/60 hover:bg-panel-alt border-border-soft text-foreground"
-                    }`}
+                    )}
                   >
-                    <div className="flex items-center justify-between">
+                    <span className="flex items-center justify-between">
                       <span className="font-bold text-foreground">{f.name}</span>
                       {hasOpen && (
-                        <span className="text-[9px] font-bold text-amber bg-amber/12 border border-amber/30 px-1.5 py-0.5 rounded uppercase">Open</span>
+                        <Badge variant="outline" className="text-[9px] px-1.5 py-0.5 uppercase bg-amber/12 text-amber border-amber/30">
+                          Open
+                        </Badge>
                       )}
-                    </div>
+                    </span>
                     {f.nik && <span className="font-mono text-[11px] text-muted-foreground">{f.nik}</span>}
-                  </div>
+                  </button>
                 )
               })}
               {filteredFarmers.length === 0 && (
@@ -486,7 +511,7 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
 
             {!farmerId && (
               <div className="text-center py-4 text-muted-foreground text-[11px]">
-                <Info className="w-5 h-5 text-muted-2 mx-auto mb-1.5" />
+                <Info className="size-5 text-muted-2 mx-auto mb-1.5" />
                 Pilih petani di atas untuk memulai grading bale.
               </div>
             )}
@@ -507,15 +532,17 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
                       </option>
                     ))}
                   </select>
-                  <button
+                  <Button
                     type="button"
                     onClick={handleAddTransaction}
                     disabled={startingNew || txChecking}
                     title="Tambah transaksi"
-                    className="px-3 rounded-lg border border-border-soft bg-panel-alt text-emerald font-bold text-[12px] hover:bg-panel transition-colors disabled:opacity-50 cursor-pointer"
+                    aria-label="Tambah transaksi"
+                    variant="default"
+                    size="icon"
                   >
-                    <Plus className="w-3.5 h-3.5" />
-                  </button>
+                    <Plus data-icon="inline-start" />
+                  </Button>
                 </div>
                 {!purchases.some((p) => p.status === "DRAFT") && (
                   <p className="text-[10.5px] text-muted-2 mt-1">
@@ -614,7 +641,7 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
                       key={g.id}
                       type="button"
                       onClick={() => handleGradeSelect(g.name, g.defaultPrice)}
-                      className={`grade-btn ${isSelected ? "grade-btn-active" : ""}`}
+                      className={cn("grade-btn", isSelected && "grade-btn-active")}
                     >
                       {g.name}
                     </button>
@@ -632,7 +659,7 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
             )}
 
             {/* Alokasi Customer */}
-            <div className="field-wf" style={{ marginTop: "14px" }}>
+            <div className="field-wf mt-3.5">
               <label className="field-wf-label">Alokasi Customer *</label>
               <select
                 value={customerId}
@@ -655,7 +682,7 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
               disabled={submitting || !farmerId}
               className="btn-wf-primary mt-1.5 disabled:opacity-50"
             >
-              {submitting ? "Menyimpan…" : "Simpan Grade & Cetak Barcode"}
+              {submitting ? "Menyimpan…" : printMode === "auto" ? "Simpan Grade & Cetak Barcode" : "Simpan Grade"}
             </button>
           </div>
 
@@ -671,9 +698,32 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
               farmerName={previewFarmerName}
             />
 
+            <div className="mt-3">
+              <p className="text-[11px] font-medium text-muted-2 mb-1.5">Mode Cetak</p>
+              <ToggleGroup
+                value={printMode === "auto" ? ["auto"] : ["manual"]}
+                onValueChange={(v) => {
+                  const next = v[v.length - 1]
+                  if (next === "manual" || next === "auto") setPrintMode(next)
+                }}
+                size="sm"
+                variant="outline"
+                className="w-full [&_[data-slot='toggle-group-item']]:flex-1"
+              >
+                <ToggleGroupItem value="manual">
+                  <MousePointerClick data-icon="inline-start" />
+                  Manual
+                </ToggleGroupItem>
+                <ToggleGroupItem value="auto">
+                  <Printer data-icon="inline-start" />
+                  Auto
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </div>
+
             {lastItem && (
               <div className="pending-tag">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber shrink-0" />
+                <span className="size-1.5 rounded-full bg-amber shrink-0" />
                 <StatusPill status={lastItem.status as "GRADED" | "WEIGHED" | "CLOSED"} />
                 <span>— menunggu ditimbang</span>
               </div>
@@ -721,17 +771,18 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
             Pilih transaksi yang mau dilanjutkan, atau buat transaksi baru. Transaksi yang sudah
             ditimbang tidak bisa ditambah bale.
           </DialogDescription>
-          <div className="space-y-1.5">
+          <div className="flex flex-col gap-1.5">
             {txOptions.map((txn) => {
               const continuable = txn.status === "DRAFT"
               return (
                 <div
                   key={txn.id}
-                  className={`flex items-center justify-between gap-2 p-2.5 rounded-xl border text-[12px] ${
+                  className={cn(
+                    "flex items-center justify-between gap-2 p-2.5 rounded-xl border text-[12px]",
                     continuable
                       ? "bg-panel-alt/60 border-amber/35 hover:border-amber"
                       : "bg-panel-alt/40 border-border-soft opacity-60"
-                  }`}
+                  )}
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="font-bold text-foreground truncate">{txn.label}</span>

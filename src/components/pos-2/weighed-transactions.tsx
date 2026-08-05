@@ -1,17 +1,19 @@
 "use client"
 
-import { useState, useRef, useCallback } from "react"
+import { useState, useRef, useCallback, useMemo } from "react"
 import { toast } from "sonner"
 import { getWeighedTransactions, endWeighSession, getSessionUnweighed, getNotaData } from "@/lib/actions/weighing"
 import type { WeighedTransaction, NotaItem, SessionCheckResult } from "@/lib/actions/weighing"
 import { usePrintDocument, printBaseStyle } from "@/lib/print"
-import { NotaTimbangan } from "@/components/pos-2/nota-timbangan"
+import { lazyPrint } from "@/components/shared/lazy-print"
+
+const NotaTimbangan = lazyPrint(() =>
+  import("@/components/pos-2/nota-timbangan").then((m) => m.NotaTimbangan)
+)
 import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { formatCurrency, formatDateTime } from "@/lib/utils"
 import { StatusPill } from "@/components/shared/status-pill"
-import { usePolling } from "@/hooks/usePolling"
-import { useSse } from "@/hooks/useSse"
-import { REALTIME_INTERVAL_MS } from "@/lib/realtime"
+import { useRealtime } from "@/hooks/useRealtime"
 
 interface NotaData {
   transactionCode: string
@@ -54,18 +56,7 @@ export function WeighedTransactions({ laneId }: Props) {
     }
   }, [laneId])
 
-  usePolling(loadTransactions, REALTIME_INTERVAL_MS, [loadTransactions])
-
-  useSse(laneId, (event) => {
-    if (
-      event.type === "bale.created" ||
-      event.type === "bale.deleted" ||
-      event.type === "bale.weighed" ||
-      event.type === "session.ended"
-    ) {
-      loadTransactions()
-    }
-  })
+  useRealtime(laneId, [loadTransactions])
 
   async function handleRequestFinish(txn: WeighedTransaction) {
     setConfirmTxn(txn)
@@ -106,9 +97,15 @@ export function WeighedTransactions({ laneId }: Props) {
     }
   }
 
-  const activeCount = transactions.filter((t) => t.status === "DRAFT").length
-  const endedCount = transactions.length - activeCount
-  const totalWeighed = transactions.reduce((s, t) => s + t.weighedCount, 0)
+  const { activeCount, endedCount, totalWeighed } = useMemo(() => {
+    let active = 0
+    let weighed = 0
+    for (const t of transactions) {
+      if (t.status === "DRAFT") active++
+      weighed += t.weighedCount
+    }
+    return { activeCount: active, endedCount: transactions.length - active, totalWeighed: weighed }
+  }, [transactions])
 
   if (loading) {
     return (

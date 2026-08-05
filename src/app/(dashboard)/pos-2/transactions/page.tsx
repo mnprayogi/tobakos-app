@@ -9,9 +9,8 @@ export default async function Pos2TransactionsPage({
 }: {
   searchParams: Promise<{ lane?: string }>
 }) {
-  const session = await auth()
-  const { lane: laneCode } = await searchParams
-  const assignedLane = await getCurrentUserLane()
+  const [session, { lane: laneCode }] = await Promise.all([auth(), searchParams])
+  const assignedLane = await getCurrentUserLane(session)
 
   const lane = assignedLane ?? (laneCode ? await getLaneByCode(laneCode) : null)
 

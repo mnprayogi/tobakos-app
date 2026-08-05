@@ -7,9 +7,8 @@ import { GradingShell } from "@/components/pos-1/grading-shell"
 import { getSettingNumber } from "@/lib/settings"
 
 export default async function GradingPage({ searchParams }: { searchParams: Promise<{ lane?: string }> }) {
-  const session = await auth()
-  const { lane: laneCode } = await searchParams
-  const assignedLane = await getCurrentUserLane()
+  const [session, { lane: laneCode }] = await Promise.all([auth(), searchParams])
+  const assignedLane = await getCurrentUserLane(session)
 
   const lane = assignedLane ?? (laneCode ? await getLaneByCode(laneCode) : null)
 
@@ -24,7 +23,18 @@ export default async function GradingPage({ searchParams }: { searchParams: Prom
     )
   }
 
-  const [rawTypes, leafTypes, packingTypes, farmers, customers, todayDraftPurchases, recentBales] = await Promise.all([
+  const [
+    rawTypes,
+    leafTypes,
+    packingTypes,
+    farmers,
+    customers,
+    todayDraftPurchases,
+    recentBales,
+    maxMoisturePercent,
+    defaultMoisturePercent,
+    defaultWarehouseId,
+  ] = await Promise.all([
     prisma.tobaccoType.findMany({ where: { active: true }, include: { grades: true } }),
     prisma.leafType.findMany({ where: { active: true } }),
     prisma.packingType.findMany(),
@@ -44,9 +54,6 @@ export default async function GradingPage({ searchParams }: { searchParams: Prom
         customer: true,
       },
     }),
-  ])
-
-  const [maxMoisturePercent, defaultMoisturePercent, defaultWarehouseId] = await Promise.all([
     getSettingNumber("MAX_MOISTURE_PERCENT", 20),
     getSettingNumber("DEFAULT_MOISTURE_PERCENT", 3),
     getSettingNumber("DEFAULT_WAREHOUSE_ID", 1),
@@ -81,7 +88,7 @@ export default async function GradingPage({ searchParams }: { searchParams: Prom
   }))
 
   return (
-    <div className="space-y-5">
+    <div className="flex flex-col gap-5">
       <GradingShell
         tobaccoTypes={tobaccoTypes}
         leafTypes={leafTypesPlain}

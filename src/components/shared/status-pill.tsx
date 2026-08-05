@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils"
+import { Badge } from "@/components/ui/badge"
 
 type Status = "GRADED" | "WEIGHED" | "CLOSED" | "DRAFT" | "APPROVED" | "PAID" | "PENDING" | "SYNCING"
 
@@ -15,13 +16,14 @@ const variantMap: Record<Status, string> = {
 
 export function StatusPill({ status }: { status: Status }) {
   return (
-    <span
+    <Badge
+      variant="outline"
       className={cn(
-        "font-sans font-bold text-[10.5px] px-[9px] py-[3px] rounded-full inline-block tracking-[0.02em] border",
+        "font-sans font-bold text-[10.5px] px-[9px] py-[3px] rounded-full tracking-[0.02em] h-auto",
         variantMap[status]
       )}
     >
       {status}
-    </span>
+    </Badge>
   )
 }
