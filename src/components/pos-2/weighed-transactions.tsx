@@ -18,6 +18,10 @@ interface NotaData {
   farmerName: string
   farmerNik: string | null
   warehouse: string
+  laneCode: string | null
+  createdBy: string | null
+  weighedBy: string | null
+  approvedBy: string | null
   date: string
   items: NotaItem[]
   totals: NotaItem

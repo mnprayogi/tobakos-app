@@ -275,8 +275,12 @@ export async function getSessionUnweighed(purchaseId: number, laneId: number): P
 interface NotaPurchase {
   transactionCode: string
   transactionDate: Date
+  createdBy: string | null
+  weighedBy: string | null
+  approvedBy: string | null
   farmer: { name: string; nik: string | null }
   warehouse: { name: string | null; code: string | null } | null
+  lane: { code: string | null } | null
   items: {
     grade: string
     grossWeight: number | null
@@ -329,6 +333,10 @@ function buildNotaData(purchase: NotaPurchase) {
     farmerName: purchase.farmer.name,
     farmerNik: purchase.farmer.nik,
     warehouse: purchase.warehouse?.name ?? purchase.warehouse?.code ?? "Gudang",
+    laneCode: purchase.lane?.code ?? null,
+    createdBy: purchase.createdBy,
+    weighedBy: purchase.weighedBy,
+    approvedBy: purchase.approvedBy,
     date: purchase.transactionDate.toISOString(),
     items: notaItems,
     totals,
@@ -339,7 +347,7 @@ export async function getNotaData(purchaseId: number, laneId: number) {
   const lane = await resolveActorLane({ laneId })
   const purchase = await prisma.purchase.findUnique({
     where: { id: purchaseId },
-    include: { farmer: true, items: true, warehouse: true },
+    include: { farmer: true, items: true, warehouse: true, lane: true },
   })
   if (!purchase) throw new Error("Transaksi tidak ditemukan")
   if (purchase.laneId !== lane.id) throw new Error("Transaksi bukan milik jalur ini")
@@ -352,7 +360,7 @@ export async function endWeighSession(purchaseId: number, laneId: number) {
   const lane = await resolveActorLane({ laneId })
   const purchase = await prisma.purchase.findUnique({
     where: { id: purchaseId },
-    include: { farmer: true, items: true, warehouse: true },
+    include: { farmer: true, items: true, warehouse: true, lane: true },
   })
   if (!purchase) throw new Error("Transaksi tidak ditemukan")
   if (purchase.laneId !== lane.id) throw new Error("Transaksi bukan milik jalur ini")

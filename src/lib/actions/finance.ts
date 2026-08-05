@@ -412,6 +412,7 @@ export interface BuktiData {
   totalLoanDeduction: number
   remaining: number
   paidBy: string | null
+  approvedBy: string | null
   lastPaidAt: Date | null
   payments: BuktiPayment[]
 }
@@ -453,6 +454,7 @@ export async function getBuktiData(purchaseId: number): Promise<BuktiData> {
     totalLoanDeduction,
     remaining: roundMoney(totalPrice - paidAmount),
     paidBy: purchase.paidBy,
+    approvedBy: purchase.approvedBy,
     lastPaidAt: purchase.payments.length > 0 ? purchase.payments[purchase.payments.length - 1].paidAt : null,
     payments: purchase.payments.map((pay) => ({
       id: pay.id,
