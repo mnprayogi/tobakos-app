@@ -43,17 +43,22 @@ interface BaleItem {
   createdBy: string | null
 }
 
+let tempBaleId = 0
+function nextTempBaleId() {
+  tempBaleId -= 1
+  return tempBaleId
+}
+
 function mergeRecentBales(prev: BaleItem[], fetched: RecentBaleItem[]): BaleItem[] {
-  const byId = new Map(prev.map((b) => [b.id, b]))
+  const fetchedIds = new Set(fetched.map((b) => b.id))
+  const prevSurvivors = prev.filter((b) => fetchedIds.has(b.id))
   const added: BaleItem[] = []
   for (const b of fetched) {
-    if (byId.has(b.id)) {
-      byId.set(b.id, b)
-    } else {
+    if (!prevSurvivors.some((p) => p.id === b.id)) {
       added.push(b)
     }
   }
-  return [...added, ...prev.map((b) => byId.get(b.id) ?? b)]
+  return [...added, ...prevSurvivors]
 }
 
 interface Props {
@@ -77,6 +82,7 @@ interface Props {
 
 export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, customers, warehouse, warehouseName, laneCode, laneName, laneId, todayDraftFarmerIds, baleItems: initialBaleItems, maxMoisturePercent, defaultMoisturePercent, userName }: Props) {
   const [baleItems, setBaleItems] = useState(initialBaleItems)
+  const [optimisticBales, setOptimisticBales] = useState<BaleItem[]>([])
   const [draftFarmerIds, setDraftFarmerIds] = useState(todayDraftFarmerIds)
   const [farmerId, setFarmerId] = useState<number | null>(null)
   const [selectedPurchaseId, setSelectedPurchaseId] = useState<number | null>(null)
@@ -171,6 +177,7 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
   )
 
   const queuedPending = useQueueStore((s) => s.pending)
+  const queuedSyncing = useQueueStore((s) => s.syncing)
 
   const pendingBaleItems = useMemo(() => {
     const queued = queuedPending.filter((a) => a.type === "GRADE")
@@ -180,13 +187,18 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
         id: -1 - i,
         labelCode: `ANTRI #${i + 1}`,
         grade: a.payload.grade,
-        status: "PENDING",
+        status: queuedSyncing[a.id] ? "SYNCING" : "PENDING",
         tobaccoType: tobaccoTypes.find((t) => t.id === a.payload.tobaccoTypeId)?.name ?? "—",
         farmerName: farmers.find((f) => f.id === a.payload.farmerId)?.name ?? "—",
         customerName: customers.find((c) => c.id === a.payload.customerId)?.name ?? "—",
         createdBy: null,
       }))
-  }, [queuedPending, farmerId, tobaccoTypes, farmers, customers])
+  }, [queuedPending, queuedSyncing, farmerId, tobaccoTypes, farmers, customers])
+
+  const farmerOptimisticBales = useMemo(
+    () => optimisticBales.filter((b) => (farmerId ? b.farmerId === farmerId : true)),
+    [optimisticBales, farmerId]
+  )
 
   const shortLane = laneToken(laneCode, warehouse)
   const todaySampleCode = `${warehouse}-${shortLane}-${toDateKey(new Date()).replace(/-/g, "")}-XXXX`
@@ -280,44 +292,56 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
       return
     }
 
+    if (submitting) return
+
+    const payload = {
+      farmerId,
+      tobaccoTypeId: Number(tobaccoTypeId),
+      leafTypeId: Number(leafTypeId),
+      packingTypeId: Number(packingTypeId),
+      grade: selectedGrade,
+      moisturePercent: Number(moisturePercent),
+      packingWeight: Number(packingWeight),
+      laneCode,
+      purchaseId: selectedPurchaseId,
+      customerId,
+    }
+
+    const tempId = nextTempBaleId()
+    const optimisticItem: BaleItem = {
+      id: tempId,
+      labelCode: "MENUNGGU\u2026",
+      grade: selectedGrade,
+      status: "SYNCING",
+      tobaccoType: tobaccoTypes.find((t) => t.id === Number(tobaccoTypeId))?.name ?? "—",
+      farmerName: selectedFarmer?.name ?? "—",
+      farmerId: farmerId!,
+      customerName: customers.find((c) => c.id === customerId)?.name ?? "—",
+      createdBy: null,
+    }
+    const gradeSnapshot = selectedGrade
+    const priceSnapshot = selectedPrice
+    const customerSnapshot = customerId
+    setOptimisticBales((prev) => [optimisticItem, ...prev])
     setSubmitting(true)
+    resetForm()
+
     try {
-      const payload = {
-        farmerId,
-        tobaccoTypeId: Number(tobaccoTypeId),
-        leafTypeId: Number(leafTypeId),
-        packingTypeId: Number(packingTypeId),
-        grade: selectedGrade,
-        moisturePercent: Number(moisturePercent),
-        packingWeight: Number(packingWeight),
-        laneCode,
-        purchaseId: selectedPurchaseId,
-        customerId,
-      }
-      let result: Awaited<ReturnType<typeof saveGrade>>
-      try {
-        result = await saveGrade(payload)
-      } catch (err) {
-        if (!isNetworkError(err)) throw err
-        enqueue({ type: "GRADE", payload })
-        toast.info("Offline — bale masuk antrean sinkron")
-        resetForm()
-        return
-      }
-      const newItem = {
+      const result = await saveGrade(payload)
+      const newItem: BaleItem = {
         id: result.id,
         labelCode: result.labelCode,
         grade: result.grade,
         status: result.status,
-        tobaccoType: tobaccoTypes.find((t) => t.id === Number(tobaccoTypeId))?.name ?? "",
+        tobaccoType: result.tobaccoType,
         farmerName: result.farmerName,
         farmerId: farmerId!,
         customerName: result.customerName,
         createdBy: result.createdBy,
       }
+      setOptimisticBales((prev) => prev.filter((b) => b.id !== tempId))
       setBaleItems((prev) => [newItem, ...prev])
       toast.success(`Bale ${result.labelCode} berhasil disimpan`)
-      resetForm()
       try {
         await loadPurchases(farmerId)
       } catch {
@@ -343,6 +367,15 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
         handlePrintSticker()
       }
     } catch (err) {
+      setOptimisticBales((prev) => prev.filter((b) => b.id !== tempId))
+      if (isNetworkError(err)) {
+        enqueue({ type: "GRADE", payload })
+        toast.info("Offline — bale masuk antrean sinkron")
+        return
+      }
+      setSelectedGrade(gradeSnapshot)
+      setSelectedPrice(priceSnapshot)
+      setCustomerId(customerSnapshot)
       const msg = err instanceof Error ? err.message : String(err)
       if (msg.includes("ditimbang") || msg.includes("ditutup")) {
         realtimeRefetch()
@@ -658,6 +691,7 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
         {/* ===== TABLE: BALE HISTORY ===== */}
         <BaleHistoryTable
           items={farmerBaleItems}
+          syncingItems={farmerOptimisticBales}
           pendingItems={pendingBaleItems}
           farmerName={selectedFarmer?.name ?? null}
           farmerNik={selectedFarmer?.nik ?? null}

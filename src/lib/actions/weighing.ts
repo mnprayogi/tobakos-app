@@ -108,8 +108,8 @@ export async function saveWeighData(data: WeighInput) {
       2
     )
 
-    const result = await tx.purchaseItem.update({
-      where: { id: item.id },
+    const result = await tx.purchaseItem.updateMany({
+      where: { id: item.id, status: "GRADED" },
       data: {
         grossWeight: data.grossWeight,
         weightAfterPacking,
@@ -121,6 +121,8 @@ export async function saveWeighData(data: WeighInput) {
       },
     })
 
+    if (result.count !== 1) throw new Error("Bale sudah ditimbang")
+
     await tx.purchase.update({
       where: { id: item.purchaseId },
       data: {
@@ -130,7 +132,15 @@ export async function saveWeighData(data: WeighInput) {
       },
     })
 
-    return result
+    return {
+      id: item.id,
+      grossWeight: data.grossWeight,
+      weightAfterPacking,
+      moistureDeduction,
+      netWeight,
+      subtotal,
+      status: "WEIGHED",
+    }
   })
 
   revalidatePath("/pos-2/weighing")
@@ -142,7 +152,7 @@ export async function saveWeighData(data: WeighInput) {
     weightAfterPacking: updated.weightAfterPacking,
     moistureDeduction: updated.moistureDeduction,
     netWeight: updated.netWeight,
-    subtotal: Number(updated.subtotal),
+    subtotal: updated.subtotal,
     status: updated.status,
   }
 }
@@ -167,6 +177,7 @@ export interface HistoryPurchase {
   transactionCode: string
   transactionLabel: string
   laneCode: string
+  status: string
   items: HistoryItem[]
 }
 
@@ -178,10 +189,10 @@ export async function getWeighedHistory(farmerId: number, laneId: number) {
   const allToday = await prisma.purchase.findMany({
     where: {
       farmerId,
-      status: "DRAFT",
+      status: { in: ["DRAFT", "WEIGHED"] },
       transactionDate: { gte: todayStart },
     },
-    orderBy: { createdAt: "asc" },
+    orderBy: { createdAt: "desc" },
     include: {
       lane: true,
       items: {
@@ -197,8 +208,9 @@ export async function getWeighedHistory(farmerId: number, laneId: number) {
   return byLane.map((p, laneIdx) => ({
     id: p.id,
     transactionCode: p.transactionCode,
-    transactionLabel: `Transaksi #${laneIdx + 1}`,
+    transactionLabel: `Transaksi #${byLane.length - laneIdx}`,
     laneCode: p.lane?.code ?? "",
+    status: p.status,
     items: p.items.map((item) => ({
       id: item.id,
       inputOrder: item.inputOrder,
@@ -260,33 +272,26 @@ export async function getSessionUnweighed(purchaseId: number, laneId: number): P
   }
 }
 
-export async function endWeighSession(purchaseId: number, laneId: number) {
-  const lane = await resolveActorLane({ laneId })
-  const purchase = await prisma.purchase.findUnique({
-    where: { id: purchaseId },
-    include: { farmer: true, items: true, warehouse: true },
-  })
-  if (!purchase) throw new Error("Transaksi tidak ditemukan")
-  if (purchase.laneId !== lane.id) throw new Error("Transaksi bukan milik jalur ini")
-  if (purchase.status !== "DRAFT") throw new Error("Transaksi sudah ditutup")
+interface NotaPurchase {
+  transactionCode: string
+  transactionDate: Date
+  farmer: { name: string; nik: string | null }
+  warehouse: { name: string | null; code: string | null } | null
+  items: {
+    grade: string
+    grossWeight: number | null
+    packingWeight: number | null
+    moistureDeduction: number | null
+    netWeight: number | null
+    subtotal: unknown
+    status: string
+  }[]
+}
 
-  const unweighedItems = purchase.items.filter((i) => i.status === "GRADED")
-  const weighedItems = purchase.items.filter((i) => i.status === "WEIGHED")
-  if (weighedItems.length === 0) throw new Error("Tidak ada bale yang ditimbang")
-  if (unweighedItems.length > 0) {
-    const labels = unweighedItems
-      .map((i) => i.labelCode)
-      .sort()
-      .join(", ")
-    throw new Error(
-      `Masih ada ${unweighedItems.length} bale belum ditimbang (${labels}). Timbang semua bale sebelum menutup sesi.`
-    )
-  }
-
-  await prisma.purchase.update({
-    where: { id: purchaseId },
-    data: { status: "WEIGHED", weighedBy: await getActorName() },
-  })
+function buildNotaData(purchase: NotaPurchase) {
+  const weighedItems = purchase.items.filter(
+    (i) => i.status === "WEIGHED" || i.status === "CLOSED"
+  )
 
   const gradeMap = new Map<string, NotaItem>()
   for (const item of weighedItems) {
@@ -319,9 +324,6 @@ export async function endWeighSession(purchaseId: number, laneId: number) {
     totalSubtotal: notaItems.reduce((s, g) => s + g.totalSubtotal, 0),
   }
 
-  revalidatePath("/pos-2/weighing")
-  revalidatePath("/pos-2/transactions")
-  publishEvent("session.ended", lane.id)
   return {
     transactionCode: purchase.transactionCode,
     farmerName: purchase.farmer.name,
@@ -331,6 +333,55 @@ export async function endWeighSession(purchaseId: number, laneId: number) {
     items: notaItems,
     totals,
   }
+}
+
+export async function getNotaData(purchaseId: number, laneId: number) {
+  const lane = await resolveActorLane({ laneId })
+  const purchase = await prisma.purchase.findUnique({
+    where: { id: purchaseId },
+    include: { farmer: true, items: true, warehouse: true },
+  })
+  if (!purchase) throw new Error("Transaksi tidak ditemukan")
+  if (purchase.laneId !== lane.id) throw new Error("Transaksi bukan milik jalur ini")
+  if (purchase.status !== "WEIGHED")
+    throw new Error("Nota hanya tersedia untuk transaksi yang sudah diakhiri sesinya")
+  return buildNotaData(purchase)
+}
+
+export async function endWeighSession(purchaseId: number, laneId: number) {
+  const lane = await resolveActorLane({ laneId })
+  const purchase = await prisma.purchase.findUnique({
+    where: { id: purchaseId },
+    include: { farmer: true, items: true, warehouse: true },
+  })
+  if (!purchase) throw new Error("Transaksi tidak ditemukan")
+  if (purchase.laneId !== lane.id) throw new Error("Transaksi bukan milik jalur ini")
+  if (purchase.status !== "DRAFT") throw new Error("Transaksi sudah ditutup")
+
+  const unweighedItems = purchase.items.filter((i) => i.status === "GRADED")
+  const weighedItems = purchase.items.filter((i) => i.status === "WEIGHED")
+  if (weighedItems.length === 0) throw new Error("Tidak ada bale yang ditimbang")
+  if (unweighedItems.length > 0) {
+    const labels = unweighedItems
+      .map((i) => i.labelCode)
+      .sort()
+      .join(", ")
+    throw new Error(
+      `Masih ada ${unweighedItems.length} bale belum ditimbang (${labels}). Timbang semua bale sebelum menutup sesi.`
+    )
+  }
+
+  await prisma.purchase.update({
+    where: { id: purchaseId },
+    data: { status: "WEIGHED", weighedBy: await getActorName() },
+  })
+
+  const nota = buildNotaData(purchase)
+
+  revalidatePath("/pos-2/weighing")
+  revalidatePath("/pos-2/transactions")
+  publishEvent("session.ended", lane.id)
+  return nota
 }
 
 export interface FarmerQueueItem {
@@ -370,7 +421,7 @@ export async function getWeighedTransactions(laneId: number): Promise<WeighedTra
       status: { in: ["DRAFT", "WEIGHED"] },
       items: { some: { status: "WEIGHED" } },
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ status: "asc" }, { createdAt: "desc" }],
     include: {
       farmer: true,
       lane: true,

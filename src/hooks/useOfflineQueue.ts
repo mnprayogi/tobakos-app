@@ -25,6 +25,7 @@ export function useOfflineQueue() {
     try {
       const actions = useQueueStore.getState().pending
       for (const action of actions) {
+        useQueueStore.getState().markSyncing(action.id)
         try {
           if (action.type === "GRADE") {
             await saveGrade(action.payload)
@@ -37,6 +38,8 @@ export function useOfflineQueue() {
           if (isNetworkError(err)) break
           useQueueStore.getState().remove(action.id)
           toast.error(`Sinkron gagal: ${err instanceof Error ? err.message : String(err)}`)
+        } finally {
+          useQueueStore.getState().unmarkSyncing(action.id)
         }
       }
     } finally {

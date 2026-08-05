@@ -71,6 +71,7 @@ export function WeighingPageClient({ laneId, defaultRoundingMode = "normal" }: P
         return
       }
       setScannedItem(item)
+      setCapturedWeight(null)
       setSelectedFarmer({
         farmerId: item.farmerId,
         farmerName: item.farmerName,
@@ -94,6 +95,7 @@ export function WeighingPageClient({ laneId, defaultRoundingMode = "normal" }: P
   function handleFarmerSelect(farmer: FarmerQueueItem) {
     setSelectedFarmer(farmer)
     setScannedItem(null)
+    setCapturedWeight(null)
     setScanValue("")
     setScanKey((k) => k + 1)
   }
@@ -168,7 +170,7 @@ export function WeighingPageClient({ laneId, defaultRoundingMode = "normal" }: P
                     setCapturedWeight(w)
                     toast.success(`Berat diambil: ${w.toFixed(2)} kg`)
                   } else {
-                    toast.error("Belum ada pembacaan berat")
+                    toast.error("Berat belum stabil — tunggu indikator Stabil")
                   }
                 }}
                 disabled={!scannedItem}

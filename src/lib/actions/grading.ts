@@ -7,6 +7,7 @@ import { generateLabelCode } from "@/lib/barcode"
 import { nextSequence } from "@/lib/sequences"
 import { resolveActorLane } from "@/lib/lane-resolution"
 import { getActorName } from "@/lib/actor"
+import { getSettingNumber } from "@/lib/settings"
 import { publishEvent } from "@/lib/events"
 
 export async function getTodayDraftFarmerIds(laneId: number): Promise<number[]> {
@@ -166,6 +167,14 @@ export async function saveGrade(data: GradeInput) {
 
   if (!data.customerId) throw new Error("Pilih alokasi customer")
 
+  const maxMoisture = await getSettingNumber("MAX_MOISTURE_PERCENT", 20)
+  if (!Number.isFinite(data.moisturePercent) || data.moisturePercent < 0 || data.moisturePercent > maxMoisture) {
+    throw new Error(`Potongan MC harus antara 0–${maxMoisture}%`)
+  }
+  if (!Number.isFinite(data.packingWeight) || data.packingWeight < 0) {
+    throw new Error("Potongan packing tidak boleh negatif")
+  }
+
   const actor = await getActorName()
 
   const item = await prisma.$transaction(async (tx) => {
@@ -173,6 +182,9 @@ export async function saveGrade(data: GradeInput) {
       SELECT id FROM lanes WHERE id = ${lane.id} FOR UPDATE
     `
     if (locked.length === 0) throw new Error("Jalur tidak ditemukan")
+
+    const customer = await tx.customer.findUnique({ where: { id: data.customerId }, select: { id: true } })
+    if (!customer) throw new Error("Alokasi customer tidak ditemukan")
 
     const tobaccoGrade = await tx.tobaccoGrade.findFirst({
       where: { name: data.grade, tobaccoTypeId: data.tobaccoTypeId },
@@ -191,6 +203,8 @@ export async function saveGrade(data: GradeInput) {
     if (data.purchaseId) {
       const existing = await tx.purchase.findUnique({ where: { id: data.purchaseId } })
       if (!existing) throw new Error("Transaksi tidak ditemukan")
+      if (existing.farmerId !== data.farmerId)
+        throw new Error("Transaksi bukan milik petani ini — pilih transaksi yang benar")
       if (existing.status === "WEIGHED")
         throw new Error("Transaksi sudah ditimbang — tidak bisa menambah bale. Buat transaksi baru.")
       if (existing.status !== "DRAFT") throw new Error("Transaksi sudah ditutup")
@@ -222,7 +236,10 @@ export async function saveGrade(data: GradeInput) {
       purchaseId = purchase.id
     }
 
-    const itemCount = await tx.purchaseItem.count({ where: { purchaseId } })
+    const orderAgg = await tx.purchaseItem.aggregate({
+      where: { purchaseId },
+      _max: { inputOrder: true },
+    })
 
     await tx.purchase.update({
       where: { id: purchaseId },
@@ -232,7 +249,7 @@ export async function saveGrade(data: GradeInput) {
     return tx.purchaseItem.create({
       data: {
         purchaseId,
-        inputOrder: itemCount + 1,
+        inputOrder: (orderAgg._max.inputOrder ?? 0) + 1,
         labelCode,
         packingTypeId: data.packingTypeId,
         tobaccoTypeId: data.tobaccoTypeId,

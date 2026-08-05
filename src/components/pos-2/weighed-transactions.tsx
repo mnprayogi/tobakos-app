@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback } from "react"
 import { toast } from "sonner"
-import { getWeighedTransactions, endWeighSession, getSessionUnweighed } from "@/lib/actions/weighing"
+import { getWeighedTransactions, endWeighSession, getSessionUnweighed, getNotaData } from "@/lib/actions/weighing"
 import type { WeighedTransaction, NotaItem, SessionCheckResult } from "@/lib/actions/weighing"
 import { usePrintDocument, printBaseStyle } from "@/lib/print"
 import { NotaTimbangan } from "@/components/pos-2/nota-timbangan"
@@ -53,7 +53,12 @@ export function WeighedTransactions({ laneId }: Props) {
   usePolling(loadTransactions, REALTIME_INTERVAL_MS, [loadTransactions])
 
   useSse(laneId, (event) => {
-    if (event.type === "bale.weighed" || event.type === "session.ended") {
+    if (
+      event.type === "bale.created" ||
+      event.type === "bale.deleted" ||
+      event.type === "bale.weighed" ||
+      event.type === "session.ended"
+    ) {
       loadTransactions()
     }
   })
@@ -85,6 +90,15 @@ export function WeighedTransactions({ laneId }: Props) {
       toast.error((err as Error).message)
     } finally {
       setFinishing(null)
+    }
+  }
+
+  async function handleReprintNota(txn: WeighedTransaction) {
+    try {
+      const data = await getNotaData(txn.id, laneId)
+      setNotaData(data)
+    } catch (err) {
+      toast.error((err as Error).message)
     }
   }
 
@@ -200,7 +214,13 @@ export function WeighedTransactions({ laneId }: Props) {
                             {finishing === txn.id ? "Memproses\u2026" : "Akhiri Sesi Timbang"}
                           </button>
                         ) : (
-                          <span className="text-[11px] text-muted-2">Selesai ditimbang</span>
+                          <button
+                            type="button"
+                            onClick={() => handleReprintNota(txn)}
+                            className="px-3 py-1.5 bg-emerald hover:bg-emerald/80 text-primary-foreground font-extrabold text-[11px] rounded-lg transition-all cursor-pointer"
+                          >
+                            Cetak Nota
+                          </button>
                         )}
                       </td>
                     </tr>

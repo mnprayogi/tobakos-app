@@ -97,11 +97,9 @@ export function useScale() {
   }, [clearReadings])
 
   const capture = useCallback((): number | null => {
-    if (stableRef.current && lastStableRef.current != null) {
-      return lastStableRef.current
-    }
-    return state.weight
-  }, [state.weight])
+    if (!stableRef.current || lastStableRef.current == null) return null
+    return lastStableRef.current
+  }, [])
 
   useEffect(() => {
     return () => {

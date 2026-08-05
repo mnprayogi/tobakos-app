@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { toast } from "sonner"
 import { saveWeighData } from "@/lib/actions/weighing"
 import { useOfflineQueue, isNetworkError } from "@/hooks/useOfflineQueue"
@@ -51,6 +51,8 @@ interface Props {
   onSaved?: () => void
 }
 
+const AUTO_ADVANCE_MS = 1600
+
 export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, onRoundingModeChange, onReset, onSaved }: Props) {
   const [grossWeight, setGrossWeight] = useState("")
   const [weighing, setWeighing] = useState(false)
@@ -61,6 +63,18 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
   } | null>(null)
   const [prevCaptured, setPrevCaptured] = useState<number | null>(null)
   const { enqueue } = useOfflineQueue()
+
+  useEffect(() => {
+    if (!lastWeighed) return
+    const t = setTimeout(() => {
+      setGrossWeight("")
+      setLastWeighed(null)
+      setPendingSync(false)
+      onReset()
+    }, AUTO_ADVANCE_MS)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastWeighed])
 
   if (item && capturedWeight !== prevCaptured && capturedWeight != null) {
     setPrevCaptured(capturedWeight)
@@ -124,6 +138,10 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
           <div>
             <label className="text-[11px] text-muted-foreground block mb-1.5">Jenis Tembakau</label>
             <input value={item.tobaccoType} disabled className="w-full bg-[#0a121f] border border-dashed border-border-soft text-foreground/80 font-sans text-[13.5px] px-2.5 py-2 rounded-lg" />
+          </div>
+          <div>
+            <label className="text-[11px] text-muted-foreground block mb-1.5">Jenis Daun</label>
+            <input value={item.leafType} disabled className="w-full bg-[#0a121f] border border-dashed border-border-soft text-foreground/80 font-sans text-[13.5px] px-2.5 py-2 rounded-lg" />
           </div>
           <div>
             <label className="text-[11px] text-muted-foreground block mb-1.5">Jenis Packing</label>
@@ -234,6 +252,7 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
 
   async function handleSave() {
     if (!item) return
+    if (weighing) return
     if (grossWeightNum <= 0) {
       toast.error("Masukkan berat timbangan")
       return
@@ -246,39 +265,42 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
         roundingMode,
         laneId,
       }
-      let result: Awaited<ReturnType<typeof saveWeighData>>
-      try {
-        result = await saveWeighData(payload)
-      } catch (err) {
-        if (!isNetworkError(err)) throw err
-        const alreadyQueued = useQueueStore.getState().pending.some(
-          (a) => a.type === "WEIGH" && a.payload.labelCode === item.labelCode
-        )
-        if (!alreadyQueued) {
-          enqueue({ type: "WEIGH", payload })
-          toast.info(`Offline — bale ${item.labelCode} masuk antrean sinkron`)
-        } else {
-          toast.info(`Bale ${item.labelCode} sudah ada di antrean sinkron`)
-        }
-        setLastWeighed({ netWeight, subtotal })
-        setPendingSync(true)
-        onSaved?.()
-        return
-      }
-      setLastWeighed({
-        netWeight: result.netWeight ?? 0,
-        subtotal: result.subtotal ?? 0,
-      })
+      setLastWeighed({ netWeight, subtotal })
       setPendingSync(false)
-      onSaved?.()
-      toast.success(`Bale ${item.labelCode} — Netto ${(result.netWeight ?? 0).toFixed(weightDecimals)} KG`)
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      if (msg.includes("ditutup")) {
+      try {
+        const result = await saveWeighData(payload)
+        setLastWeighed({
+          netWeight: result.netWeight ?? 0,
+          subtotal: result.subtotal ?? 0,
+        })
+        setPendingSync(false)
         onSaved?.()
-        onReset()
+        toast.success(`Bale ${item.labelCode} — Netto ${(result.netWeight ?? 0).toFixed(weightDecimals)} KG`)
+      } catch (err) {
+        if (isNetworkError(err)) {
+          const alreadyQueued = useQueueStore.getState().pending.some(
+            (a) => a.type === "WEIGH" && a.payload.labelCode === item.labelCode
+          )
+          if (!alreadyQueued) {
+            enqueue({ type: "WEIGH", payload })
+            toast.info(`Offline — bale ${item.labelCode} masuk antrean sinkron`)
+          } else {
+            toast.info(`Bale ${item.labelCode} sudah ada di antrean sinkron`)
+          }
+          setPendingSync(true)
+          onSaved?.()
+          return
+        }
+        setLastWeighed(null)
+        setPendingSync(false)
+        setGrossWeight("")
+        const msg = err instanceof Error ? err.message : String(err)
+        if (msg.includes("ditutup")) {
+          onSaved?.()
+          onReset()
+        }
+        toast.error(msg)
       }
-      toast.error(msg)
     } finally {
       setWeighing(false)
     }
@@ -345,6 +367,10 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
         <div>
           <label className="text-[11px] text-muted-foreground block mb-1.5">Jenis Tembakau</label>
           <input value={item.tobaccoType} disabled className="w-full bg-[#0a121f] border border-dashed border-border-soft text-foreground/80 font-sans text-[13.5px] px-2.5 py-2 rounded-lg" />
+        </div>
+        <div>
+          <label className="text-[11px] text-muted-foreground block mb-1.5">Jenis Daun</label>
+          <input value={item.leafType} disabled className="w-full bg-[#0a121f] border border-dashed border-border-soft text-foreground/80 font-sans text-[13.5px] px-2.5 py-2 rounded-lg" />
         </div>
         <div>
           <label className="text-[11px] text-muted-foreground block mb-1.5">Jenis Packing</label>

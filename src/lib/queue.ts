@@ -15,16 +15,20 @@ export type NewQueuedAction =
 
 interface QueueState {
   pending: QueuedAction[]
+  syncing: Record<string, boolean>
   online: boolean
   enqueue: (action: NewQueuedAction) => void
   remove: (id: string) => void
   setOnline: (v: boolean) => void
+  markSyncing: (id: string) => void
+  unmarkSyncing: (id: string) => void
 }
 
 export const useQueueStore = create<QueueState>()(
   persist(
     (set) => ({
       pending: [],
+      syncing: {},
       online: typeof navigator !== "undefined" ? navigator.onLine : true,
       enqueue: (action) =>
         set((s) => {
@@ -36,6 +40,14 @@ export const useQueueStore = create<QueueState>()(
         }),
       remove: (id) => set((s) => ({ pending: s.pending.filter((a) => a.id !== id) })),
       setOnline: (v) => set({ online: v }),
+      markSyncing: (id) => set((s) => ({ syncing: { ...s.syncing, [id]: true } })),
+      unmarkSyncing: (id) =>
+        set((s) => {
+          if (!s.syncing[id]) return s
+          const next = { ...s.syncing }
+          delete next[id]
+          return { syncing: next }
+        }),
     }),
     {
       name: "tobakos-offline-queue",
