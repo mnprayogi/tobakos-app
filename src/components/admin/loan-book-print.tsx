@@ -16,16 +16,29 @@ function entryLabel(type: string, method: string | null): string {
   return "BAYAR TUNAI"
 }
 
-export const LoanBookPrint = forwardRef<HTMLDivElement, { book: LoanBook; companyName?: string }>(
-  function LoanBookPrint({ book, companyName = "TobakOS" }, ref) {
+function fmtDateTime(d: Date): string {
+  return d.toLocaleString("id-ID", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
+
+export const LoanBookPrint = forwardRef<
+  HTMLDivElement,
+  { book: LoanBook; companyName?: string; userName?: string; printedAt?: Date | null }
+>(function LoanBookPrint({ book, companyName = "TobakOS", userName, printedAt }, ref) {
     const opened = new Date(book.openedAt)
     const openedStr = opened.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })
+    const entries = book.entries.filter((e) => !e.voided)
 
     return (
       <div ref={ref} style={{ width: "100%", maxWidth: "180mm", margin: "0 auto", fontFamily: "'Courier New', Courier, monospace" }}>
         <div style={{ textAlign: "center", marginBottom: "5mm", borderBottom: "2px solid #000", paddingBottom: "3mm" }}>
           <h1 style={{ fontSize: "16pt", fontWeight: 900, margin: "0 0 2mm", letterSpacing: "0.1em", color: "#000" }}>BUKU HUTANG MODAL</h1>
-          <p style={{ fontSize: "11pt", fontWeight: 600, margin: "0 0 1mm", color: "#000" }}>{companyName} · Gudang Tembakau</p>
+          <p style={{ fontSize: "11pt", fontWeight: 600, margin: "0 0 1mm", color: "#000" }}>{companyName} · {book.warehouseName}</p>
           <p style={{ fontSize: "9pt", color: "#222", margin: 0 }}>Buku ini mencatat seluruh pinjaman modal &amp; pembayarannya per petani</p>
         </div>
 
@@ -40,6 +53,11 @@ export const LoanBookPrint = forwardRef<HTMLDivElement, { book: LoanBook; compan
               <td style={{ width: "24mm", fontWeight: 700, padding: "1.5mm 2mm", fontSize: "11pt", color: "#000" }}>NIK</td>
               <td style={{ width: "4mm", padding: "1.5mm 2mm", fontSize: "11pt", color: "#000" }}>:</td>
               <td style={{ padding: "1.5mm 2mm", fontSize: "11pt", color: "#000" }}>{book.farmerNik ?? "\u2014"}</td>
+            </tr>
+            <tr>
+              <td style={{ width: "24mm", fontWeight: 700, padding: "1.5mm 2mm", fontSize: "11pt", color: "#000" }}>Gudang</td>
+              <td style={{ width: "4mm", padding: "1.5mm 2mm", fontSize: "11pt", color: "#000" }}>:</td>
+              <td style={{ padding: "1.5mm 2mm", fontSize: "11pt", color: "#000", fontWeight: 600 }}>{book.warehouseName}</td>
             </tr>
             <tr>
               <td style={{ width: "24mm", fontWeight: 700, padding: "1.5mm 2mm", fontSize: "11pt", color: "#000" }}>Status</td>
@@ -84,12 +102,12 @@ export const LoanBookPrint = forwardRef<HTMLDivElement, { book: LoanBook; compan
             </tr>
           </thead>
           <tbody>
-            {book.entries.length === 0 && (
+            {entries.length === 0 && (
               <tr>
                 <td colSpan={5} style={{ textAlign: "center", border: "1.5px solid #000", padding: "4mm 3mm", fontSize: "10pt", color: "#000" }}>Belum ada transaksi pada buku ini.</td>
               </tr>
             )}
-            {book.entries.map((e) => (
+            {entries.map((e) => (
               <tr key={e.id}>
                 <td style={{ textAlign: "left", border: "1.5px solid #000", padding: "2mm 3mm", fontSize: "9pt", color: "#000", whiteSpace: "nowrap" }}>
                   {new Date(e.createdAt).toLocaleDateString("id-ID", { day: "2-digit", month: "2-digit", year: "numeric" })}
@@ -122,6 +140,11 @@ export const LoanBookPrint = forwardRef<HTMLDivElement, { book: LoanBook; compan
 
         <div style={{ textAlign: "center", borderTop: "2.5px solid #000", paddingTop: "3mm", fontSize: "11pt", fontWeight: 700 }}>
           <p style={{ color: "#000" }}>Dicetak dari {companyName}</p>
+          {printedAt && (
+            <p style={{ fontSize: "9pt", color: "#333", margin: "1mm 0 0" }}>
+              Dicetak oleh: {userName ?? "\u2014"} · {fmtDateTime(printedAt)}
+            </p>
+          )}
         </div>
       </div>
     )

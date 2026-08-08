@@ -23,11 +23,12 @@ export interface LoanDialogState {
 interface Props {
   state: LoanDialogState | null
   farmers?: LoanFarmer[]
+  warehouseName?: string
   onClose: () => void
   onDone?: () => void
 }
 
-export function LoanDialog({ state, farmers = [], onClose, onDone }: Props) {
+export function LoanDialog({ state, farmers = [], warehouseName, onClose, onDone }: Props) {
   const [farmerId, setFarmerId] = useState<number | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [amount, setAmount] = useState("")
@@ -107,6 +108,11 @@ export function LoanDialog({ state, farmers = [], onClose, onDone }: Props) {
 
         {state && (
           <div className="space-y-4">
+            {state.mode === "disburse" && warehouseName && (
+              <p className="text-[10.5px] text-muted-2">
+                Pinjaman dicatat ke buku <b className="text-foreground">{warehouseName}</b>.
+              </p>
+            )}
             {state.mode === "disburse" && (
               <div>
                 <label className="block text-[11px] font-bold text-muted-foreground mb-1">Cari Petani *</label>

@@ -5,6 +5,8 @@ import { prisma } from "@/lib/db"
 import { isMultipleOf100, negotiateItems, roundMoney, roundRupiah } from "@/lib/calculations"
 import { requireRoles } from "@/lib/roles"
 import { publishEvent } from "@/lib/events"
+import { resolveWarehouseScope } from "@/lib/actions/scope"
+import { loanTotals } from "@/lib/loan-totals"
 
 export type PaymentMethodValue = "TUNAI" | "TRANSFER"
 
@@ -138,22 +140,19 @@ export async function recordPayment(purchaseId: number, input: PaymentInput) {
     let loan = null
     let newLoanBalance: number | null = null
     if (loanDeduction > 0.005) {
-      await tx.$queryRaw`SELECT id FROM farmer_loans WHERE farmer_id = ${purchase.farmerId} FOR UPDATE`
+      await tx.$queryRaw`SELECT id FROM farmer_loans WHERE farmerId = ${purchase.farmerId} FOR UPDATE`
 
       loan = await tx.farmerLoan.findUnique({
         where: { farmerId: purchase.farmerId },
-        include: { entries: { select: { type: true, amount: true } } },
+        include: { entries: { select: { type: true, amount: true, voidedAt: true } } },
       })
       if (!loan || loan.status !== "ACTIVE") {
         throw new Error("Petani tidak memiliki hutang modal aktif")
       }
-      let totalBorrowed = 0
-      let totalRepaid = 0
-      for (const e of loan.entries) {
-        if (e.type === "DISBURSEMENT") totalBorrowed += Number(e.amount)
-        else totalRepaid += Number(e.amount)
+      if (purchase.warehouseId != null && loan.warehouseId !== purchase.warehouseId) {
+        throw new Error("Buku hutang petani terdaftar di gudang berbeda dari transaksi")
       }
-      const loanBalance = roundMoney(totalBorrowed - totalRepaid)
+      const loanBalance = loanTotals(loan.entries).balance
       if (loanDeduction > loanBalance + 0.005) {
         throw new Error(`Potongan hutang melebihi sisa hutang (sisa Rp ${loanBalance.toLocaleString("id-ID")})`)
       }
@@ -177,14 +176,7 @@ export async function recordPayment(purchaseId: number, input: PaymentInput) {
 
     let loanEntryId: number | null = null
     if (loanDeduction > 0.005) {
-      const totalBorrowed = loan!.entries
-        .filter((e) => e.type === "DISBURSEMENT")
-        .reduce((s, e) => s + Number(e.amount), 0)
-      const totalRepaid = loan!.entries
-        .filter((e) => e.type === "REPAYMENT")
-        .reduce((s, e) => s + Number(e.amount), 0)
-      const loanBalance = roundMoney(totalBorrowed - totalRepaid)
-      const isLoanSettled = Math.abs(loanDeduction - loanBalance) <= 0.005
+      const isLoanSettled = newLoanBalance != null && Math.abs(newLoanBalance) <= 0.005
 
       const entry = await tx.loanEntry.create({
         data: {
@@ -282,9 +274,12 @@ export async function voidPayment(purchaseId: number, paymentId: number) {
     if (payment.voidedAt) throw new Error("Pembayaran ini sudah dibatalkan")
 
     if (Number(payment.loanDeduction ?? 0) > 0.005) {
-      await tx.$queryRaw`SELECT id FROM farmer_loans WHERE farmer_id = ${purchase.farmerId} FOR UPDATE`
+      await tx.$queryRaw`SELECT id FROM farmer_loans WHERE farmerId = ${purchase.farmerId} FOR UPDATE`
       loanTouched = true
-      await tx.loanEntry.deleteMany({ where: { paymentId } })
+      await tx.loanEntry.updateMany({
+        where: { paymentId },
+        data: { voidedAt: new Date(), voidedBy: actor },
+      })
     }
 
     await tx.payment.update({
@@ -325,16 +320,10 @@ export async function voidPayment(purchaseId: number, paymentId: number) {
     if (loanTouched) {
       const loan = await tx.farmerLoan.findUnique({
         where: { farmerId: purchase.farmerId },
-        include: { entries: { select: { type: true, amount: true } } },
+        include: { entries: { select: { type: true, amount: true, voidedAt: true } } },
       })
       if (loan) {
-        let borrowed = 0
-        let repaid = 0
-        for (const e of loan.entries) {
-          if (e.type === "DISBURSEMENT") borrowed += Number(e.amount)
-          else repaid += Number(e.amount)
-        }
-        const balance = roundMoney(borrowed - repaid)
+        const balance = loanTotals(loan.entries).balance
         const isSettled = balance <= 0.005
         await tx.farmerLoan.update({
           where: { id: loan.id },
@@ -435,8 +424,12 @@ export interface DebtFarmer {
 
 export async function getDebtSummary(): Promise<DebtFarmer[]> {
   await requireRoles("ADMIN", "FINANCE", "OWNER")
+  const scope = await resolveWarehouseScope()
   const purchases = await prisma.purchase.findMany({
-    where: { status: { in: ["APPROVED", "PAID"] } },
+    where: {
+      status: { in: ["APPROVED", "PAID"] },
+      ...(scope.mode === "scoped" ? { warehouseId: scope.warehouseId } : {}),
+    },
     orderBy: [{ farmerId: "asc" }, { createdAt: "desc" }],
     include: {
       farmer: { select: { name: true, nik: true } },
@@ -459,18 +452,16 @@ export async function getDebtSummary(): Promise<DebtFarmer[]> {
 
   const farmerIds = [...new Set(purchases.map((p) => p.farmerId))]
   const loans = await prisma.farmerLoan.findMany({
-    where: { farmerId: { in: farmerIds }, status: "ACTIVE" },
-    include: { entries: { select: { type: true, amount: true } } },
+    where: {
+      farmerId: { in: farmerIds },
+      status: "ACTIVE",
+      ...(scope.mode === "scoped" ? { warehouseId: scope.warehouseId } : {}),
+    },
+    include: { entries: { select: { type: true, amount: true, voidedAt: true } } },
   })
   const loanBalanceByFarmer = new Map<number, number>()
   for (const loan of loans) {
-    let borrowed = 0
-    let repaid = 0
-    for (const e of loan.entries) {
-      if (e.type === "DISBURSEMENT") borrowed += Number(e.amount)
-      else repaid += Number(e.amount)
-    }
-    loanBalanceByFarmer.set(loan.farmerId, roundMoney(borrowed - repaid))
+    loanBalanceByFarmer.set(loan.farmerId, loanTotals(loan.entries).balance)
   }
 
   const farmers = new Map<number, DebtFarmer>()

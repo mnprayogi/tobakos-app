@@ -22,8 +22,8 @@ import {
   type FarmerSummaryRow,
   type PeriodSummaryRow,
   type TransactionDetailRow,
-  type ReportScope,
 } from "@/lib/actions/reports"
+import type { WarehouseScope } from "@/lib/actions/scope"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { StatusPill } from "@/components/shared/status-pill"
 import { usePrintDocument, printBaseStyle } from "@/lib/print"
@@ -81,7 +81,7 @@ export function ReportsClient({
   warehouses: WarehouseMeta[]
   farmers: FarmerMeta[]
   companyName: string
-  scope: ReportScope
+  scope: WarehouseScope
   userName?: string
 }) {
   const [tab, setTab] = useState<Tab>("farmer")

@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation"
+import { auth } from "@/lib/auth"
 import { getLoanBook } from "@/lib/actions/loans"
 import { canAccess } from "@/lib/roles"
 import { LoanBookClient } from "./client"
@@ -17,7 +18,10 @@ export default async function LoanBookPage({ params }: { params: Promise<{ id: s
     notFound()
   }
 
-  const companyName = await getSetting("COMPANY_NAME", "TobakOS")
+  const [session, companyName] = await Promise.all([
+    auth(),
+    getSetting("COMPANY_NAME", "TobakOS"),
+  ])
 
-  return <LoanBookClient book={book} companyName={companyName} />
+  return <LoanBookClient book={book} companyName={companyName} userName={session?.user.name ?? ""} />
 }

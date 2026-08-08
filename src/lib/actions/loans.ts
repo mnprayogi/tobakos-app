@@ -5,6 +5,8 @@ import { prisma } from "@/lib/db"
 import { isMultipleOf100, roundMoney } from "@/lib/calculations"
 import { requireRoles } from "@/lib/roles"
 import { publishEvent } from "@/lib/events"
+import { resolveWarehouseScope } from "@/lib/actions/scope"
+import { loanTotals } from "@/lib/loan-totals"
 
 export type LoanStatusValue = "ACTIVE" | "SETTLED"
 export type LoanEntryTypeValue = "DISBURSEMENT" | "REPAYMENT"
@@ -15,6 +17,8 @@ export interface LoanAccount {
   farmerId: number
   farmerName: string
   farmerNik: string | null
+  warehouseId: number
+  warehouseName: string
   status: LoanStatusValue
   openedAt: Date
   settledAt: Date | null
@@ -34,6 +38,8 @@ export interface LoanEntryInfo {
   createdBy: string | null
   createdAt: Date
   balanceAfter: number
+  voided: boolean
+  voidedBy: string | null
 }
 
 export interface LoanBook {
@@ -41,6 +47,8 @@ export interface LoanBook {
   farmerId: number
   farmerName: string
   farmerNik: string | null
+  warehouseId: number
+  warehouseName: string
   status: LoanStatusValue
   openedAt: Date
   settledAt: Date | null
@@ -52,33 +60,30 @@ export interface LoanBook {
 
 export async function getLoansData(): Promise<LoanAccount[]> {
   await requireRoles("ADMIN", "FINANCE", "OWNER")
+  const scope = await resolveWarehouseScope()
   const loans = await prisma.farmerLoan.findMany({
+    where: scope.mode === "scoped" ? { warehouseId: scope.warehouseId } : {},
     orderBy: { updatedAt: "desc" },
     include: {
       farmer: true,
-      entries: { select: { type: true, amount: true } },
+      warehouse: true,
+      entries: { select: { type: true, amount: true, voidedAt: true } },
     },
   })
 
   return loans.map((loan) => {
-    let totalBorrowed = 0
-    let totalRepaid = 0
-    for (const e of loan.entries) {
-      if (e.type === "DISBURSEMENT") totalBorrowed += Number(e.amount)
-      else totalRepaid += Number(e.amount)
-    }
-    const balance = roundMoney(totalBorrowed - totalRepaid)
+    const totals = loanTotals(loan.entries)
     return {
       loanId: loan.id,
       farmerId: loan.farmerId,
       farmerName: loan.farmer.name,
       farmerNik: loan.farmer.nik,
+      warehouseId: loan.warehouseId,
+      warehouseName: loan.warehouse.name,
       status: loan.status as LoanStatusValue,
       openedAt: loan.openedAt,
       settledAt: loan.settledAt,
-      totalBorrowed: roundMoney(totalBorrowed),
-      totalRepaid: roundMoney(totalRepaid),
-      balance,
+      ...totals,
       entryCount: loan.entries.length,
     }
   })
@@ -97,20 +102,31 @@ export async function disburseLoan(input: DisburseInput) {
   if (amount <= 0) throw new Error("Jumlah pinjaman harus lebih dari 0")
   if (!isMultipleOf100(amount)) throw new Error("Jumlah pinjaman harus kelipatan 100 Rupiah")
 
+  const scope = await resolveWarehouseScope()
+  const warehouseId = scope.mode === "scoped" ? scope.warehouseId : null
+  if (warehouseId == null) throw new Error("Akun Anda belum ditugaskan ke gudang")
+
   const farmer = await prisma.farmer.findUnique({ where: { id: input.farmerId } })
   if (!farmer) throw new Error("Petani tidak ditemukan")
 
   const result = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM farmer_loans WHERE farmerId = ${input.farmerId} FOR UPDATE`
+
     let loan = await tx.farmerLoan.findUnique({ where: { farmerId: input.farmerId } })
     if (!loan) {
       loan = await tx.farmerLoan.create({
-        data: { farmerId: input.farmerId, status: "ACTIVE", notes: null },
+        data: { farmerId: input.farmerId, warehouseId, status: "ACTIVE", notes: null },
       })
-    } else if (loan.status === "SETTLED") {
-      loan = await tx.farmerLoan.update({
-        where: { id: loan.id },
-        data: { status: "ACTIVE", settledAt: null },
-      })
+    } else {
+      if (loan.warehouseId !== warehouseId) {
+        throw new Error("Buku hutang petani ini terdaftar di gudang lain")
+      }
+      if (loan.status === "SETTLED") {
+        loan = await tx.farmerLoan.update({
+          where: { id: loan.id },
+          data: { status: "ACTIVE", settledAt: null },
+        })
+      }
     }
 
     await tx.loanEntry.create({
@@ -147,21 +163,24 @@ export async function repayLoanCash(input: RepayInput) {
   const amount = roundMoney(input.amount)
   if (amount <= 0) throw new Error("Jumlah pembayaran harus lebih dari 0")
 
+  const scope = await resolveWarehouseScope()
+
   const result = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM farmer_loans WHERE id = ${input.loanId} FOR UPDATE`
+
     const loan = await tx.farmerLoan.findUnique({
       where: { id: input.loanId },
-      include: { entries: { select: { type: true, amount: true } } },
+      include: {
+        entries: { select: { type: true, amount: true, voidedAt: true } },
+      },
     })
     if (!loan) throw new Error("Buku hutang tidak ditemukan")
     if (loan.status !== "ACTIVE") throw new Error("Buku hutang sudah lunas")
-
-    let totalBorrowed = 0
-    let totalRepaid = 0
-    for (const e of loan.entries) {
-      if (e.type === "DISBURSEMENT") totalBorrowed += Number(e.amount)
-      else totalRepaid += Number(e.amount)
+    if (scope.mode === "scoped" && loan.warehouseId !== scope.warehouseId) {
+      throw new Error("Buku hutang bukan milik gudang Anda")
     }
-    const balance = roundMoney(totalBorrowed - totalRepaid)
+
+    const balance = loanTotals(loan.entries).balance
     if (amount > balance + 0.005) {
       throw new Error(`Pembayaran melebihi sisa hutang (sisa Rp ${balance.toLocaleString("id-ID")})`)
     }
@@ -198,10 +217,12 @@ export async function repayLoanCash(input: RepayInput) {
 
 export async function getLoanBook(loanId: number): Promise<LoanBook> {
   await requireRoles("ADMIN", "FINANCE", "OWNER")
+  const scope = await resolveWarehouseScope()
   const loan = await prisma.farmerLoan.findUnique({
     where: { id: loanId },
     include: {
       farmer: true,
+      warehouse: true,
       entries: {
         orderBy: { createdAt: "asc" },
         include: {
@@ -211,18 +232,24 @@ export async function getLoanBook(loanId: number): Promise<LoanBook> {
     },
   })
   if (!loan) throw new Error("Buku hutang tidak ditemukan")
+  if (scope.mode === "scoped" && loan.warehouseId !== scope.warehouseId) {
+    throw new Error("Buku hutang bukan milik gudang Anda")
+  }
 
   const entries: LoanEntryInfo[] = []
   let running = 0
   let totalBorrowed = 0
   let totalRepaid = 0
   for (const e of loan.entries) {
-    if (e.type === "DISBURSEMENT") {
-      running += Number(e.amount)
-      totalBorrowed += Number(e.amount)
-    } else {
-      running -= Number(e.amount)
-      totalRepaid += Number(e.amount)
+    const voided = e.voidedAt != null
+    if (!voided) {
+      if (e.type === "DISBURSEMENT") {
+        running += Number(e.amount)
+        totalBorrowed += Number(e.amount)
+      } else {
+        running -= Number(e.amount)
+        totalRepaid += Number(e.amount)
+      }
     }
     entries.push({
       id: e.id,
@@ -234,6 +261,8 @@ export async function getLoanBook(loanId: number): Promise<LoanBook> {
       createdBy: e.createdBy,
       createdAt: e.createdAt,
       balanceAfter: roundMoney(running),
+      voided,
+      voidedBy: e.voidedBy,
     })
   }
 
@@ -242,6 +271,8 @@ export async function getLoanBook(loanId: number): Promise<LoanBook> {
     farmerId: loan.farmerId,
     farmerName: loan.farmer.name,
     farmerNik: loan.farmer.nik,
+    warehouseId: loan.warehouseId,
+    warehouseName: loan.warehouse.name,
     status: loan.status as LoanStatusValue,
     openedAt: loan.openedAt,
     settledAt: loan.settledAt,

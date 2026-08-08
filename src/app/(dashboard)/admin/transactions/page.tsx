@@ -95,13 +95,14 @@ export default async function TransactionsPage({
   const farmerIds = [...new Set(raw.map((p) => p.farmerId))]
   const loans = await prisma.farmerLoan.findMany({
     where: { farmerId: { in: farmerIds }, status: "ACTIVE" },
-    include: { entries: { select: { type: true, amount: true } } },
+    include: { entries: { select: { type: true, amount: true, voidedAt: true } } },
   })
   const loanBalanceByFarmer = new Map<number, number>()
   for (const loan of loans) {
     let borrowed = 0
     let repaid = 0
     for (const e of loan.entries) {
+      if (e.voidedAt) continue
       if (e.type === "DISBURSEMENT") borrowed += Number(e.amount)
       else repaid += Number(e.amount)
     }

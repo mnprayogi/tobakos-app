@@ -2,11 +2,13 @@
 
 import { useRef, useState } from "react"
 import Link from "next/link"
+import { flushSync } from "react-dom"
 import { formatCurrency, formatDateTime } from "@/lib/utils"
 import { usePrintDocument, printBaseStyle } from "@/lib/print"
 import type { LoanBook, LoanEntryInfo } from "@/lib/actions/loans"
 import { LoanDialog, type LoanDialogState } from "@/components/admin/loan-dialog"
 import { LoanBookPrint } from "@/components/admin/loan-book-print"
+import { Wallet } from "lucide-react"
 
 function entryLabel(e: LoanEntryInfo): string {
   if (e.type === "DISBURSEMENT") return "Pinjam"
@@ -14,13 +16,19 @@ function entryLabel(e: LoanEntryInfo): string {
   return "Bayar Tunai"
 }
 
-export function LoanBookClient({ book, companyName }: { book: LoanBook; companyName: string }) {
+export function LoanBookClient({ book, companyName, userName }: { book: LoanBook; companyName: string; userName: string }) {
   const [dialog, setDialog] = useState<LoanDialogState | null>(null)
+  const [printedAt, setPrintedAt] = useState<Date | null>(null)
   const printRef = useRef<HTMLDivElement>(null)
   const handlePrint = usePrintDocument(printRef, printBaseStyle, {
     documentTitle: `Buku-Hutang-${book.farmerName}`,
   })
   const active = book.status === "ACTIVE" && book.balance > 0.005
+
+  function onPrint() {
+    flushSync(() => setPrintedAt(new Date()))
+    handlePrint()
+  }
 
   return (
     <div className="space-y-5 print:space-y-3">
@@ -32,7 +40,7 @@ export function LoanBookClient({ book, companyName }: { book: LoanBook; companyN
           <h1 className="text-lg font-bold text-foreground">Buku Hutang</h1>
         </div>
         <button
-          onClick={handlePrint}
+          onClick={onPrint}
           className="rounded-lg bg-panel-alt px-3.5 py-2 font-bold text-[12px] text-foreground border border-border-soft cursor-pointer"
         >
           Cetak
@@ -40,7 +48,7 @@ export function LoanBookClient({ book, companyName }: { book: LoanBook; companyN
       </div>
 
       <div className="hidden" aria-hidden="true">
-        <LoanBookPrint ref={printRef} book={book} companyName={companyName} />
+        <LoanBookPrint ref={printRef} book={book} companyName={companyName} userName={userName} printedAt={printedAt} />
       </div>
 
       <div className="rounded-xl border border-border bg-card p-4 print:border-0 print:rounded-none print:p-0">
@@ -48,6 +56,10 @@ export function LoanBookClient({ book, companyName }: { book: LoanBook; companyN
           <div>
             <h2 className="font-extrabold text-foreground text-[15px]">{book.farmerName}</h2>
             <p className="font-mono text-[11px] text-muted-2 mt-0.5">{book.farmerNik ?? "—"}</p>
+            <span className="inline-flex items-center gap-1.5 mt-1.5 rounded-full bg-panel-alt border border-border-soft px-2 py-0.5 text-[10.5px] font-bold text-muted-foreground">
+              <Wallet className="w-3 h-3 text-emerald" />
+              {book.warehouseName}
+            </span>
           </div>
           <span className={`inline-block px-2.5 py-1 rounded-full text-[10.5px] font-bold border ${
             active ? "bg-amber/12 text-amber border-amber/35" : "bg-muted/12 text-muted border-border"
@@ -104,24 +116,33 @@ export function LoanBookClient({ book, companyName }: { book: LoanBook; companyN
               {book.entries.map((e) => {
                 const isLoan = e.type === "DISBURSEMENT"
                 return (
-                  <tr key={e.id}>
+                  <tr key={e.id} className={e.voided ? "opacity-50" : undefined}>
                     <td className="py-2 pr-2 border-b border-border-soft font-mono text-muted-foreground whitespace-nowrap">{formatDateTime(e.createdAt)}</td>
                     <td className="py-2 px-2 border-b border-border-soft">
                       <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        isLoan ? "bg-amber/12 text-amber border border-amber/35" : "bg-emerald/12 text-emerald border border-emerald/35"
+                        e.voided
+                          ? "bg-muted/12 text-muted border border-border"
+                          : isLoan
+                            ? "bg-amber/12 text-amber border border-amber/35"
+                            : "bg-emerald/12 text-emerald border border-emerald/35"
                       }`}>
-                        {entryLabel(e)}
+                        {e.voided ? "Dibatalkan" : entryLabel(e)}
                       </span>
                     </td>
                     <td className="py-2 px-2 border-b border-border-soft">
+                      {e.voided && e.voidedBy && <p className="text-[11px] text-muted-foreground italic">Dibatalkan oleh {e.voidedBy}</p>}
                       {e.note && <p className="text-[11.5px] text-muted-foreground">{e.note}</p>}
                       {e.transactionCode && <p className="font-mono text-[10.5px] text-emerald">{e.transactionCode}</p>}
-                      {!e.note && !e.transactionCode && <span className="text-muted-2 text-[11px]">—</span>}
+                      {!e.note && !e.transactionCode && !(e.voided && e.voidedBy) && <span className="text-muted-2 text-[11px]">—</span>}
                     </td>
                     <td className={`py-2 px-2 border-b border-border-soft text-right font-mono font-bold ${isLoan ? "text-amber" : "text-emerald"}`}>
-                      {isLoan ? "+" : "−"} {formatCurrency(e.amount)}
+                      <span className={e.voided ? "line-through" : undefined}>
+                        {isLoan ? "+" : "−"} {formatCurrency(e.amount)}
+                      </span>
                     </td>
-                    <td className="py-2 pl-2 border-b border-border-soft text-right font-mono font-bold text-foreground">{formatCurrency(e.balanceAfter)}</td>
+                    <td className="py-2 pl-2 border-b border-border-soft text-right font-mono font-bold text-foreground">
+                      {e.voided ? <span className="text-muted-2">—</span> : formatCurrency(e.balanceAfter)}
+                    </td>
                   </tr>
                 )
               })}

@@ -1,32 +1,12 @@
 "use server"
 
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
 import { requireRoles } from "@/lib/roles"
 import { roundMoney } from "@/lib/calculations"
 import { toDateKey } from "@/lib/utils"
-
-export type ReportScope =
-  | { mode: "all" }
-  | { mode: "scoped"; warehouseId: number }
-
-export async function resolveReportScope(): Promise<ReportScope> {
-  const session = await auth()
-  const role = session?.user?.role ?? null
-  if (role === "SUPER_ADMIN" || role === "OWNER") return { mode: "all" }
-
-  const user = session?.user?.id
-    ? await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { lane: { select: { warehouseId: true } } },
-      })
-    : null
-  const warehouseId = user?.lane?.warehouseId
-  if (warehouseId == null) {
-    throw new Error("Akun Anda belum ditugaskan ke gudang — hubungi admin untuk mengatur jalur")
-  }
-  return { mode: "scoped", warehouseId }
-}
+import {
+  resolveWarehouseScope,
+} from "@/lib/actions/scope"
 
 export interface ReportFilters {
   from?: string
@@ -99,7 +79,7 @@ export interface TransactionDetailRow {
 
 export async function getReportMeta() {
   await requireRoles("ADMIN", "FINANCE", "OWNER")
-  const scope = await resolveReportScope()
+  const scope = await resolveWarehouseScope()
   const [warehouses, farmers] = await Promise.all([
     prisma.warehouse.findMany({
       where: {
@@ -134,7 +114,7 @@ function statusWhere(status?: string | null) {
 export async function getFarmerSummary(filters: ReportFilters): Promise<FarmerSummaryRow[]> {
   await requireRoles("ADMIN", "FINANCE", "OWNER")
   const { from, to } = dateRange(filters)
-  const scope = await resolveReportScope()
+  const scope = await resolveWarehouseScope()
   const warehouseId = scope.mode === "scoped" ? scope.warehouseId : filters.warehouseId
 
   const purchases = await prisma.purchase.findMany({
@@ -153,13 +133,14 @@ export async function getFarmerSummary(filters: ReportFilters): Promise<FarmerSu
   const farmerIds = [...new Set(purchases.map((p) => p.farmerId))]
   const loans = await prisma.farmerLoan.findMany({
     where: { farmerId: { in: farmerIds } },
-    include: { entries: { select: { type: true, amount: true } } },
+    include: { entries: { select: { type: true, amount: true, voidedAt: true } } },
   })
   const loanBalanceMap = new Map<number, number>()
   for (const loan of loans) {
     let borrowed = 0
     let repaid = 0
     for (const e of loan.entries) {
+      if (e.voidedAt) continue
       if (e.type === "DISBURSEMENT") borrowed += Number(e.amount)
       else repaid += Number(e.amount)
     }
@@ -202,7 +183,7 @@ export async function getFarmerSummary(filters: ReportFilters): Promise<FarmerSu
 export async function getPeriodSummary(filters: ReportFilters): Promise<PeriodSummaryRow[]> {
   await requireRoles("ADMIN", "FINANCE", "OWNER")
   const { from, to } = dateRange(filters)
-  const scope = await resolveReportScope()
+  const scope = await resolveWarehouseScope()
   const warehouseId = scope.mode === "scoped" ? scope.warehouseId : filters.warehouseId
 
   const purchases = await prisma.purchase.findMany({
@@ -246,7 +227,7 @@ export async function getPeriodSummary(filters: ReportFilters): Promise<PeriodSu
 export async function getTransactionDetail(filters: ReportFilters): Promise<TransactionDetailRow[]> {
   await requireRoles("ADMIN", "FINANCE", "OWNER")
   const { from, to } = dateRange(filters)
-  const scope = await resolveReportScope()
+  const scope = await resolveWarehouseScope()
   const warehouseId = scope.mode === "scoped" ? scope.warehouseId : filters.warehouseId
 
   const purchases = await prisma.purchase.findMany({
