@@ -9,6 +9,7 @@ import { getActorName } from "@/lib/actor"
 import { getSettingNumber } from "@/lib/settings"
 import { requireRoles } from "@/lib/roles"
 import { publishEvent } from "@/lib/events"
+import { farmerSchema } from "@/lib/validations"
 
 export async function getTodayDraftFarmerIds(laneId: number): Promise<number[]> {
   await requireRoles("GRADER", "ADMIN")
@@ -151,6 +152,43 @@ export async function startNewTransaction(farmerId: number, laneCode: string) {
 
   revalidatePath("/pos-1/grading")
   return { id: purchase.id, transactionCode: purchase.transactionCode }
+}
+
+export interface RegisteredFarmer {
+  id: number
+  name: string
+  nik: string | null
+  phone: string | null
+  address: string | null
+}
+
+export async function registerFarmer(data: {
+  name: string
+  nik?: string
+  phone?: string
+  address?: string
+}): Promise<{ farmer: RegisteredFarmer; existed: boolean }> {
+  await requireRoles("GRADER", "ADMIN")
+  const parsed = farmerSchema.parse(data)
+
+  if (parsed.nik) {
+    const existing = await prisma.farmer.findFirst({ where: { nik: parsed.nik } })
+    if (existing) {
+      return { farmer: { id: existing.id, name: existing.name, nik: existing.nik, phone: existing.phone, address: existing.address }, existed: true }
+    }
+  }
+
+  try {
+    const farmer = await prisma.farmer.create({ data: parsed })
+    revalidatePath("/pos-1/grading")
+    return { farmer: { id: farmer.id, name: farmer.name, nik: farmer.nik, phone: farmer.phone, address: farmer.address }, existed: false }
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("Unique constraint")) {
+      const dup = await prisma.farmer.findFirst({ where: { nik: parsed.nik ?? undefined } })
+      if (dup) return { farmer: { id: dup.id, name: dup.name, nik: dup.nik, phone: dup.phone, address: dup.address }, existed: true }
+    }
+    throw err
+  }
 }
 
 export interface GradeInput {

@@ -12,6 +12,7 @@ import {
   getFarmerTodayTransactions,
   getFarmerLaneTodayTransactions,
   startNewTransaction,
+  registerFarmer,
   type TransactionOption,
   type LaneTransactionOption,
   type RecentBaleItem,
@@ -32,7 +33,7 @@ import { useOfflineQueue, isNetworkError } from "@/hooks/useOfflineQueue"
 import { useRealtime } from "@/hooks/useRealtime"
 import { useQueueStore } from "@/lib/queue"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import { Search, Info, Plus, MousePointerClick, Printer, ScanLine } from "lucide-react"
+import { Search, Info, Plus, UserPlus, MousePointerClick, Printer, ScanLine, ChevronDown, ChevronUp } from "lucide-react"
 import { PageHeader } from "@/components/shared/page-header"
 
 const StickerPreview = dynamic(
@@ -80,6 +81,24 @@ function mergeRecentBales(prev: BaleItem[], fetched: RecentBaleItem[]): BaleItem
   return [...added, ...prevSurvivors]
 }
 
+interface StoredGradingDefaults {
+  tobaccoTypeId: string
+  leafTypeId: string
+  packingTypeId: string
+  moisturePercent: string
+  packingWeight: string
+  customerId: number
+}
+
+function loadStoredDefaults(laneId: number): StoredGradingDefaults | null {
+  try {
+    const raw = window.localStorage.getItem(`tobak:grading-defaults:${laneId}`)
+    return raw ? (JSON.parse(raw) as StoredGradingDefaults) : null
+  } catch {
+    return null
+  }
+}
+
 interface Props {
   tobaccoTypes: TobaccoType[]
   leafTypes: Array<{ id: number; name: string }>
@@ -103,6 +122,7 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
   const [baleItems, setBaleItems] = useState(initialBaleItems)
   const [optimisticBales, setOptimisticBales] = useState<BaleItem[]>([])
   const [draftFarmerIds, setDraftFarmerIds] = useState(todayDraftFarmerIds)
+  const [farmerList, setFarmerList] = useState(farmers)
   const [farmerId, setFarmerId] = useState<number | null>(null)
   const [selectedPurchaseId, setSelectedPurchaseId] = useState<number | null>(null)
 
@@ -141,13 +161,14 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
   useRealtime(laneId, [realtimeRefetch])
 
   const [searchTerm, setSearchTerm] = useState("")
-  const [tobaccoTypeId, setTobaccoTypeId] = useState("")
-  const [leafTypeId, setLeafTypeId] = useState("")
-  const [packingTypeId, setPackingTypeId] = useState("")
-  const [moisturePercent, setMoisturePercent] = useState(String(defaultMoisturePercent))
-  const [packingWeight, setPackingWeight] = useState("2.00")
+  const [storedDefaults] = useState<StoredGradingDefaults | null>(() => loadStoredDefaults(laneId))
+  const [tobaccoTypeId, setTobaccoTypeId] = useState(storedDefaults?.tobaccoTypeId ?? "")
+  const [leafTypeId, setLeafTypeId] = useState(storedDefaults?.leafTypeId ?? "")
+  const [packingTypeId, setPackingTypeId] = useState(storedDefaults?.packingTypeId ?? "")
+  const [moisturePercent, setMoisturePercent] = useState(storedDefaults?.moisturePercent ?? String(defaultMoisturePercent))
+  const [packingWeight, setPackingWeight] = useState(storedDefaults?.packingWeight ?? "2.00")
   const defaultCustomerId = customers.find((c) => c.name === "Gudang Sendiri")?.id ?? customers[0]?.id ?? 0
-  const [customerId, setCustomerId] = useState(defaultCustomerId)
+  const [customerId, setCustomerId] = useState(storedDefaults?.customerId || defaultCustomerId)
 
   const [selectedGrade, setSelectedGrade] = useState<string | null>(null)
   const [selectedPrice, setSelectedPrice] = useState<number | null>(null)
@@ -169,27 +190,66 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
     }
   }, [printMode])
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        `tobak:grading-defaults:${laneId}`,
+        JSON.stringify({ tobaccoTypeId, leafTypeId, packingTypeId, moisturePercent, packingWeight, customerId })
+      )
+    } catch {
+      // penyimpanan preferensi diabaikan jika gagal
+    }
+  }, [laneId, tobaccoTypeId, leafTypeId, packingTypeId, moisturePercent, packingWeight, customerId])
+
+  useEffect(() => {
+    if (tobaccoTypes.length === 1 && !tobaccoTypeId) setTobaccoTypeId(String(tobaccoTypes[0].id))
+    if (leafTypes.length === 1 && !leafTypeId) setLeafTypeId(String(leafTypes[0].id))
+    if (packingTypes.length === 1 && !packingTypeId) setPackingTypeId(String(packingTypes[0].id))
+    // hanya sekali saat mount, memakai nilai awal (termasuk yang dimuat dari localStorage)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const [startingNew, setStartingNew] = useState(false)
   const [txDialogOpen, setTxDialogOpen] = useState(false)
   const [txOptions, setTxOptions] = useState<LaneTransactionOption[]>([])
   const [txChecking, setTxChecking] = useState(false)
 
+  const [farmerDialogOpen, setFarmerDialogOpen] = useState(false)
+  const [newFarmer, setNewFarmer] = useState({ name: "", nik: "", phone: "", address: "" })
+  const [savingFarmer, setSavingFarmer] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState(true)
+
   const [lastItem, setLastItem] = useState<{
     id: number; labelCode: string; grade: string; status: string; farmerName: string
   } | null>(null)
 
-  const selectedFarmer = farmers.find((f) => f.id === farmerId)
+  const selectedFarmer = farmerList.find((f) => f.id === farmerId)
   const currentGrades = tobaccoTypes.find((t) => t.id === Number(tobaccoTypeId))?.grades ?? []
   const filteredFarmers = useMemo(() => {
     const q = searchTerm.toLowerCase()
-    if (!q) return farmers
-    return farmers.filter(
+    if (!q) return farmerList
+    return farmerList.filter(
       (f) =>
         f.name.toLowerCase().includes(q) ||
         (f.nik && f.nik.includes(searchTerm)) ||
         (f.address && f.address.toLowerCase().includes(q))
     )
-  }, [farmers, searchTerm])
+  }, [farmerList, searchTerm])
+
+  const recentFarmerIds = useMemo(() => {
+    const ids: number[] = []
+    for (const b of baleItems) if (!ids.includes(b.farmerId)) ids.push(b.farmerId)
+    for (const id of draftFarmerIds) if (!ids.includes(id)) ids.push(id)
+    return ids.slice(0, 6)
+  }, [baleItems, draftFarmerIds])
+
+  const recentFarmers = useMemo(
+    () =>
+      recentFarmerIds
+        .map((id) => farmerList.find((f) => f.id === id))
+        .filter((f): f is Farmer => Boolean(f)),
+    [recentFarmerIds, farmerList]
+  )
 
   const farmerBaleItems = useMemo(
     () => baleItems.filter((b) => (farmerId ? b.farmerId === farmerId && b.status === "GRADED" : true)),
@@ -209,11 +269,11 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
         grade: a.payload.grade,
         status: queuedSyncing[a.id] ? "SYNCING" : "PENDING",
         tobaccoType: tobaccoTypes.find((t) => t.id === a.payload.tobaccoTypeId)?.name ?? "—",
-        farmerName: farmers.find((f) => f.id === a.payload.farmerId)?.name ?? "—",
+        farmerName: farmerList.find((f) => f.id === a.payload.farmerId)?.name ?? "—",
         customerName: customers.find((c) => c.id === a.payload.customerId)?.name ?? "—",
         createdBy: null,
       }))
-  }, [queuedPending, queuedSyncing, farmerId, tobaccoTypes, farmers, customers])
+  }, [queuedPending, queuedSyncing, farmerId, tobaccoTypes, farmerList, customers])
 
   const farmerOptimisticBales = useMemo(
     () => optimisticBales.filter((b) => (farmerId ? b.farmerId === farmerId : true)),
@@ -231,7 +291,28 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
   function resetForm() {
     setSelectedGrade(null)
     setSelectedPrice(null)
-    setCustomerId(defaultCustomerId)
+  }
+
+  async function handleRegisterFarmer() {
+    if (!newFarmer.name.trim()) { toast.error("Nama petani wajib diisi"); return }
+    setSavingFarmer(true)
+    try {
+      const { farmer, existed } = await registerFarmer({
+        name: newFarmer.name.trim(),
+        nik: newFarmer.nik.trim() || undefined,
+        phone: newFarmer.phone.trim() || undefined,
+        address: newFarmer.address.trim() || undefined,
+      })
+      setFarmerList((prev) => [farmer, ...prev.filter((f) => f.id !== farmer.id)])
+      setNewFarmer({ name: "", nik: "", phone: "", address: "" })
+      setFarmerDialogOpen(false)
+      toast.success(existed ? `NIK sudah terdaftar — petani ${farmer.name} dipilih` : `Petani ${farmer.name} ditambahkan`)
+      await handleSelectFarmer(farmer.id)
+    } catch (err) {
+      toast.error((err as Error).message)
+    } finally {
+      setSavingFarmer(false)
+    }
   }
 
   async function loadPurchases(farmerId: number) {
@@ -459,9 +540,21 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
 
         {/* ===== 3-COLUMN GRID ===== */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* ===== KOLOM 1: Registrasi Petani ===== */}
-          <div className="bg-panel border border-border rounded-xl p-4 pb-[18px]">
-            <p className="card-title-wf">Registrasi Petani</p>
+          {/* ===== KOLOM A: Petani & Transaksi ===== */}
+          <div className="bg-panel border border-border rounded-xl p-4 pb-[18px] flex flex-col">
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <p className="card-title-wf" style={{ margin: 0 }}>Petani &amp; Transaksi</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setFarmerDialogOpen(true)}
+                className="shrink-0"
+              >
+                <UserPlus data-icon="inline-start" />
+                Petani Baru
+              </Button>
+            </div>
 
             {/* Search */}
             <div className="field-wf">
@@ -477,6 +570,30 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
                 </InputGroupAddon>
               </InputGroup>
             </div>
+
+            {/* Petani Terbaru */}
+            {recentFarmers.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {recentFarmers.map((f) => {
+                  const isSel = f.id === farmerId
+                  return (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => handleSelectFarmer(f.id)}
+                      className={cn(
+                        "px-2.5 py-1 rounded-full border text-[11px] font-bold transition-all cursor-pointer",
+                        isSel
+                          ? "bg-emerald/15 border-emerald text-emerald"
+                          : "bg-panel-alt/60 border-border-soft text-muted-2 hover:border-amber/50 hover:text-foreground"
+                      )}
+                    >
+                      {f.name}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
 
             {/* Farmer List */}
             <div className="max-h-40 overflow-y-auto flex flex-col gap-1 mb-3 pr-1 no-scrollbar">
@@ -556,22 +673,29 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
                 )}
               </div>
             )}
+          </div>
 
-            {/* Jenis Tembakau + Jenis Daun */}
-            <div className="field-wf-row">
-              <div>
-                <label className="field-wf-label">Jenis Tembakau</label>
-                <select
-                  value={tobaccoTypeId}
-                  onChange={(e) => { setTobaccoTypeId(e.target.value); setSelectedGrade(null); setSelectedPrice(null) }}
-                  className="field-input"
-                >
-                  <option value="">Pilih…</option>
-                  {tobaccoTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="field-wf-label">Jenis Daun</label>
+          {/* ===== KOLOM B: Data Bale ===== */}
+          <div className="bg-panel border border-border rounded-xl p-4 pb-[18px]">
+            <p className="card-title-wf">Data Bale</p>
+
+            {/* Jenis Tembakau */}
+            <div className="field-wf">
+              <label className="field-wf-label">Jenis Tembakau</label>
+              <select
+                value={tobaccoTypeId}
+                onChange={(e) => { setTobaccoTypeId(e.target.value); setSelectedGrade(null); setSelectedPrice(null) }}
+                className="field-input"
+              >
+                <option value="">Pilih…</option>
+                {tobaccoTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            </div>
+
+            {/* Jenis Daun */}
+            <div className="field-wf">
+              <label className="field-wf-label">Jenis Daun</label>
+              {leafTypes.length > 5 ? (
                 <select
                   value={leafTypeId}
                   onChange={(e) => setLeafTypeId(e.target.value)}
@@ -580,27 +704,59 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
                   <option value="">Pilih…</option>
                   {leafTypes.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
                 </select>
-              </div>
+              ) : (
+                <div className="grade-grid">
+                  {leafTypes.map((l) => (
+                    <button
+                      key={l.id}
+                      type="button"
+                      onClick={() => setLeafTypeId(String(l.id))}
+                      className={cn("grade-btn", leafTypeId === String(l.id) && "grade-btn-active")}
+                    >
+                      {l.name}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Jenis Packing */}
             <div className="field-wf">
               <label className="field-wf-label">Jenis Packing</label>
-              <select
-                value={packingTypeId}
-                onChange={(e) => {
-                const val = e.target.value
-                setPackingTypeId(val)
-                const found = packingTypes.find((p) => p.id === Number(val))
-                if (found) setPackingWeight(String(found.deductionWeight))
-              }}
-                className="field-input"
-              >
-                <option value="">Pilih…</option>
-                {packingTypes.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name} (Tara {p.deductionWeight}kg)</option>
-                ))}
-              </select>
+              {packingTypes.length > 5 ? (
+                <select
+                  value={packingTypeId}
+                  onChange={(e) => {
+                    const val = e.target.value
+                    setPackingTypeId(val)
+                    const found = packingTypes.find((p) => p.id === Number(val))
+                    if (found) setPackingWeight(String(found.deductionWeight))
+                  }}
+                  className="field-input"
+                >
+                  <option value="">Pilih…</option>
+                  {packingTypes.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name} (Tara {p.deductionWeight}kg)</option>
+                  ))}
+                </select>
+              ) : (
+                <div className="grade-grid">
+                  {packingTypes.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => {
+                        setPackingTypeId(String(p.id))
+                        setPackingWeight(String(p.deductionWeight))
+                      }}
+                      className={cn("grade-btn", packingTypeId === String(p.id) && "grade-btn-active")}
+                    >
+                      {p.name}
+                      <span className="block font-sans font-normal text-[10px] opacity-80 mt-0.5">Tara {p.deductionWeight}kg</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Potongan */}
@@ -624,11 +780,28 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
                 />
               </div>
             </div>
+
+            {/* Alokasi Customer */}
+            <div className="field-wf">
+              <label className="field-wf-label">Alokasi Customer *</label>
+              <select
+                value={customerId}
+                onChange={(e) => setCustomerId(e.target.value ? Number(e.target.value) : 0)}
+                className="field-input"
+              >
+                {customerId === 0 && <option value={0}>Pilih customer…</option>}
+                {customers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
-          {/* ===== KOLOM 2: Grade Quality ===== */}
-          <div className="bg-panel border border-border rounded-xl p-4 pb-[18px]">
-            <p className="card-title-wf">Grade Quality</p>
+          {/* ===== KOLOM C: Grade & Simpan ===== */}
+          <div className="bg-panel border border-border rounded-xl p-4 pb-[18px] flex flex-col">
+            <p className="card-title-wf">Grade &amp; Harga</p>
 
             {/* Grade Grid */}
             {currentGrades.length === 0 ? (
@@ -661,84 +834,99 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
               </div>
             )}
 
-            {/* Alokasi Customer */}
-            <div className="field-wf mt-3.5">
-              <label className="field-wf-label">Alokasi Customer *</label>
-              <select
-                value={customerId}
-                onChange={(e) => setCustomerId(e.target.value ? Number(e.target.value) : 0)}
-                className="field-input"
-              >
-                {customerId === 0 && <option value={0}>Pilih customer…</option>}
-                {customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
             {/* Save Button */}
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={submitting || !farmerId}
-              className="btn-wf-primary mt-1.5 disabled:opacity-50"
-            >
-              {submitting ? "Menyimpan…" : printMode === "auto" ? "Simpan Grade & Cetak Barcode" : "Simpan Grade"}
-            </button>
-          </div>
-
-          {/* ===== KOLOM 3: Sticker Preview ===== */}
-          <div className="bg-panel border border-border rounded-xl p-4 pb-[18px]">
-            <p className="card-title-wf">Sticker Barcode Preview</p>
-
-            <StickerPreview
-              labelCode={previewLabelCode}
-              grade={previewGrade}
-              warehouse={warehouse}
-              lane={shortLane}
-              farmerName={previewFarmerName}
-            />
-
-            <div className="mt-3">
-              <p className="text-[11px] font-medium text-muted-2 mb-1.5">Mode Cetak</p>
-              <ToggleGroup
-                value={printMode === "auto" ? ["auto"] : ["manual"]}
-                onValueChange={(v) => {
-                  const next = v[v.length - 1]
-                  if (next === "manual" || next === "auto") setPrintMode(next)
-                }}
-                size="sm"
-                variant="outline"
-                className="w-full [&_[data-slot='toggle-group-item']]:flex-1"
+            <div className="mt-auto pt-4">
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={submitting || !farmerId}
+                className="btn-wf-primary disabled:opacity-50"
               >
-                <ToggleGroupItem value="manual">
-                  <MousePointerClick data-icon="inline-start" />
-                  Manual
-                </ToggleGroupItem>
-                <ToggleGroupItem value="auto">
-                  <Printer data-icon="inline-start" />
-                  Auto
-                </ToggleGroupItem>
-              </ToggleGroup>
+                {submitting ? "Menyimpan…" : printMode === "auto" ? "Simpan Grade & Cetak Barcode" : "Simpan Grade"}
+              </button>
             </div>
-
-            {lastItem && (
-              <div className="pending-tag">
-                <span className="size-1.5 rounded-full bg-amber shrink-0" />
-                <StatusPill status={lastItem.status as "GRADED" | "WEIGHED" | "CLOSED"} />
-                <span>— menunggu ditimbang</span>
-              </div>
-            )}
-            <button
-              type="button"
-              onClick={handlePrintSticker}
-              className="btn-wf-ghost mt-2"
-            >
-              Cetak QR Code
-            </button>
           </div>
+        </div>
+
+        {/* ===== STRIP: STICKER PREVIEW + MODE CETAK ===== */}
+        <div className="bg-panel border border-border rounded-xl p-4 pb-[18px]">
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <p className="card-title-wf" style={{ margin: 0 }}>Sticker Barcode Preview</p>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setPreviewOpen((v) => !v)}
+              aria-expanded={previewOpen}
+              className="shrink-0"
+            >
+              {previewOpen ? (
+                <>
+                  <ChevronUp data-icon="inline-start" />
+                  Sembunyikan
+                </>
+              ) : (
+                <>
+                  <ChevronDown data-icon="inline-start" />
+                  Tampilkan
+                </>
+              )}
+            </Button>
+          </div>
+
+          {previewOpen && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+              <StickerPreview
+                labelCode={previewLabelCode}
+                grade={previewGrade}
+                warehouse={warehouse}
+                lane={shortLane}
+                farmerName={previewFarmerName}
+              />
+
+              <div>
+                <p className="text-[11px] font-medium text-muted-2 mb-1.5">Mode Cetak</p>
+                <ToggleGroup
+                  value={printMode === "auto" ? ["auto"] : ["manual"]}
+                  onValueChange={(v) => {
+                    const next = v[v.length - 1]
+                    if (next === "manual" || next === "auto") setPrintMode(next)
+                  }}
+                  size="sm"
+                  variant="outline"
+                  className="w-full [&_[data-slot='toggle-group-item']]:flex-1"
+                >
+                  <ToggleGroupItem value="manual">
+                    <MousePointerClick data-icon="inline-start" />
+                    Manual
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="auto">
+                    <Printer data-icon="inline-start" />
+                    Auto
+                  </ToggleGroupItem>
+                </ToggleGroup>
+
+                {lastItem && (
+                  <div className="pending-tag">
+                    <span className="size-1.5 rounded-full bg-amber shrink-0" />
+                    <StatusPill status={lastItem.status as "GRADED" | "WEIGHED" | "CLOSED"} />
+                    <span>— menunggu ditimbang</span>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <p className="text-[11px] font-medium text-muted-2 mb-1.5">QR Code</p>
+                <button
+                  type="button"
+                  onClick={handlePrintSticker}
+                  className="btn-wf-ghost"
+                >
+                  Cetak QR Code
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ===== TABLE: BALE HISTORY ===== */}
@@ -837,6 +1025,81 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
         </DialogContent>
       </Dialog>
     )}
+
+    {/* Dialog Tambah Petani */}
+    <Dialog open={farmerDialogOpen} onOpenChange={(open) => { if (!open && !savingFarmer) setFarmerDialogOpen(false) }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogTitle>Tambah Petani Baru</DialogTitle>
+        <DialogDescription>
+          Registrasi langsung di pos grading untuk petani yang belum terdaftar. NIK yang sudah terdaftar
+          otomatis memilih petani yang ada.
+        </DialogDescription>
+        <div className="space-y-3">
+          <div>
+            <label className="field-wf-label">Nama Lengkap *</label>
+            <input
+              type="text"
+              placeholder="Pak Supardi"
+              value={newFarmer.name}
+              onChange={(e) => setNewFarmer((p) => ({ ...p, name: e.target.value }))}
+              className="field-input"
+            />
+          </div>
+          <div>
+            <label className="field-wf-label">NIK / KTP</label>
+            <input
+              type="text"
+              placeholder="3323011208750001"
+              value={newFarmer.nik}
+              onChange={(e) => setNewFarmer((p) => ({ ...p, nik: e.target.value }))}
+              className="field-input"
+            />
+          </div>
+          <div className="field-wf-row">
+            <div>
+              <label className="field-wf-label">Telepon</label>
+              <input
+                type="text"
+                placeholder="0812-3456-7890"
+                value={newFarmer.phone}
+                onChange={(e) => setNewFarmer((p) => ({ ...p, phone: e.target.value }))}
+                className="field-input"
+              />
+            </div>
+            <div>
+              <label className="field-wf-label">Alamat</label>
+              <input
+                type="text"
+                placeholder="Dusun Wonosari"
+                value={newFarmer.address}
+                onChange={(e) => setNewFarmer((p) => ({ ...p, address: e.target.value }))}
+                className="field-input"
+              />
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setFarmerDialogOpen(false)}
+              disabled={savingFarmer}
+              className="px-4 py-1.5 bg-panel-alt text-foreground border border-border-soft font-bold text-[11.5px] rounded-lg cursor-pointer hover:bg-border/50 disabled:opacity-50"
+            >
+              Batal
+            </button>
+            <button
+              type="button"
+              onClick={handleRegisterFarmer}
+              disabled={savingFarmer}
+              className="px-4 py-1.5 bg-emerald hover:bg-emerald/80 text-primary-foreground font-extrabold text-[11.5px] rounded-lg transition-all cursor-pointer disabled:opacity-50"
+            >
+              {savingFarmer ? "Menyimpan\u2026" : "Simpan Petani"}
+            </button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     </>
   )
 }
