@@ -5,12 +5,18 @@ import { roundMoney } from "@/lib/calculations"
 import { requireRoles } from "@/lib/roles"
 import { getDebtSummary } from "@/lib/actions/finance"
 import { getLoansData } from "@/lib/actions/loans"
-import { getPeriodSummary } from "@/lib/actions/reports"
 import { toDateKey } from "@/lib/utils"
 
 function todayStart(): Date {
   const d = new Date()
   d.setHours(0, 0, 0, 0)
+  return d
+}
+
+function yesterdayStart(): Date {
+  const d = new Date()
+  d.setHours(0, 0, 0, 0)
+  d.setDate(d.getDate() - 1)
   return d
 }
 
@@ -38,47 +44,146 @@ export interface RecentPayment {
   farmerName: string
 }
 
+export interface StatusCount {
+  status: string
+  count: number
+}
+
+export interface TrendRow {
+  label: string
+  transactionCount: number
+  totalBales: number
+  totalNetWeight: number
+  totalPrice: number
+  totalPaid: number
+}
+
+// ─── Tren 7 hari terakhir (dipakai semua role) ──────
+
+async function getSevenDayTrend(): Promise<TrendRow[]> {
+  const from = new Date()
+  from.setHours(0, 0, 0, 0)
+  from.setDate(from.getDate() - 6)
+
+  const purchases = await prisma.purchase.findMany({
+    where: { transactionDate: { gte: from } },
+    select: {
+      transactionDate: true,
+      totalNetWeight: true,
+      totalPrice: true,
+      paidAmount: true,
+      _count: { select: { items: true } },
+    },
+  })
+
+  const days: { label: string; date: string }[] = []
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date()
+    d.setDate(d.getDate() - i)
+    days.push({
+      label: new Intl.DateTimeFormat("id-ID", {
+        weekday: "short",
+        day: "2-digit",
+        month: "2-digit",
+      }).format(d),
+      date: toDateKey(d),
+    })
+  }
+
+  const map = new Map<string, Omit<TrendRow, "label">>()
+  for (const p of purchases) {
+    const key = toDateKey(new Date(p.transactionDate))
+    const totalPrice = Number(p.totalPrice)
+    const paid = Number(p.paidAmount)
+    const existing = map.get(key)
+    if (existing) {
+      existing.transactionCount += 1
+      existing.totalBales += p._count.items
+      existing.totalNetWeight = roundMoney(existing.totalNetWeight + Number(p.totalNetWeight))
+      existing.totalPrice = roundMoney(existing.totalPrice + totalPrice)
+      existing.totalPaid = roundMoney(existing.totalPaid + paid)
+    } else {
+      map.set(key, {
+        transactionCount: 1,
+        totalBales: p._count.items,
+        totalNetWeight: roundMoney(Number(p.totalNetWeight)),
+        totalPrice: roundMoney(totalPrice),
+        totalPaid: roundMoney(paid),
+      })
+    }
+  }
+
+  return days.map((d) => {
+    const t = map.get(d.date)
+    return {
+      label: d.label,
+      transactionCount: t?.transactionCount ?? 0,
+      totalBales: t?.totalBales ?? 0,
+      totalNetWeight: roundMoney(t?.totalNetWeight ?? 0),
+      totalPrice: roundMoney(t?.totalPrice ?? 0),
+      totalPaid: roundMoney(t?.totalPaid ?? 0),
+    }
+  })
+}
+
 // ─── GRADER ──────────────────────────────────────────
 
 export interface GraderDashboard {
   todayGraded: number
+  yesterdayGraded: number
   todayDraftTransactions: number
+  yesterdayDraftTransactions: number
   todayActiveFarmers: number
+  yesterdayActiveFarmers: number
   awaitingWeigh: number
+  trend: TrendRow[]
   recentBales: RecentBale[]
 }
 
 export async function getGraderDashboard(): Promise<GraderDashboard> {
   await requireRoles("GRADER", "ADMIN")
   const start = todayStart()
+  const yStart = yesterdayStart()
 
-  const [createdToday, awaitingWeigh, draftTx, activeFarmers, recentItems] =
-    await Promise.all([
-      prisma.purchaseItem.count({ where: { createdAt: { gte: start } } }),
-      prisma.purchaseItem.count({ where: { status: "GRADED" } }),
-      prisma.purchase.count({
-        where: { status: "DRAFT", transactionDate: { gte: start } },
-      }),
-      prisma.purchase.groupBy({
-        by: ["farmerId"],
-        where: { transactionDate: { gte: start } },
-      }),
-      prisma.purchaseItem.findMany({
-        where: { createdAt: { gte: start } },
-        orderBy: { createdAt: "desc" },
-        take: 10,
-        include: {
-          purchase: { include: { farmer: true, lane: true } },
-          customer: true,
-        },
-      }),
-    ])
+  const [
+    createdToday,
+    createdYesterday,
+    draftTxToday,
+    draftTxYesterday,
+    farmersToday,
+    farmersYesterday,
+    awaitingWeigh,
+    trend,
+    recentItems,
+  ] = await Promise.all([
+    prisma.purchaseItem.count({ where: { createdAt: { gte: start } } }),
+    prisma.purchaseItem.count({ where: { createdAt: { gte: yStart, lt: start } } }),
+    prisma.purchase.count({ where: { status: "DRAFT", transactionDate: { gte: start } } }),
+    prisma.purchase.count({ where: { status: "DRAFT", transactionDate: { gte: yStart, lt: start } } }),
+    prisma.purchase.groupBy({ by: ["farmerId"], where: { transactionDate: { gte: start } } }),
+    prisma.purchase.groupBy({ by: ["farmerId"], where: { transactionDate: { gte: yStart, lt: start } } }),
+    prisma.purchaseItem.count({ where: { status: "GRADED" } }),
+    getSevenDayTrend(),
+    prisma.purchaseItem.findMany({
+      where: { createdAt: { gte: start } },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      include: {
+        purchase: { include: { farmer: true, lane: true } },
+        customer: true,
+      },
+    }),
+  ])
 
   return {
     todayGraded: createdToday,
-    todayDraftTransactions: draftTx,
-    todayActiveFarmers: activeFarmers.length,
+    yesterdayGraded: createdYesterday,
+    todayDraftTransactions: draftTxToday,
+    yesterdayDraftTransactions: draftTxYesterday,
+    todayActiveFarmers: farmersToday.length,
+    yesterdayActiveFarmers: farmersYesterday.length,
     awaitingWeigh,
+    trend,
     recentBales: recentItems.map((i) => ({
       id: i.id,
       labelCode: i.labelCode,
@@ -98,27 +203,36 @@ export async function getGraderDashboard(): Promise<GraderDashboard> {
 
 export interface OperatorDashboard {
   todayWeighed: number
-  awaitingWeigh: number
+  yesterdayWeighed: number
   todayGrossWeight: number
   todayNetWeight: number
+  yesterdayNetWeight: number
   todaySubtotal: number
+  yesterdaySubtotal: number
+  awaitingWeigh: number
+  trend: TrendRow[]
   recentWeighed: RecentBale[]
 }
 
 export async function getOperatorDashboard(): Promise<OperatorDashboard> {
   await requireRoles("OPERATOR", "ADMIN")
   const start = todayStart()
+  const yStart = yesterdayStart()
 
-  const [todayWeighed, awaitingWeigh, todayAgg, recentWeighed] =
+  const [todayWeighed, yesterdayWeighed, awaitingWeigh, todayAgg, yesterdayAgg, trend, recentWeighed] =
     await Promise.all([
-      prisma.purchaseItem.count({
-        where: { status: "WEIGHED", createdAt: { gte: start } },
-      }),
+      prisma.purchaseItem.count({ where: { status: "WEIGHED", createdAt: { gte: start } } }),
+      prisma.purchaseItem.count({ where: { status: "WEIGHED", createdAt: { gte: yStart, lt: start } } }),
       prisma.purchaseItem.count({ where: { status: "GRADED" } }),
       prisma.purchaseItem.aggregate({
         where: { status: "WEIGHED", createdAt: { gte: start } },
         _sum: { grossWeight: true, netWeight: true, subtotal: true },
       }),
+      prisma.purchaseItem.aggregate({
+        where: { status: "WEIGHED", createdAt: { gte: yStart, lt: start } },
+        _sum: { grossWeight: true, netWeight: true, subtotal: true },
+      }),
+      getSevenDayTrend(),
       prisma.purchaseItem.findMany({
         where: { status: "WEIGHED" },
         orderBy: { updatedAt: "desc" },
@@ -132,10 +246,14 @@ export async function getOperatorDashboard(): Promise<OperatorDashboard> {
 
   return {
     todayWeighed,
-    awaitingWeigh,
+    yesterdayWeighed,
     todayGrossWeight: Number(todayAgg._sum.grossWeight ?? 0),
     todayNetWeight: Number(todayAgg._sum.netWeight ?? 0),
+    yesterdayNetWeight: Number(yesterdayAgg._sum.netWeight ?? 0),
     todaySubtotal: Number(todayAgg._sum.subtotal ?? 0),
+    yesterdaySubtotal: Number(yesterdayAgg._sum.subtotal ?? 0),
+    awaitingWeigh,
+    trend,
     recentWeighed: recentWeighed.map((i) => ({
       id: i.id,
       labelCode: i.labelCode,
@@ -160,13 +278,19 @@ export interface FinanceDashboard {
   debtRemaining: number
   loanOutstanding: number
   loanActiveCount: number
+  todayPayments: number
+  yesterdayPayments: number
+  todayPaymentAmount: number
+  yesterdayPaymentAmount: number
   recentPayments: RecentPayment[]
 }
 
 export async function getFinanceDashboard(): Promise<FinanceDashboard> {
   await requireRoles("FINANCE", "ADMIN")
+  const start = todayStart()
+  const yStart = yesterdayStart()
 
-  const [debt, loans, awaitingReview, payments] = await Promise.all([
+  const [debt, loans, awaitingReview, payments, todayPayAgg, yesterdayPayAgg] = await Promise.all([
     getDebtSummary(),
     getLoansData(),
     prisma.purchase.count({ where: { status: "WEIGHED" } }),
@@ -174,6 +298,16 @@ export async function getFinanceDashboard(): Promise<FinanceDashboard> {
       orderBy: { paidAt: "desc" },
       take: 10,
       include: { purchase: { include: { farmer: true } } },
+    }),
+    prisma.payment.aggregate({
+      where: { paidAt: { gte: start } },
+      _count: { _all: true },
+      _sum: { amount: true },
+    }),
+    prisma.payment.aggregate({
+      where: { paidAt: { gte: yStart, lt: start } },
+      _count: { _all: true },
+      _sum: { amount: true },
     }),
   ])
 
@@ -190,6 +324,10 @@ export async function getFinanceDashboard(): Promise<FinanceDashboard> {
     debtRemaining: roundMoney(debtRemaining),
     loanOutstanding: roundMoney(loanOutstanding),
     loanActiveCount,
+    todayPayments: todayPayAgg._count._all,
+    yesterdayPayments: yesterdayPayAgg._count._all,
+    todayPaymentAmount: roundMoney(Number(todayPayAgg._sum.amount ?? 0)),
+    yesterdayPaymentAmount: roundMoney(Number(yesterdayPayAgg._sum.amount ?? 0)),
     recentPayments: payments.map((p) => ({
       id: p.id,
       amount: Number(p.amount),
@@ -202,20 +340,6 @@ export async function getFinanceDashboard(): Promise<FinanceDashboard> {
 }
 
 // ─── OWNER ───────────────────────────────────────────
-
-export interface StatusCount {
-  status: string
-  count: number
-}
-
-export interface TrendRow {
-  label: string
-  transactionCount: number
-  totalBales: number
-  totalNetWeight: number
-  totalPrice: number
-  totalPaid: number
-}
 
 export interface WarehouseSummary {
   code: string
@@ -257,9 +381,6 @@ export interface OwnerDashboard {
 export async function getOwnerDashboard(): Promise<OwnerDashboard> {
   await requireRoles("OWNER", "ADMIN", "FINANCE")
 
-  const from = new Date()
-  from.setDate(from.getDate() - 6)
-
   const [txAgg, byStatusAgg, baleCount, trend, debt, loans, whAgg, warehouses, recentTx] =
     await Promise.all([
       prisma.purchase.aggregate({
@@ -268,7 +389,7 @@ export async function getOwnerDashboard(): Promise<OwnerDashboard> {
       }),
       prisma.purchase.groupBy({ by: ["status"], _count: { _all: true } }),
       prisma.purchaseItem.count(),
-      getPeriodSummary({ from: toDateKey(from) }),
+      getSevenDayTrend(),
       getDebtSummary(),
       getLoansData(),
       prisma.purchase.groupBy({
@@ -302,32 +423,6 @@ export async function getOwnerDashboard(): Promise<OwnerDashboard> {
     count: statusMap.get(status) ?? 0,
   }))
 
-  const days: { label: string; date: string }[] = []
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date()
-    d.setDate(d.getDate() - i)
-    days.push({
-      label: new Intl.DateTimeFormat("id-ID", {
-        weekday: "short",
-        day: "2-digit",
-        month: "2-digit",
-      }).format(d),
-      date: toDateKey(d),
-    })
-  }
-  const trendMap = new Map(trend.map((r) => [r.date, r]))
-  const trendRows: TrendRow[] = days.map((d) => {
-    const t = trendMap.get(d.date)
-    return {
-      label: d.label,
-      transactionCount: t?.transactionCount ?? 0,
-      totalBales: t?.totalBales ?? 0,
-      totalNetWeight: roundMoney(t?.totalNetWeight ?? 0),
-      totalPrice: roundMoney(t?.totalPrice ?? 0),
-      totalPaid: roundMoney(t?.totalPaid ?? 0),
-    }
-  })
-
   const whMap = new Map(warehouses.map((w) => [w.id, w]))
   const byWarehouse: WarehouseSummary[] = whAgg.map((g) => ({
     code: whMap.get(g.warehouseId!)?.code ?? `#${g.warehouseId}`,
@@ -348,7 +443,7 @@ export async function getOwnerDashboard(): Promise<OwnerDashboard> {
     byStatus,
     debtRemaining: roundMoney(debtRemaining),
     loanOutstanding: roundMoney(loanOutstanding),
-    trend: trendRows,
+    trend,
     byWarehouse,
     recentTransactions: recentTx.map((p) => ({
       id: p.id,
@@ -370,10 +465,14 @@ export async function getOwnerDashboard(): Promise<OwnerDashboard> {
 export interface AdminDashboard {
   today: {
     graded: number
+    yesterdayGraded: number
     draftTransactions: number
+    yesterdayDraftTransactions: number
     weighed: number
+    yesterdayWeighed: number
     awaitingWeigh: number
     todaySubtotal: number
+    yesterdaySubtotal: number
   }
   finance: {
     totalTransactions: number
@@ -383,6 +482,8 @@ export interface AdminDashboard {
     debtRemaining: number
     loanOutstanding: number
   }
+  byStatus: StatusCount[]
+  trend: TrendRow[]
   recentBales: RecentBale[]
   recentPayments: RecentPayment[]
 }
@@ -390,56 +491,95 @@ export interface AdminDashboard {
 export async function getAdminDashboard(): Promise<AdminDashboard> {
   await requireRoles("ADMIN")
   const start = todayStart()
+  const yStart = yesterdayStart()
 
-  const [gradedToday, draftTx, weighedToday, awaitingWeigh, subtotalAgg, txAgg, awaitingReview, debt, loans, recentItems, payments] =
-    await Promise.all([
-      prisma.purchaseItem.count({ where: { createdAt: { gte: start } } }),
-      prisma.purchase.count({
-        where: { status: "DRAFT", transactionDate: { gte: start } },
-      }),
-      prisma.purchaseItem.count({
-        where: { status: "WEIGHED", createdAt: { gte: start } },
-      }),
-      prisma.purchaseItem.count({ where: { status: "GRADED" } }),
-      prisma.purchaseItem.aggregate({
-        where: { status: "WEIGHED", createdAt: { gte: start } },
-        _sum: { subtotal: true },
-      }),
-      prisma.purchase.aggregate({
-        _count: { _all: true },
-        _sum: { totalPrice: true, paidAmount: true },
-      }),
-      prisma.purchase.count({ where: { status: "WEIGHED" } }),
-      getDebtSummary(),
-      getLoansData(),
-      prisma.purchaseItem.findMany({
-        where: { createdAt: { gte: start } },
-        orderBy: { createdAt: "desc" },
-        take: 8,
-        include: {
-          purchase: { include: { farmer: true, lane: true } },
-          customer: true,
-        },
-      }),
-      prisma.payment.findMany({
-        orderBy: { paidAt: "desc" },
-        take: 8,
-        include: { purchase: { include: { farmer: true } } },
-      }),
-    ])
+  const [
+    gradedToday,
+    gradedYesterday,
+    draftTxToday,
+    draftTxYesterday,
+    weighedToday,
+    weighedYesterday,
+    awaitingWeigh,
+    subtotalToday,
+    subtotalYesterday,
+    txAgg,
+    awaitingReview,
+    debt,
+    loans,
+    byStatusAgg,
+    trend,
+    recentItems,
+    payments,
+  ] = await Promise.all([
+    prisma.purchaseItem.count({ where: { createdAt: { gte: start } } }),
+    prisma.purchaseItem.count({ where: { createdAt: { gte: yStart, lt: start } } }),
+    prisma.purchase.count({ where: { status: "DRAFT", transactionDate: { gte: start } } }),
+    prisma.purchase.count({ where: { status: "DRAFT", transactionDate: { gte: yStart, lt: start } } }),
+    prisma.purchaseItem.count({ where: { status: "WEIGHED", createdAt: { gte: start } } }),
+    prisma.purchaseItem.count({ where: { status: "WEIGHED", createdAt: { gte: yStart, lt: start } } }),
+    prisma.purchaseItem.count({ where: { status: "GRADED" } }),
+    prisma.purchaseItem.aggregate({
+      where: { status: "WEIGHED", createdAt: { gte: start } },
+      _sum: { subtotal: true },
+    }),
+    prisma.purchaseItem.aggregate({
+      where: { status: "WEIGHED", createdAt: { gte: yStart, lt: start } },
+      _sum: { subtotal: true },
+    }),
+    prisma.purchase.aggregate({
+      _count: { _all: true },
+      _sum: { totalPrice: true, paidAmount: true },
+    }),
+    prisma.purchase.count({ where: { status: "WEIGHED" } }),
+    getDebtSummary(),
+    getLoansData(),
+    prisma.purchase.groupBy({ by: ["status"], _count: { _all: true } }),
+    getSevenDayTrend(),
+    prisma.purchaseItem.findMany({
+      where: { createdAt: { gte: start } },
+      orderBy: { createdAt: "desc" },
+      take: 8,
+      include: {
+        purchase: { include: { farmer: true, lane: true } },
+        customer: true,
+      },
+    }),
+    prisma.payment.findMany({
+      orderBy: { paidAt: "desc" },
+      take: 8,
+      include: { purchase: { include: { farmer: true } } },
+    }),
+  ])
 
   const totalPrice = Number(txAgg._sum.totalPrice ?? 0)
   const totalPaid = Number(txAgg._sum.paidAmount ?? 0)
   const debtRemaining = debt.reduce((s, f) => s + f.sisa, 0)
   const loanOutstanding = loans.reduce((s, l) => s + l.balance, 0)
 
+  const statusOrder: ("DRAFT" | "WEIGHED" | "APPROVED" | "PAID")[] = [
+    "DRAFT",
+    "WEIGHED",
+    "APPROVED",
+    "PAID",
+  ]
+  const statusMap = new Map(byStatusAgg.map((s) => [s.status, s._count._all]))
+  const byStatus: StatusCount[] = statusOrder.map((status) => ({
+    status,
+    count: statusMap.get(status) ?? 0,
+  }))
+
   return {
     today: {
       graded: gradedToday,
-      draftTransactions: draftTx,
+      yesterdayGraded: gradedYesterday,
+      draftTransactions: draftTxToday,
+      yesterdayDraftTransactions: draftTxYesterday,
       weighed: weighedToday,
+      yesterdayWeighed: weighedYesterday,
       awaitingWeigh,
-      todaySubtotal: roundMoney(Number(subtotalAgg._sum.subtotal ?? 0)),
+      todaySubtotal: roundMoney(Number(subtotalToday._sum.subtotal ?? 0)),
+      yesterdaySubtotal: roundMoney(Number(subtotalYesterday._sum.subtotal ?? 0)),
     },
     finance: {
       totalTransactions: txAgg._count._all,
@@ -449,6 +589,8 @@ export async function getAdminDashboard(): Promise<AdminDashboard> {
       debtRemaining: roundMoney(debtRemaining),
       loanOutstanding: roundMoney(loanOutstanding),
     },
+    byStatus,
+    trend,
     recentBales: recentItems.map((i) => ({
       id: i.id,
       labelCode: i.labelCode,

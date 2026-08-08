@@ -7,7 +7,7 @@ import {
   getOwnerDashboard,
   getAdminDashboard,
 } from "@/lib/actions/dashboard"
-import { DashboardClient, type DashboardView } from "./client"
+import { DashboardClient, type DashboardView } from "@/components/dashboard/dashboard-client"
 
 export const dynamic = "force-dynamic"
 

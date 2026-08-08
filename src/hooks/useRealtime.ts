@@ -5,7 +5,17 @@ import { useSse } from "@/hooks/useSse"
 import { usePolling } from "@/hooks/usePolling"
 import { REALTIME_INTERVAL_MS } from "@/lib/realtime"
 
-const TRIGGER_EVENTS = new Set(["bale.created", "bale.deleted", "bale.weighed", "session.ended"])
+const TRIGGER_EVENTS = new Set([
+  "bale.created",
+  "bale.deleted",
+  "bale.weighed",
+  "session.ended",
+  "payment.recorded",
+  "payment.voided",
+  "purchase.approved",
+  "purchase.reopened",
+  "loan.updated",
+])
 
 export function useRealtime(
   laneId: number | null,
