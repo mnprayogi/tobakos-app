@@ -29,6 +29,7 @@ export interface PayPurchase {
   remaining: number
   payments: PaymentInfo[]
   loanBalance?: number
+  crossLoanBalance?: number
 }
 
 export interface PaymentUpdate {
@@ -45,9 +46,10 @@ interface Props {
   onClose: () => void
   onPaid: (updated: PaymentUpdate) => void
   canVoid?: boolean
+  canDeduct?: boolean
 }
 
-export function PaymentDialog({ purchase, onClose, onPaid, canVoid = false }: Props) {
+export function PaymentDialog({ purchase, onClose, onPaid, canVoid = false, canDeduct = true }: Props) {
   const router = useRouter()
   const [total, setTotal] = useState("")
   const [method, setMethod] = useState<"TUNAI" | "TRANSFER">("TUNAI")
@@ -57,6 +59,8 @@ export function PaymentDialog({ purchase, onClose, onPaid, canVoid = false }: Pr
 
   const loanBalance = purchase?.loanBalance ?? 0
   const hasActiveLoan = loanBalance > 0.005
+  const crossLoanBalance = purchase?.crossLoanBalance ?? 0
+  const crossLoanVisible = !hasActiveLoan && crossLoanBalance > 0.005
 
   const [prevPurchaseId, setPrevPurchaseId] = useState(purchase?.id ?? null)
   if ((purchase?.id ?? null) !== prevPurchaseId) {
@@ -220,7 +224,16 @@ export function PaymentDialog({ purchase, onClose, onPaid, canVoid = false }: Pr
               )}
             </div>
 
-            {hasActiveLoan && (
+            {crossLoanVisible && (
+              <div className="rounded-lg border border-amber/25 bg-amber/8 p-3">
+                <p className="text-[11px] font-bold text-amber">Hutang modal petani tercatat di gudang lain</p>
+                <p className="text-[10.5px] text-muted-2 mt-0.5">
+                  Potongan hutang tidak tersedia di transaksi ini — sisa hutang {formatCurrency(crossLoanBalance)}
+                </p>
+              </div>
+            )}
+
+            {hasActiveLoan && canDeduct && (
               <div className="rounded-lg border border-border-soft bg-panel-alt p-3 space-y-2.5">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <p className="text-[11px] font-bold text-muted-foreground">Potongan Hutang Modal</p>
@@ -271,7 +284,7 @@ export function PaymentDialog({ purchase, onClose, onPaid, canVoid = false }: Pr
                   <span>Sisa tagihan setelah ini</span>
                   <span className="font-mono">{formatCurrency(purchase.remaining - parsedTotal)}</span>
                 </div>
-                {hasActiveLoan && (
+                {hasActiveLoan && canDeduct && (
                   <div className="flex items-center justify-between text-[10.5px] text-muted-2">
                     <span>Sisa hutang modal setelah potongan</span>
                     <span className="font-mono">{formatCurrency(loanBalance - parsedDeduction)}</span>

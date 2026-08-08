@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation"
 import { prisma } from "@/lib/db"
 import { canAccess } from "@/lib/roles"
+import { resolveWarehouseScope } from "@/lib/actions/scope"
 import { ReviewClient } from "./client"
 
 interface PageProps {
@@ -18,6 +19,7 @@ export default async function ReviewPage({ params }: PageProps) {
     where: { id: purchaseId },
     include: {
       farmer: true,
+      warehouse: true,
       items: {
         orderBy: { inputOrder: "asc" },
         include: { customer: true },
@@ -28,6 +30,19 @@ export default async function ReviewPage({ params }: PageProps) {
   if (!purchase) notFound()
   if (purchase.status !== "WEIGHED") redirect("/admin/transactions")
 
+  let scope: { mode: "all" } | { mode: "scoped"; warehouseId: number; warehouseName: string }
+  try {
+    scope = await resolveWarehouseScope()
+  } catch (err) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-6">
+        <h1 className="text-lg font-bold text-foreground">Review Transaksi</h1>
+        <p className="mt-2 text-sm text-muted-foreground">{(err as Error).message}</p>
+      </div>
+    )
+  }
+  if (scope.mode === "scoped" && purchase.warehouseId !== scope.warehouseId) notFound()
+
   return (
     <ReviewClient
       purchase={{
@@ -35,6 +50,7 @@ export default async function ReviewPage({ params }: PageProps) {
         transactionCode: purchase.transactionCode,
         farmerName: purchase.farmer.name,
         transactionDate: purchase.transactionDate,
+        warehouseName: purchase.warehouse?.name ?? null,
         totalItems: purchase.totalItems,
         totalNetWeight: purchase.totalNetWeight,
         totalPrice: Number(purchase.totalPrice),

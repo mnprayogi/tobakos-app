@@ -10,6 +10,9 @@ import { useSse } from "@/hooks/useSse"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { StatusPill } from "@/components/shared/status-pill"
 import { Pagination } from "@/components/shared/pagination"
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
+import { Search, Wallet } from "lucide-react"
+import type { WarehouseScope } from "@/lib/actions/scope"
 import {
   PaymentDialog,
   type PayPurchase,
@@ -58,6 +61,7 @@ interface Purchase {
   items: PurchaseItem[]
   payments: Payment[]
   loanBalance: number
+  crossLoanBalance: number
 }
 
 interface TransactionsClientProps {
@@ -69,6 +73,8 @@ interface TransactionsClientProps {
   status: string
   statusCounts: Record<string, number>
   role: string
+  scope: WarehouseScope
+  stats: { totalTransactions: number; totalValue: number; totalOutstanding: number }
 }
 
 const STATUS_FILTERS: { key: string; label: string }[] = [
@@ -82,7 +88,7 @@ const STATUS_FILTERS: { key: string; label: string }[] = [
 const filterActiveStyle: Record<string, string> = {
   ALL: "bg-emerald text-primary-foreground border-emerald",
   DRAFT: "bg-amber/15 text-amber border-amber/40",
-  WEIGHED: "bg-emerald/15 text-emerald border-emerald/40",
+  WEIGHED: "bg-amber/15 text-amber border-amber/40",
   APPROVED: "bg-emerald/15 text-emerald border-emerald/40",
   PAID: "bg-blue/15 text-blue border-blue/40",
 }
@@ -97,12 +103,14 @@ function buildTxnUrl(opts: { q: string; status: string; page: number; pageSize: 
   return `/admin/transactions${s ? `?${s}` : ""}`
 }
 
-function deriveStatus(p: Purchase): string | null {
-  if (p.status !== "APPROVED") return null
+function statusLabel(p: Purchase): { text: string; className: string } {
+  if (p.status === "DRAFT") return { text: "Draft", className: "text-amber" }
+  if (p.status === "WEIGHED") return { text: "Menunggu Review", className: "text-amber" }
+  if (p.status === "PAID") return { text: "Lunas", className: "text-blue" }
   const remaining = Math.round((p.totalPrice - p.paidAmount) * 100) / 100
-  if (remaining <= 0.005) return "Lunas"
-  if (p.paidAmount <= 0.005) return "Hutang"
-  return "Sebagian (DP)"
+  if (remaining <= 0.005) return { text: "Lunas", className: "text-blue" }
+  if (p.paidAmount <= 0.005) return { text: "Hutang", className: "text-red-deduction" }
+  return { text: "Sebagian (DP)", className: "text-amber" }
 }
 
 export function TransactionsClient({
@@ -114,6 +122,8 @@ export function TransactionsClient({
   status,
   statusCounts,
   role,
+  scope,
+  stats,
 }: TransactionsClientProps) {
   const router = useRouter()
   const [purchases, setPurchases] = useState(initial)
@@ -201,16 +211,42 @@ export function TransactionsClient({
 
   return (
     <div className="space-y-5">
-      <h1 className="text-lg font-bold text-foreground">Transaksi</h1>
+      <div className="flex items-center gap-3 flex-wrap">
+        <h1 className="text-lg font-bold text-foreground">Transaksi</h1>
+        {scope.mode === "scoped" && (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-panel-alt border border-border-soft px-2.5 py-1 text-[11px] font-bold text-muted-foreground">
+            <Wallet className="w-3.5 h-3.5 text-emerald" />
+            Gudang: {scope.warehouseName}
+          </span>
+        )}
+      </div>
+
+      <div className="grid grid-cols-3 gap-4 max-md:grid-cols-1">
+        <div className="rounded-xl border border-border bg-card p-4">
+          <p className="text-[10px] uppercase font-bold text-muted-2 mb-1">Total Transaksi</p>
+          <p className="font-mono font-bold text-2xl text-foreground">{stats.totalTransactions}</p>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-4">
+          <p className="text-[10px] uppercase font-bold text-muted-2 mb-1">Total Nilai (Disetujui & Lunas)</p>
+          <p className="font-mono font-bold text-2xl text-amber">{formatCurrency(stats.totalValue)}</p>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-4">
+          <p className="text-[10px] uppercase font-bold text-muted-2 mb-1">Total Sisa Tagihan</p>
+          <p className="font-mono font-bold text-2xl text-red-deduction">{formatCurrency(stats.totalOutstanding)}</p>
+        </div>
+      </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <input
-          type="text"
-          placeholder="Cari kode transaksi / petani / NIK…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          className="h-9 flex-1 min-w-[200px] px-3 bg-panel-alt border border-border-soft text-foreground text-[12px] rounded-lg outline-none placeholder:text-muted-2"
-        />
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-2" />
+          <input
+            type="text"
+            placeholder="Cari kode transaksi / petani / NIK…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="h-9 w-full pl-9 pr-3 bg-panel-alt border border-border-soft text-foreground text-[12px] rounded-lg outline-none placeholder:text-muted-2"
+          />
+        </div>
         <button
           type="button"
           onClick={handleExport}
@@ -245,7 +281,19 @@ export function TransactionsClient({
 
       <div className="rounded-xl border border-border bg-card p-4">
         {purchases.length === 0 ? (
-          <p className="py-10 text-center text-[12px] text-muted-2">Tidak ada transaksi.</p>
+          <Empty>
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Search className="size-4 text-muted-2" />
+              </EmptyMedia>
+              <EmptyTitle>Tidak ada transaksi</EmptyTitle>
+              <EmptyDescription>
+                {query || status !== "ALL"
+                  ? "Coba ubah kata kunci pencarian atau filter status."
+                  : "Belum ada transaksi pembelian pada gudang ini."}
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         ) : (
           <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] border-collapse text-[12.5px]">
@@ -268,7 +316,6 @@ export function TransactionsClient({
               {purchases.map((p) => {
                 const allWeighed = p.items.length > 0 && p.items.every((i) => i.status === "WEIGHED" || i.status === "CLOSED")
                 const remaining = Math.round((p.totalPrice - p.paidAmount) * 100) / 100
-                const derived = deriveStatus(p)
                 const payPurchase: PayPurchase = {
                   id: p.id,
                   transactionCode: p.transactionCode,
@@ -278,6 +325,7 @@ export function TransactionsClient({
                   remaining,
                   payments: p.payments,
                   loanBalance: p.loanBalance,
+                  crossLoanBalance: p.crossLoanBalance,
                 }
                 return (
                   <tr key={p.id}>
@@ -298,9 +346,9 @@ export function TransactionsClient({
                     </td>
                     <td className="py-2 px-2 border-b border-border-soft">
                       <StatusPill status={p.status as "DRAFT" | "WEIGHED" | "APPROVED" | "PAID"} />
-                      {derived && (
-                        <span className="block text-[10px] font-bold mt-1 text-muted-foreground">{derived}</span>
-                      )}
+                      <span className={`block text-[10px] font-bold mt-1 ${statusLabel(p).className}`}>
+                        {statusLabel(p).text}
+                      </span>
                       {p.priceReviewNote && (
                         <span className="block text-[10px] text-muted-2 italic mt-1 max-w-[160px] truncate" title={p.priceReviewNote}>
                           {p.priceReviewNote}
@@ -339,7 +387,10 @@ export function TransactionsClient({
                           )}
                           {remaining <= 0.005 && <span className="text-[11px] text-muted-2">Lunas</span>}
                           {p.paidAmount <= 0.005 && (
-                            <button onClick={() => handleReopen(p.id)} className="text-[11px] font-bold text-amber cursor-pointer hover:underline">
+                            <button
+                              onClick={() => handleReopen(p.id)}
+                              className="mt-1 pt-1 border-t border-border-soft text-[11px] font-bold text-amber cursor-pointer hover:underline"
+                            >
                               Buka
                             </button>
                           )}
@@ -378,6 +429,7 @@ export function TransactionsClient({
         onClose={() => setPayTarget(null)}
         onPaid={handlePaid}
         canVoid={role === "SUPER_ADMIN" || role === "OWNER"}
+        canDeduct={payTarget ? (payTarget.loanBalance ?? 0) > 0.005 : true}
       />
 
       <BuktiLunasDialog

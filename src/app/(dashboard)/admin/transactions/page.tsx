@@ -2,6 +2,8 @@ import { redirect } from "next/navigation"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
 import { canAccess } from "@/lib/roles"
+import { roundMoney } from "@/lib/calculations"
+import { resolveWarehouseScope, type WarehouseScope } from "@/lib/actions/scope"
 import { TransactionsClient } from "./client"
 
 const STATUS_VALUES = ["DRAFT", "WEIGHED", "APPROVED", "PAID"] as const
@@ -24,6 +26,18 @@ export default async function TransactionsPage({
   const session = await auth()
   const role = session?.user?.role ?? ""
 
+  let scope: WarehouseScope
+  try {
+    scope = await resolveWarehouseScope()
+  } catch (err) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-6">
+        <h1 className="text-lg font-bold text-foreground">Transaksi</h1>
+        <p className="mt-2 text-sm text-muted-foreground">{(err as Error).message}</p>
+      </div>
+    )
+  }
+
   const sp = searchParams ? await searchParams : {}
   const q = (sp.q ?? "").trim()
   const status = (STATUS_VALUES as readonly string[]).includes(sp.status ?? "")
@@ -32,7 +46,9 @@ export default async function TransactionsPage({
   const requestedPage = Math.max(1, Number(sp.page) || 1)
   const pageSize = Math.min(100, Math.max(10, Number(sp.pageSize) || 25))
 
+  const warehouseWhere = scope.mode === "scoped" ? { warehouseId: scope.warehouseId } : {}
   const where = {
+    ...warehouseWhere,
     ...(status !== "ALL" ? { status } : {}),
     ...(q
       ? {
@@ -49,48 +65,63 @@ export default async function TransactionsPage({
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const page = Math.min(requestedPage, totalPages)
 
-  const raw = await prisma.purchase.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    skip: (page - 1) * pageSize,
-    take: pageSize,
-    include: {
-      farmer: { select: { name: true } },
-      items: {
-        select: {
-          id: true,
-          status: true,
-          labelCode: true,
-          grade: true,
-          netWeight: true,
-          pricePerKg: true,
-          subtotal: true,
+  const [raw, statusRows, allStats, closedStats] = await Promise.all([
+    prisma.purchase.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      include: {
+        farmer: { select: { name: true } },
+        items: {
+          select: {
+            id: true,
+            status: true,
+            labelCode: true,
+            grade: true,
+            netWeight: true,
+            pricePerKg: true,
+            subtotal: true,
+          },
+          orderBy: { inputOrder: "asc" },
         },
-        orderBy: { inputOrder: "asc" },
-      },
-      payments: {
-        select: {
-          id: true,
-          amount: true,
-          method: true,
-          note: true,
-          paidBy: true,
-          paidAt: true,
-          loanDeduction: true,
-          voidedAt: true,
-          voidedBy: true,
+        payments: {
+          select: {
+            id: true,
+            amount: true,
+            method: true,
+            note: true,
+            paidBy: true,
+            paidAt: true,
+            loanDeduction: true,
+            voidedAt: true,
+            voidedBy: true,
+          },
+          orderBy: { paidAt: "asc" },
         },
-        orderBy: { paidAt: "asc" },
       },
-    },
-  })
+    }),
+    prisma.purchase.groupBy({
+      by: ["status"],
+      where: warehouseWhere,
+      _count: { _all: true },
+    }),
+    prisma.purchase.aggregate({
+      where: warehouseWhere,
+      _count: { _all: true },
+    }),
+    prisma.purchase.aggregate({
+      where: { ...warehouseWhere, status: { in: ["APPROVED", "PAID"] } },
+      _sum: { totalPrice: true, paidAmount: true },
+    }),
+  ])
 
-  const statusRows = await prisma.purchase.groupBy({
-    by: ["status"],
-    _count: { _all: true },
-  })
   const statusCounts: Record<string, number> = { ALL: total }
   for (const row of statusRows) statusCounts[row.status] = row._count._all
+
+  const totalValue = Number(closedStats._sum.totalPrice ?? 0)
+  const totalPaid = Number(closedStats._sum.paidAmount ?? 0)
+  const totalOutstanding = roundMoney(totalValue - totalPaid)
 
   const farmerIds = [...new Set(raw.map((p) => p.farmerId))]
   const loans = await prisma.farmerLoan.findMany({
@@ -98,6 +129,7 @@ export default async function TransactionsPage({
     include: { entries: { select: { type: true, amount: true, voidedAt: true } } },
   })
   const loanBalanceByFarmer = new Map<number, number>()
+  const crossLoanBalanceByFarmer = new Map<number, number>()
   for (const loan of loans) {
     let borrowed = 0
     let repaid = 0
@@ -106,7 +138,15 @@ export default async function TransactionsPage({
       if (e.type === "DISBURSEMENT") borrowed += Number(e.amount)
       else repaid += Number(e.amount)
     }
-    loanBalanceByFarmer.set(loan.farmerId, Number((borrowed - repaid).toFixed(2)))
+    const balance = Number((borrowed - repaid).toFixed(2))
+    if (scope.mode === "scoped" && loan.warehouseId !== scope.warehouseId) {
+      crossLoanBalanceByFarmer.set(
+        loan.farmerId,
+        Number(((crossLoanBalanceByFarmer.get(loan.farmerId) ?? 0) + balance).toFixed(2))
+      )
+    } else {
+      loanBalanceByFarmer.set(loan.farmerId, balance)
+    }
   }
 
   const purchases = raw.map((p) => ({
@@ -146,6 +186,7 @@ export default async function TransactionsPage({
       voidedBy: pay.voidedBy,
     })),
     loanBalance: loanBalanceByFarmer.get(p.farmerId) ?? 0,
+    crossLoanBalance: crossLoanBalanceByFarmer.get(p.farmerId) ?? 0,
   }))
 
   return (
@@ -158,6 +199,8 @@ export default async function TransactionsPage({
       status={status}
       statusCounts={statusCounts}
       role={role}
+      scope={scope}
+      stats={{ totalTransactions: allStats._count._all, totalValue, totalOutstanding }}
     />
   )
 }

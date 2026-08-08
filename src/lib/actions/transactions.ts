@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/db"
 import { requireRoles } from "@/lib/roles"
+import { resolveWarehouseScope } from "@/lib/actions/scope"
 
 export interface TxnExportRow {
   transactionCode: string
@@ -27,12 +28,16 @@ export interface TxnExportRow {
 export async function getTransactionsExport(q: string, status: string): Promise<TxnExportRow[]> {
   await requireRoles("ADMIN", "FINANCE")
 
+  const scope = await resolveWarehouseScope()
+  const warehouseWhere = scope.mode === "scoped" ? { warehouseId: scope.warehouseId } : {}
+
   const query = (q ?? "").trim()
   const statusValues = ["DRAFT", "WEIGHED", "APPROVED", "PAID"] as const
   type TxnStatus = (typeof statusValues)[number]
   const statusFilter = (statusValues as readonly string[]).includes(status) ? (status as TxnStatus) : "ALL"
 
   const where: Record<string, unknown> = {
+    ...warehouseWhere,
     ...(statusFilter !== "ALL" ? { status: statusFilter } : {}),
     ...(query
       ? {
