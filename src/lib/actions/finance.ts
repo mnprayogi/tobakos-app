@@ -85,7 +85,7 @@ export async function reviewAndApprove(purchaseId: number, input: ReviewInput) {
   revalidatePath("/admin/transactions")
   revalidatePath("/admin/debt")
   publishEvent("purchase.approved", purchase.laneId)
-  return { ...result, totalPrice: Number(result.totalPrice) }
+  return { id: result.id, status: result.status, totalPrice: Number(result.totalPrice) }
 }
 
 export interface PaymentInput {
@@ -382,7 +382,7 @@ export async function reopenTransaction(purchaseId: number) {
   revalidatePath("/admin/transactions")
   revalidatePath("/admin/debt")
   publishEvent("purchase.reopened", purchase.laneId)
-  return purchase
+  return { id: purchase.id, status: "WEIGHED", paidAmount: Number(purchase.paidAmount) }
 }
 
 export type DebtStatus = "HUTANG" | "DP" | "LUNAS"

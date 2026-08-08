@@ -152,7 +152,7 @@ export async function startNewTransaction(farmerId: number, laneCode: string) {
   })
 
   revalidatePath("/pos-1/grading")
-  return purchase
+  return { id: purchase.id, transactionCode: purchase.transactionCode }
 }
 
 export interface GradeInput {

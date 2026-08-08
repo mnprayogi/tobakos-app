@@ -104,16 +104,6 @@ function buildTxnUrl(opts: { q: string; status: string; page: number; pageSize: 
   return `/admin/transactions${s ? `?${s}` : ""}`
 }
 
-function statusLabel(p: Purchase): { text: string; className: string } {
-  if (p.status === "DRAFT") return { text: "Draft", className: "text-amber" }
-  if (p.status === "WEIGHED") return { text: "Menunggu Review", className: "text-amber" }
-  if (p.status === "PAID") return { text: "Lunas", className: "text-blue" }
-  const remaining = Math.round((p.totalPrice - p.paidAmount) * 100) / 100
-  if (remaining <= 0.005) return { text: "Lunas", className: "text-blue" }
-  if (p.paidAmount <= 0.005) return { text: "Hutang", className: "text-red-deduction" }
-  return { text: "Sebagian (DP)", className: "text-amber" }
-}
-
 export function TransactionsClient({
   purchases: initial,
   total,
@@ -350,9 +340,6 @@ export function TransactionsClient({
                     </td>
                     <td className="py-2 px-2 border-b border-border-soft">
                       <StatusPill status={p.status as "DRAFT" | "WEIGHED" | "APPROVED" | "PAID"} />
-                      <span className={`block text-[10px] font-bold mt-1 ${statusLabel(p).className}`}>
-                        {statusLabel(p).text}
-                      </span>
                       {p.priceReviewNote && (
                         <span className="block text-[10px] text-muted-2 italic mt-1 max-w-[160px] truncate" title={p.priceReviewNote}>
                           {p.priceReviewNote}
