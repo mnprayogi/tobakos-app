@@ -1,9 +1,32 @@
 "use server"
 
+import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
 import { requireRoles } from "@/lib/roles"
 import { roundMoney } from "@/lib/calculations"
 import { toDateKey } from "@/lib/utils"
+
+export type ReportScope =
+  | { mode: "all" }
+  | { mode: "scoped"; warehouseId: number }
+
+export async function resolveReportScope(): Promise<ReportScope> {
+  const session = await auth()
+  const role = session?.user?.role ?? null
+  if (role === "SUPER_ADMIN" || role === "OWNER") return { mode: "all" }
+
+  const user = session?.user?.id
+    ? await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { lane: { select: { warehouseId: true } } },
+      })
+    : null
+  const warehouseId = user?.lane?.warehouseId
+  if (warehouseId == null) {
+    throw new Error("Akun Anda belum ditugaskan ke gudang — hubungi admin untuk mengatur jalur")
+  }
+  return { mode: "scoped", warehouseId }
+}
 
 export interface ReportFilters {
   from?: string
@@ -76,9 +99,13 @@ export interface TransactionDetailRow {
 
 export async function getReportMeta() {
   await requireRoles("ADMIN", "FINANCE", "OWNER")
+  const scope = await resolveReportScope()
   const [warehouses, farmers] = await Promise.all([
     prisma.warehouse.findMany({
-      where: { active: true },
+      where: {
+        active: true,
+        ...(scope.mode === "scoped" ? { id: scope.warehouseId } : {}),
+      },
       orderBy: { code: "asc" },
       select: { id: true, code: true, name: true },
     }),
@@ -87,7 +114,7 @@ export async function getReportMeta() {
       select: { id: true, name: true, nik: true },
     }),
   ])
-  return { warehouses, farmers }
+  return { warehouses, farmers, scope }
 }
 
 function dateRange(filters: ReportFilters): { from: Date; to: Date } {
@@ -107,11 +134,13 @@ function statusWhere(status?: string | null) {
 export async function getFarmerSummary(filters: ReportFilters): Promise<FarmerSummaryRow[]> {
   await requireRoles("ADMIN", "FINANCE", "OWNER")
   const { from, to } = dateRange(filters)
+  const scope = await resolveReportScope()
+  const warehouseId = scope.mode === "scoped" ? scope.warehouseId : filters.warehouseId
 
   const purchases = await prisma.purchase.findMany({
     where: {
       transactionDate: { gte: from, lte: to },
-      ...(filters.warehouseId ? { warehouseId: filters.warehouseId } : {}),
+      ...(warehouseId ? { warehouseId } : {}),
       ...(filters.farmerId ? { farmerId: filters.farmerId } : {}),
       ...statusWhere(filters.status),
     },
@@ -173,11 +202,13 @@ export async function getFarmerSummary(filters: ReportFilters): Promise<FarmerSu
 export async function getPeriodSummary(filters: ReportFilters): Promise<PeriodSummaryRow[]> {
   await requireRoles("ADMIN", "FINANCE", "OWNER")
   const { from, to } = dateRange(filters)
+  const scope = await resolveReportScope()
+  const warehouseId = scope.mode === "scoped" ? scope.warehouseId : filters.warehouseId
 
   const purchases = await prisma.purchase.findMany({
     where: {
       transactionDate: { gte: from, lte: to },
-      ...(filters.warehouseId ? { warehouseId: filters.warehouseId } : {}),
+      ...(warehouseId ? { warehouseId } : {}),
       ...statusWhere(filters.status),
     },
     include: { _count: { select: { items: true } } },
@@ -215,11 +246,13 @@ export async function getPeriodSummary(filters: ReportFilters): Promise<PeriodSu
 export async function getTransactionDetail(filters: ReportFilters): Promise<TransactionDetailRow[]> {
   await requireRoles("ADMIN", "FINANCE", "OWNER")
   const { from, to } = dateRange(filters)
+  const scope = await resolveReportScope()
+  const warehouseId = scope.mode === "scoped" ? scope.warehouseId : filters.warehouseId
 
   const purchases = await prisma.purchase.findMany({
     where: {
       transactionDate: { gte: from, lte: to },
-      ...(filters.warehouseId ? { warehouseId: filters.warehouseId } : {}),
+      ...(warehouseId ? { warehouseId } : {}),
       ...(filters.farmerId ? { farmerId: filters.farmerId } : {}),
       ...statusWhere(filters.status),
     },

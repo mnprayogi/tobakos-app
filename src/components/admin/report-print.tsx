@@ -26,6 +26,9 @@ interface ReportPrintProps {
   periodRows: PeriodSummaryRow[] | null
   txRows: TransactionDetailRow[] | null
   companyName?: string
+  warehouseLabel?: string
+  printedBy?: string
+  printedAt?: string
 }
 
 const th: CSSProperties = {
@@ -46,7 +49,7 @@ const td: CSSProperties = {
 }
 
 export const ReportPrint = forwardRef<HTMLDivElement, ReportPrintProps>(function ReportPrint(
-  { tab, from, to, farmerRows, periodRows, txRows, companyName = "TobakOS" },
+  { tab, from, to, farmerRows, periodRows, txRows, companyName = "TobakOS", warehouseLabel, printedBy = "", printedAt = "" },
   ref
 ) {
   const title =
@@ -90,8 +93,13 @@ export const ReportPrint = forwardRef<HTMLDivElement, ReportPrintProps>(function
         <h1 style={{ fontSize: "15pt", fontWeight: 900, margin: "0 0 2mm", letterSpacing: "0.1em", color: "#000" }}>{title}</h1>
         <p style={{ fontSize: "11pt", fontWeight: 600, margin: "0 0 1mm", color: "#000" }}>{companyName} · Gudang Tembakau</p>
         <p style={{ fontSize: "9.5pt", color: "#222", margin: 0 }}>
-          Periode: {dateLabel(from)} — {dateLabel(to)} · Daftar {rows.length}
+          Periode: {dateLabel(from)} — {dateLabel(to)} · Gudang: {warehouseLabel ?? "Semua Gudang"} · Daftar {rows.length}
         </p>
+        {(printedBy || printedAt) && (
+          <p style={{ fontSize: "8.5pt", color: "#444", margin: "2mm 0 0" }}>
+            Dicetak oleh: {printedBy || "—"} · {printedAt || "—"}
+          </p>
+        )}
       </div>
 
       {tab === "farmer" && farmerRows && farmerTotals && (
