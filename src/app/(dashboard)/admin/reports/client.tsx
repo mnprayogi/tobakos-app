@@ -15,6 +15,7 @@ import {
   SearchX,
   X,
 } from "lucide-react"
+import { PageHeader } from "@/components/shared/page-header"
 import {
   getFarmerSummary,
   getPeriodSummary,
@@ -286,24 +287,20 @@ export function ReportsClient({
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="min-w-0">
-          <h1 className="text-lg font-bold text-foreground">Laporan</h1>
-          <p className="mt-0.5 text-[12px] text-muted-foreground">
-            Rekap pembelian tembakau — per petani &amp; per periode
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleExportExcel} disabled={loading || !loaded}>
-            <FileSpreadsheet />
-            Export Excel
-          </Button>
-          <Button size="sm" onClick={handlePrint} disabled={loading || !loaded}>
-            <Printer />
-            Cetak / PDF
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        icon={FileBarChart2}
+        title="Laporan"
+        subtitle="Rekap pembelian tembakau — per petani & per periode"
+      >
+        <Button variant="outline" size="sm" onClick={handleExportExcel} disabled={loading || !loaded}>
+          <FileSpreadsheet />
+          Export Excel
+        </Button>
+        <Button size="sm" onClick={handlePrint} disabled={loading || !loaded}>
+          <Printer />
+          Cetak / PDF
+        </Button>
+      </PageHeader>
 
       <form
         onSubmit={(e) => {

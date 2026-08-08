@@ -4,6 +4,7 @@ import { useState } from "react"
 import { toast } from "sonner"
 import { updateSystemSetting } from "@/lib/actions/admin"
 import { Settings2, Search, Pencil, Loader2, ChevronDown } from "lucide-react"
+import { PageHeader } from "@/components/shared/page-header"
 
 interface SystemSetting {
   key: string
@@ -374,17 +375,11 @@ export function SettingsClient({
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-3 bg-panel border border-border rounded-2xl p-4 shadow-sm">
-        <div className="w-9 h-9 rounded-xl bg-emerald/15 border border-emerald/30 flex items-center justify-center text-emerald shrink-0">
-          <Settings2 className="w-5 h-5" />
-        </div>
-        <div>
-          <h1 className="text-base font-extrabold text-foreground">Pengaturan Sistem</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Konfigurasi umum aplikasi — perubahan berlaku langsung.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        icon={Settings2}
+        title="Pengaturan Sistem"
+        subtitle="Konfigurasi umum aplikasi — perubahan berlaku langsung."
+      />
 
       <div className="relative">
         <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />

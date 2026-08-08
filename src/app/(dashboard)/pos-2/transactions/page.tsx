@@ -3,6 +3,8 @@ import { getActiveLanes, getLaneByCode } from "@/lib/actions/lanes"
 import { getCurrentUserLane } from "@/lib/lane-resolution"
 import { LanePicker } from "@/components/shared/lane-picker"
 import { WeighedTransactions } from "@/components/pos-2/weighed-transactions"
+import { ClipboardList } from "lucide-react"
+import { PageHeader } from "@/components/shared/page-header"
 
 export default async function Pos2TransactionsPage({
   searchParams,
@@ -27,14 +29,16 @@ export default async function Pos2TransactionsPage({
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-bold text-foreground">Transaksi Ditimbang</h1>
-          <p className="text-sm text-muted-foreground">
+      <PageHeader
+        icon={ClipboardList}
+        title="Transaksi Ditimbang"
+        subtitle={
+          <>
             {lane.warehouse.name} · {lane.name}
             <span className="ml-2 font-mono text-emerald font-bold">{lane.code}</span>
-          </p>
-        </div>
+          </>
+        }
+      >
         <div className="text-right text-[11.5px] text-muted-foreground leading-relaxed">
           <div>
             user: <span className="font-semibold text-foreground">{session?.user?.name}</span>
@@ -43,7 +47,7 @@ export default async function Pos2TransactionsPage({
             <span className="text-muted-2">Transaksi berjalan &amp; sudah diakhiri</span>
           </div>
         </div>
-      </div>
+      </PageHeader>
 
       <WeighedTransactions laneId={lane.id} />
     </div>

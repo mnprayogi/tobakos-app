@@ -4,12 +4,13 @@ import { Fragment, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import type { DebtFarmer, DebtStatus } from "@/lib/actions/finance"
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils"
-import { ChevronDown, ChevronRight, Search, Warehouse } from "lucide-react"
+import { ChevronDown, ChevronRight, Search, Warehouse, HandCoins } from "lucide-react"
 import { BuktiLunasDialog } from "@/components/admin/bukti-lunas-dialog"
 import {
   PaymentDialog,
   type PayPurchase,
 } from "@/components/admin/payment-dialog"
+import { PageHeader } from "@/components/shared/page-header"
 import type { WarehouseScope } from "@/lib/actions/scope"
 import { useSse } from "@/hooks/useSse"
 
@@ -109,15 +110,18 @@ export function DebtClient({
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-3 flex-wrap">
-        <h1 className="text-lg font-bold text-foreground">Hutang Petani</h1>
+      <PageHeader
+        icon={HandCoins}
+        title="Hutang Petani"
+        subtitle="Rekap tagihan, pembayaran bertahap & sisa per petani"
+      >
         {scope.mode === "scoped" && (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-panel-alt border border-border-soft px-2.5 py-1 text-[11px] font-bold text-muted-foreground">
             <Warehouse className="w-3.5 h-3.5 text-emerald" />
             Gudang: {scope.warehouseName}
           </span>
         )}
-      </div>
+      </PageHeader>
 
       <div className="grid grid-cols-3 gap-4 max-md:grid-cols-1">
         <div className="rounded-xl border border-border bg-card p-4">

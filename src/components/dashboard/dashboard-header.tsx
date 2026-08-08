@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react"
 
 import { cn } from "@/lib/utils"
+import { LayoutDashboard } from "lucide-react"
+import { PageHeader } from "@/components/shared/page-header"
 
 const ROLE_META: Record<string, { label: string; cls: string }> = {
   GRADER: { label: "Grader", cls: "bg-amber/12 text-amber border-amber/35" },
@@ -36,23 +38,19 @@ export function DashboardHeader({ userName, role }: { userName: string; role: st
   const meta = ROLE_META[role] ?? ROLE_META.GRADER
 
   return (
-    <header className="flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <h1 className="text-lg font-bold text-foreground">Dashboard</h1>
-        <p className="mt-0.5 text-[12.5px] text-muted-foreground">
-          Halo, {userName} · {dateLabel}
-        </p>
-      </div>
-      <div className="flex items-center gap-2.5">
-        <span
-          className={cn("rounded-full border px-2.5 py-1 text-[10.5px] font-bold", meta.cls)}
-        >
-          {meta.label}
-        </span>
-        <span className="font-mono text-[13px] font-bold tabular-nums text-muted-2">
-          {timeLabel}
-        </span>
-      </div>
-    </header>
+    <PageHeader
+      icon={LayoutDashboard}
+      title="Dashboard"
+      subtitle={`Halo, ${userName} · ${dateLabel}`}
+    >
+      <span
+        className={cn("rounded-full border px-2.5 py-1 text-[10.5px] font-bold", meta.cls)}
+      >
+        {meta.label}
+      </span>
+      <span className="font-mono text-[13px] font-bold tabular-nums text-muted-2">
+        {timeLabel}
+      </span>
+    </PageHeader>
   )
 }

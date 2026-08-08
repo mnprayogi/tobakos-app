@@ -9,7 +9,8 @@ import { negotiateItems, roundMoney } from "@/lib/calculations"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { StatusPill } from "@/components/shared/status-pill"
 import { Pagination } from "@/components/shared/pagination"
-import { Warehouse } from "lucide-react"
+import { Warehouse, ClipboardCheck } from "lucide-react"
+import { PageHeader } from "@/components/shared/page-header"
 
 interface ReviewItem {
   id: number
@@ -136,18 +137,24 @@ export function ReviewClient({ purchase }: { purchase: ReviewPurchase }) {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <Link
-            href="/admin/transactions"
-            className="text-[12px] font-bold text-muted-foreground hover:text-foreground cursor-pointer"
-          >
-            ← Kembali ke Transaksi
-          </Link>
-          <h1 className="text-lg font-bold text-foreground mt-1">
+      <div>
+        <Link
+          href="/admin/transactions"
+          className="text-[12px] font-bold text-muted-foreground hover:text-foreground cursor-pointer"
+        >
+          ← Kembali ke Transaksi
+        </Link>
+      </div>
+
+      <PageHeader
+        icon={ClipboardCheck}
+        title={
+          <>
             Review &amp; Setujui — <span className="font-mono">{purchase.transactionCode}</span>
-          </h1>
-          <p className="text-[12px] text-muted-2">
+          </>
+        }
+        subtitle={
+          <>
             {purchase.farmerName} · {formatDate(purchase.transactionDate)}
             {purchase.warehouseName && (
               <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-panel-alt border border-border-soft px-2 py-0.5 text-[10.5px] font-bold text-muted-foreground align-middle">
@@ -155,10 +162,11 @@ export function ReviewClient({ purchase }: { purchase: ReviewPurchase }) {
                 {purchase.warehouseName}
               </span>
             )}
-          </p>
-        </div>
+          </>
+        }
+      >
         <StatusPill status="WEIGHED" />
-      </div>
+      </PageHeader>
 
       <div className="grid grid-cols-1 xl:grid-cols-[380px_1fr] gap-5 items-start">
         <div className="space-y-4 rounded-xl border border-border bg-card p-4 xl:sticky xl:top-2">

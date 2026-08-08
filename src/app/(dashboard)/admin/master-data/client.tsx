@@ -51,6 +51,7 @@ import {
   Trash2,
   CheckCircle2,
 } from "lucide-react"
+import { PageHeader } from "@/components/shared/page-header"
 
 interface Farmer { id: number; name: string; nik: string | null; phone: string | null; address: string | null }
 interface Customer { id: number; name: string; phone: string | null; address: string | null }
@@ -106,17 +107,11 @@ export function MasterDataClient(props: Props) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3 bg-panel border border-border rounded-2xl p-4 shadow-sm">
-        <div className="w-9 h-9 rounded-xl bg-emerald/15 border border-emerald/30 flex items-center justify-center text-emerald shrink-0">
-          <Database className="w-5 h-5" />
-        </div>
-        <div>
-          <h1 className="text-base font-extrabold text-foreground">Manajemen Master Data</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Kelola Petani, Jenis Tembakau, Jenis Daun, Packing, Grade, Gudang, Jalur & Users
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        icon={Database}
+        title="Manajemen Master Data"
+        subtitle="Kelola Petani, Jenis Tembakau, Jenis Daun, Packing, Grade, Gudang, Jalur & Users"
+      />
 
       <div className="flex flex-wrap items-center gap-1.5 border-b border-border pb-2">
         {tabs.map((t) => {

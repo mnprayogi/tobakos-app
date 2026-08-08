@@ -8,6 +8,7 @@ import type { WarehouseScope } from "@/lib/actions/scope"
 import { LoanDialog, type LoanDialogState, type LoanFarmer } from "@/components/admin/loan-dialog"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Wallet } from "lucide-react"
+import { PageHeader } from "@/components/shared/page-header"
 import { useSse } from "@/hooks/useSse"
 
 export function LoansClient({
@@ -39,23 +40,24 @@ export function LoansClient({
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="text-lg font-bold text-foreground">Hutang Modal</h1>
-          {scoped && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-panel-alt border border-border-soft px-2.5 py-1 text-[11px] font-bold text-muted-foreground">
-              <Wallet className="w-3.5 h-3.5 text-emerald" />
-              Gudang: {scope.warehouseName}
-            </span>
-          )}
-        </div>
+      <PageHeader
+        icon={Wallet}
+        title="Hutang Modal"
+        subtitle="Buku hutang modal, pinjaman & pembayaran petani"
+      >
+        {scoped && (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-panel-alt border border-border-soft px-2.5 py-1 text-[11px] font-bold text-muted-foreground">
+            <Wallet className="w-3.5 h-3.5 text-emerald" />
+            Gudang: {scope.warehouseName}
+          </span>
+        )}
         <button
           onClick={() => setDialog({ mode: "disburse" })}
           className="rounded-lg bg-emerald px-3.5 py-2 font-bold text-[12px] text-primary-foreground cursor-pointer"
         >
           + Beri Pinjaman
         </button>
-      </div>
+      </PageHeader>
 
       <div className="grid grid-cols-3 gap-4 max-md:grid-cols-1">
         <div className="rounded-xl border border-border bg-card p-4">

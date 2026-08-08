@@ -32,7 +32,8 @@ import { useOfflineQueue, isNetworkError } from "@/hooks/useOfflineQueue"
 import { useRealtime } from "@/hooks/useRealtime"
 import { useQueueStore } from "@/lib/queue"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import { Search, Info, Plus, MousePointerClick, Printer } from "lucide-react"
+import { Search, Info, Plus, MousePointerClick, Printer, ScanLine } from "lucide-react"
+import { PageHeader } from "@/components/shared/page-header"
 
 const StickerPreview = dynamic(
   () => import("@/components/shared/sticker-preview").then((m) => m.StickerPreview),
@@ -430,29 +431,31 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
   return (
     <>
     {/* ===== SCREEN HEADER ===== */}
-    <div className="flex items-start justify-between flex-wrap gap-2.5 mb-4">
-      <div className="text-sm text-muted-foreground">
-        <b className="text-foreground font-semibold">Pos 1: Grading</b> — {warehouseName} · {laneName}
-        <span className="ml-2 font-mono text-emerald font-bold">{laneCode}</span>
+    <PageHeader
+      className="mb-4"
+      icon={ScanLine}
+      title="Pos 1 · Grading"
+      subtitle={
+        <>
+          {warehouseName} · {laneName}
+          <span className="ml-2 font-mono text-emerald font-bold">{laneCode}</span>
+        </>
+      }
+    >
+      <div className="flex items-center justify-end gap-2">
+        <SyncStatusBanner />
+        <span className="text-muted-2 text-[11.5px]">user:</span>
+        <b className="font-semibold text-foreground">{userName}</b>
       </div>
-        <div>
-          <div className="flex items-center justify-end gap-2">
-            <SyncStatusBanner />
-            <span className="text-muted-2 text-[11.5px]">user:</span>
-            <b className="font-semibold text-foreground">{userName}</b>
-          </div>
-          <div className="mt-1">
-            <PrinterManager
-              connected={printer.connected}
-              deviceName={printer.deviceName}
-              error={printer.error}
-              onConnect={printer.connect}
-              onDisconnect={printer.disconnect}
-              onTest={printer.printTest}
-            />
-          </div>
-        </div>
-    </div>
+      <PrinterManager
+        connected={printer.connected}
+        deviceName={printer.deviceName}
+        error={printer.error}
+        onConnect={printer.connect}
+        onDisconnect={printer.disconnect}
+        onTest={printer.printTest}
+      />
+    </PageHeader>
 
         {/* ===== 3-COLUMN GRID ===== */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

@@ -11,7 +11,8 @@ import { formatCurrency, formatDate } from "@/lib/utils"
 import { StatusPill } from "@/components/shared/status-pill"
 import { Pagination } from "@/components/shared/pagination"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
-import { Search, Wallet } from "lucide-react"
+import { Search, Wallet, ReceiptText } from "lucide-react"
+import { PageHeader } from "@/components/shared/page-header"
 import type { WarehouseScope } from "@/lib/actions/scope"
 import {
   PaymentDialog,
@@ -211,15 +212,18 @@ export function TransactionsClient({
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-3 flex-wrap">
-        <h1 className="text-lg font-bold text-foreground">Transaksi</h1>
+      <PageHeader
+        icon={ReceiptText}
+        title="Transaksi"
+        subtitle="Pantau, review & setujui, negosiasi harga, dan pembayaran bertahap"
+      >
         {scope.mode === "scoped" && (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-panel-alt border border-border-soft px-2.5 py-1 text-[11px] font-bold text-muted-foreground">
             <Wallet className="w-3.5 h-3.5 text-emerald" />
             Gudang: {scope.warehouseName}
           </span>
         )}
-      </div>
+      </PageHeader>
 
       <div className="grid grid-cols-3 gap-4 max-md:grid-cols-1">
         <div className="rounded-xl border border-border bg-card p-4">

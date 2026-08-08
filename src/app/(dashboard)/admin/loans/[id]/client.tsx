@@ -8,7 +8,8 @@ import { usePrintDocument, printBaseStyle } from "@/lib/print"
 import type { LoanBook, LoanEntryInfo } from "@/lib/actions/loans"
 import { LoanDialog, type LoanDialogState } from "@/components/admin/loan-dialog"
 import { LoanBookPrint } from "@/components/admin/loan-book-print"
-import { Wallet } from "lucide-react"
+import { Wallet, BookOpenText } from "lucide-react"
+import { PageHeader } from "@/components/shared/page-header"
 
 function entryLabel(e: LoanEntryInfo): string {
   if (e.type === "DISBURSEMENT") return "Pinjam"
@@ -32,20 +33,32 @@ export function LoanBookClient({ book, companyName, userName }: { book: LoanBook
 
   return (
     <div className="space-y-5 print:space-y-3">
-      <div className="flex items-center justify-between gap-3 flex-wrap print:hidden">
-        <div className="flex items-center gap-3">
-          <Link href="/admin/loans" className="text-[12px] font-bold text-muted-foreground hover:text-foreground cursor-pointer">
-            ← Kembali
-          </Link>
-          <h1 className="text-lg font-bold text-foreground">Buku Hutang</h1>
-        </div>
+      <div className="flex items-center gap-3 print:hidden">
+        <Link href="/admin/loans" className="text-[12px] font-bold text-muted-foreground hover:text-foreground cursor-pointer">
+          ← Kembali
+        </Link>
+      </div>
+
+      <PageHeader
+        icon={BookOpenText}
+        title="Buku Hutang"
+        subtitle={
+          <>
+            {book.farmerName}
+            <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-panel-alt border border-border-soft px-2 py-0.5 text-[10.5px] font-bold text-muted-foreground align-middle">
+              <Wallet className="w-3 h-3 text-emerald" />
+              {book.warehouseName}
+            </span>
+          </>
+        }
+      >
         <button
           onClick={onPrint}
           className="rounded-lg bg-panel-alt px-3.5 py-2 font-bold text-[12px] text-foreground border border-border-soft cursor-pointer"
         >
           Cetak
         </button>
-      </div>
+      </PageHeader>
 
       <div className="hidden" aria-hidden="true">
         <LoanBookPrint ref={printRef} book={book} companyName={companyName} userName={userName} printedAt={printedAt} />
