@@ -162,9 +162,15 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
 
   const [searchTerm, setSearchTerm] = useState("")
   const [storedDefaults] = useState<StoredGradingDefaults | null>(() => loadStoredDefaults(laneId))
-  const [tobaccoTypeId, setTobaccoTypeId] = useState(storedDefaults?.tobaccoTypeId ?? "")
-  const [leafTypeId, setLeafTypeId] = useState(storedDefaults?.leafTypeId ?? "")
-  const [packingTypeId, setPackingTypeId] = useState(storedDefaults?.packingTypeId ?? "")
+  const [tobaccoTypeId, setTobaccoTypeId] = useState(
+    () => storedDefaults?.tobaccoTypeId ?? (tobaccoTypes.length === 1 ? String(tobaccoTypes[0].id) : "")
+  )
+  const [leafTypeId, setLeafTypeId] = useState(
+    () => storedDefaults?.leafTypeId ?? (leafTypes.length === 1 ? String(leafTypes[0].id) : "")
+  )
+  const [packingTypeId, setPackingTypeId] = useState(
+    () => storedDefaults?.packingTypeId ?? (packingTypes.length === 1 ? String(packingTypes[0].id) : "")
+  )
   const [moisturePercent, setMoisturePercent] = useState(storedDefaults?.moisturePercent ?? String(defaultMoisturePercent))
   const [packingWeight, setPackingWeight] = useState(storedDefaults?.packingWeight ?? "2.00")
   const defaultCustomerId = customers.find((c) => c.name === "Gudang Sendiri")?.id ?? customers[0]?.id ?? 0
@@ -200,14 +206,6 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
       // penyimpanan preferensi diabaikan jika gagal
     }
   }, [laneId, tobaccoTypeId, leafTypeId, packingTypeId, moisturePercent, packingWeight, customerId])
-
-  useEffect(() => {
-    if (tobaccoTypes.length === 1 && !tobaccoTypeId) setTobaccoTypeId(String(tobaccoTypes[0].id))
-    if (leafTypes.length === 1 && !leafTypeId) setLeafTypeId(String(leafTypes[0].id))
-    if (packingTypes.length === 1 && !packingTypeId) setPackingTypeId(String(packingTypes[0].id))
-    // hanya sekali saat mount, memakai nilai awal (termasuk yang dimuat dari localStorage)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   const [startingNew, setStartingNew] = useState(false)
   const [txDialogOpen, setTxDialogOpen] = useState(false)

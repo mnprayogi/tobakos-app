@@ -187,14 +187,11 @@ export interface HistoryPurchase {
 export async function getWeighedHistory(farmerId: number, laneId: number) {
   await requireRoles("OPERATOR", "ADMIN")
   const lane = await resolveActorLane({ laneId })
-  const todayStart = new Date()
-  todayStart.setHours(0, 0, 0, 0)
 
   const allToday = await prisma.purchase.findMany({
     where: {
       farmerId,
       status: { in: ["DRAFT", "WEIGHED"] },
-      transactionDate: { gte: todayStart },
     },
     orderBy: { createdAt: "desc" },
     include: {

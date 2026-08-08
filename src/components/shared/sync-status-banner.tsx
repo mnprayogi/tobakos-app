@@ -1,10 +1,23 @@
 "use client"
 
+import { useSyncExternalStore } from "react"
 import { useOfflineQueue } from "@/hooks/useOfflineQueue"
 import { RefreshCw, WifiOff } from "lucide-react"
 
+const emptySubscribe = () => () => {}
+
+function useIsClient() {
+  return useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  )
+}
+
 export function SyncStatusBanner() {
+  const isClient = useIsClient()
   const { online, pendingCount } = useOfflineQueue()
+  if (!isClient) return null
   if (online && pendingCount === 0) return null
   return (
     <div
