@@ -57,7 +57,7 @@
 }
 
 :root {
-  --background: #080d16;
+  --background: #060a12;
   --foreground: #e7ecf5;
   --card: #101828;
   --card-foreground: #e7ecf5;
@@ -92,7 +92,7 @@
 }
 
 .dark {
-  --background: #080d16;
+  --background: #060a12;
   --foreground: #e7ecf5;
   --card: #101828;
   --card-foreground: #e7ecf5;
@@ -132,10 +132,6 @@
   }
   body {
     @apply bg-background text-foreground;
-    background:
-      radial-gradient(ellipse at 20% 0%, #0f1c2e 0%, transparent 55%),
-      radial-gradient(ellipse at 90% 100%, #0d1a24 0%, transparent 50%),
-      #060a12;
   }
   html {
     @apply font-sans;
@@ -373,7 +369,7 @@
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #080d16;
+  background: #060a12;
 }
 
 @utility sticker-wf-notch-r {
@@ -385,7 +381,7 @@
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #080d16;
+  background: #060a12;
 }
 
 @utility sticker-code {

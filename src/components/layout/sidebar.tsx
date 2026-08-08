@@ -173,16 +173,16 @@ export function Sidebar({
   return (
     <aside
       className={cn(
-        "fixed inset-y-0 left-0 z-50 flex w-60 flex-col border-r border-border bg-sidebar p-4 transition-transform duration-200 lg:p-5 lg:sticky lg:inset-auto lg:top-0 lg:h-screen lg:translate-x-0",
-        mobileOpen ? "translate-x-0" : "-translate-x-full",
-        collapsed ? "lg:hidden" : "lg:flex"
+        "fixed inset-y-0 left-0 z-50 flex w-60 flex-col border-r border-border bg-sidebar p-4 transition-[width,transform] duration-200 lg:sticky lg:inset-auto lg:top-0 lg:h-screen lg:translate-x-0",
+        collapsed ? "lg:w-16 lg:px-2.5 lg:py-5" : "lg:w-60 lg:p-5",
+        mobileOpen ? "translate-x-0" : "-translate-x-full"
       )}
     >
-      <div className="flex items-center gap-2.5 pb-5 px-1.5 border-b border-border-soft mb-4">
+      <div className={cn("flex items-center gap-2.5 pb-5 px-1.5 border-b border-border-soft mb-4", collapsed && "lg:justify-center lg:px-0")}>
         <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-emerald to-emerald/70 text-[10px] font-bold flex-shrink-0 text-primary-foreground">
           🌿
         </div>
-        <span className="font-extrabold text-[17px] tracking-tight text-foreground flex items-center">
+        <span className={cn("font-extrabold text-[17px] tracking-tight text-foreground flex items-center", collapsed && "lg:hidden")}>
           {companyName}
           <span className="font-mono text-[9.5px] font-bold bg-border text-muted-2 px-1.5 py-0.5 rounded ml-1.5 align-middle">
             OS
@@ -193,7 +193,7 @@ export function Sidebar({
       {navItemsForRole.map((section) => {
         return (
           <div key={section.section} className="mb-5">
-            <p className="text-[10px] uppercase tracking-[0.1em] font-bold text-muted-2 px-2.5 mb-2">
+            <p className={cn("text-[10px] uppercase tracking-[0.1em] font-bold text-muted-2 px-2.5 mb-2", collapsed && "lg:hidden")}>
               {section.section}
             </p>
             <div className="flex flex-col gap-0.5">
@@ -203,15 +203,18 @@ export function Sidebar({
                   <Link
                     key={item.href}
                     href={item.href}
+                    title={collapsed ? item.label : undefined}
                     onClick={onNavigate}
-                    className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13.5px] font-semibold border border-transparent transition-all duration-150 ${
+                    className={cn(
+                      "flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13.5px] font-semibold border border-transparent transition-all duration-150",
+                      collapsed && "lg:justify-center lg:px-0",
                       isActive
                         ? "bg-emerald/12 text-emerald border-emerald/30"
                         : "text-foreground/65 hover:bg-panel-alt hover:text-foreground"
-                    }`}
+                    )}
                   >
                     {item.icon && item.icon}
-                    {item.label}
+                    <span className={cn(collapsed && "lg:hidden")}>{item.label}</span>
                   </Link>
                 )
               })}
@@ -221,20 +224,23 @@ export function Sidebar({
       })}
 
       <div className="mt-auto pt-3.5 border-t border-border-soft text-[10.5px] text-muted-2 leading-relaxed">
-        <div className="px-1.5">
+        <div className={cn("px-1.5", collapsed && "lg:hidden")}>
           {userName}<br />{companyName} · Gudang 01
         </div>
         <button
           type="button"
           onClick={() => signOut({ callbackUrl: "/login" })}
-          className="mt-2.5 w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-bold text-red-deduction border border-border-soft hover:bg-red-deduction/10 hover:border-red-deduction/40 transition-all duration-150 cursor-pointer"
+          className={cn(
+            "mt-2.5 w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-bold text-red-deduction border border-border-soft hover:bg-red-deduction/10 hover:border-red-deduction/40 transition-all duration-150 cursor-pointer",
+            collapsed && "lg:justify-center lg:px-0"
+          )}
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
             <polyline points="16 17 21 12 16 7" />
             <line x1="21" y1="12" x2="9" y2="12" />
           </svg>
-          Keluar
+          <span className={cn(collapsed && "lg:hidden")}>Keluar</span>
         </button>
       </div>
     </aside>

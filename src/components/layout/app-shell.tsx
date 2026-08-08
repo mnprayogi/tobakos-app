@@ -19,14 +19,14 @@ export function AppShell({
   companyName: string
   children: React.ReactNode
 }) {
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(true)
   const [mobileOpen, setMobileOpen] = useState(false)
 
   useEffect(() => {
     try {
-      if (window.localStorage.getItem(STORAGE_KEY) === "1") {
+      if (window.localStorage.getItem(STORAGE_KEY) === "0") {
         // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time mount hydration of persisted preference
-        setCollapsed(true)
+        setCollapsed(false)
       }
     } catch {}
   }, [])
