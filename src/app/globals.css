@@ -136,6 +136,13 @@
   html {
     @apply font-sans;
   }
+  input[type="date"] {
+    color-scheme: dark;
+  }
+}
+
+@utility text-muted {
+  color: var(--muted-foreground);
 }
 
 @utility pill-graded {

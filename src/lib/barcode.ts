@@ -10,6 +10,11 @@ export function generateLabelCode(warehouse: string, lane: string, sequence: num
   return `${warehouse}-${laneToken(lane, warehouse)}-${date}-${String(sequence).padStart(4, "0")}`
 }
 
+export function generateTransactionCode(laneCode: string, sequence: number): string {
+  const date = format(new Date(), "yyyyMMdd")
+  return `TRX-${laneCode}-${date}-${String(sequence).padStart(3, "0")}`
+}
+
 export function parseLabelCode(code: string): {
   warehouse: string
   lane: string

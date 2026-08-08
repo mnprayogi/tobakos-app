@@ -1,9 +1,8 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { format } from "date-fns"
 import { prisma } from "@/lib/db"
-import { generateLabelCode } from "@/lib/barcode"
+import { generateLabelCode, generateTransactionCode } from "@/lib/barcode"
 import { nextSequence } from "@/lib/sequences"
 import { resolveActorLane } from "@/lib/lane-resolution"
 import { getActorName } from "@/lib/actor"
@@ -139,10 +138,9 @@ export async function startNewTransaction(farmerId: number, laneCode: string) {
   const lane = await resolveActorLane({ laneCode })
 
   const txSeq = await nextSequence(lane.code)
-  const txDate = format(new Date(), "yyyyMMdd")
   const purchase = await prisma.purchase.create({
     data: {
-      transactionCode: `${lane.code}-${txDate}-${String(txSeq).padStart(3, "0")}`,
+      transactionCode: generateTransactionCode(lane.code, txSeq),
       farmerId,
       warehouseId: lane.warehouseId,
       laneId: lane.id,
@@ -228,10 +226,9 @@ export async function saveGrade(data: GradeInput) {
       })
       if (!purchase) {
         const txSeq = await nextSequence(lane.code, tx)
-        const txDate = format(new Date(), "yyyyMMdd")
         purchase = await tx.purchase.create({
           data: {
-            transactionCode: `${lane.code}-${txDate}-${String(txSeq).padStart(3, "0")}`,
+            transactionCode: generateTransactionCode(lane.code, txSeq),
             farmerId: data.farmerId,
             warehouseId: lane.warehouseId,
             laneId: lane.id,
