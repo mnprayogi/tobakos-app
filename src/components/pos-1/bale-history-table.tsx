@@ -84,7 +84,7 @@ export function BaleHistoryTable({
 
   return (
     <>
-      <div className="bg-panel border border-border rounded-xl p-4 pb-[18px] table-card-wf">
+      <div className="bg-panel border border-border rounded-xl p-3.5 pb-[14px] h-full">
         <div className="table-head-row">
           <p className="card-title-wf" style={{ margin: 0 }}>
             Daftar Bale Terdaftar — Transaksi {farmerName ?? "—"} ({farmerNik ?? "—"})

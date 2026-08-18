@@ -15,8 +15,8 @@ export function PageHeader({
   className?: string
 }) {
   return (
-    <div className={cn("flex items-center justify-between gap-3 bg-panel border border-border rounded-2xl p-4 shadow-sm", className)}>
-      <div className="flex items-center gap-3 min-w-0">
+    <div className={cn("flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 bg-panel border border-border rounded-2xl p-4 shadow-sm", className)}>
+      <div className="flex items-center gap-3 min-w-0 flex-1">
         <div className="w-9 h-9 rounded-xl bg-emerald/15 border border-emerald/30 flex items-center justify-center text-emerald shrink-0">
           <Icon className="w-5 h-5" />
         </div>
@@ -25,7 +25,7 @@ export function PageHeader({
           {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
         </div>
       </div>
-      {children && <div className="flex items-center gap-2.5 shrink-0 flex-wrap">{children}</div>}
+      {children && <div className="flex items-center gap-2.5 flex-wrap w-full lg:w-auto justify-start lg:justify-end">{children}</div>}
     </div>
   )
 }

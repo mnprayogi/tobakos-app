@@ -240,18 +240,18 @@
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: #586479;
-  margin: 0 0 12px;
+  margin: 0 0 10px;
 }
 
 @utility field-wf {
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 @utility field-wf-label {
   display: block;
   font-size: 11px;
   color: #7c8aa8;
-  margin-bottom: 5px;
+  margin-bottom: 4px;
 }
 
 @utility field-wf-row {
@@ -272,8 +272,8 @@
   border: 1px solid #182236;
   color: #e7ecf5;
   font-family: var(--font-sans);
-  font-size: 13.5px;
-  padding: 9px 10px;
+  font-size: 13px;
+  padding: 8px 10px;
   border-radius: 8px;
   outline: none;
 }
@@ -286,38 +286,57 @@
 
 @utility grade-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
   margin-bottom: 12px;
-  @media (max-width: 639px) {
+  @media (min-width: 640px) and (max-width: 1023px) {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  @media (min-width: 1024px) {
     grid-template-columns: repeat(2, 1fr);
   }
 }
 
 @utility grade-btn {
-  text-align: center;
-  padding: 10px 0;
-  border-radius: 9px;
-  border: 1px solid #182236;
-  background: #0c1420;
-  color: #7c8aa8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 60px;
+  padding: 10px 8px;
+  border-radius: 12px;
+  border: 1px solid #263452;
+  background: #111c2e;
+  color: #c7d2e6;
   font-family: var(--font-mono);
   font-weight: 700;
-  font-size: 13px;
+  font-size: 14px;
   cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  &:hover {
+    border-color: rgba(34, 201, 141, 0.45);
+    background: #16233a;
+  }
 }
 
 @utility grade-btn-active {
   background: #22c98d;
   color: #04150e;
   border-color: #22c98d;
+  box-shadow: 0 0 0 3px rgba(34, 201, 141, 0.25);
+}
+
+@utility grade-btn-lg {
+  font-size: 16px;
+  border: 2px solid #3b4c6e;
 }
 
 @utility price-line {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  padding-top: 10px;
+  padding-top: 8px;
   margin-top: 4px;
   border-top: 1px dashed #182236;
   font-size: 12px;
@@ -334,21 +353,23 @@
   width: 100%;
   border: none;
   border-radius: 10px;
-  padding: 12px 0;
+  padding: 14px 0;
+  min-height: 56px;
   font-weight: 700;
-  font-size: 13.5px;
+  font-size: 14px;
   cursor: pointer;
   font-family: var(--font-sans);
   letter-spacing: 0.01em;
   background: #22c98d;
   color: #04150e;
+  box-shadow: 0 2px 14px rgba(34, 201, 141, 0.28);
 }
 
 @utility btn-wf-ghost {
   width: 100%;
   border: none;
   border-radius: 10px;
-  padding: 12px 0;
+  padding: 10px 0;
   font-weight: 700;
   font-size: 13.5px;
   cursor: pointer;
@@ -362,9 +383,8 @@
 @utility sticker-wf {
   background: #fff;
   border-radius: 10px;
-  padding: 14px 14px 12px;
+  padding: 12px 12px 10px;
   position: relative;
-  margin-bottom: 12px;
 }
 
 @utility sticker-wf-notch-l {
@@ -427,10 +447,6 @@
   padding: 3px 8px;
   border-radius: 6px;
   margin-top: 10px;
-}
-
-@utility table-card-wf {
-  margin-top: 16px;
 }
 
 @utility table-head-row {

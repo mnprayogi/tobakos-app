@@ -33,7 +33,7 @@ import { useOfflineQueue, isNetworkError } from "@/hooks/useOfflineQueue"
 import { useRealtime } from "@/hooks/useRealtime"
 import { useQueueStore } from "@/lib/queue"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import { Search, Info, Plus, UserPlus, MousePointerClick, Printer, ScanLine, ChevronDown, ChevronUp } from "lucide-react"
+import { Search, Info, Plus, UserPlus, MousePointerClick, Printer, ScanLine, ChevronDown, ChevronUp, Check } from "lucide-react"
 import { PageHeader } from "@/components/shared/page-header"
 
 const StickerPreview = dynamic(
@@ -81,10 +81,19 @@ function mergeRecentBales(prev: BaleItem[], fetched: RecentBaleItem[]): BaleItem
   return [...added, ...prevSurvivors]
 }
 
+function gradeTierClass(name: string, grades: Grade[]): string {
+  const sorted = [...grades].sort((a, b) => b.defaultPrice - a.defaultPrice)
+  const idx = sorted.findIndex((g) => g.name === name)
+  if (idx < 0) return "bg-muted-2"
+  const third = Math.max(1, Math.ceil(sorted.length / 3))
+  if (idx < third) return "bg-emerald"
+  if (idx < third * 2) return "bg-amber"
+  return "bg-red-deduction"
+}
+
 interface StoredGradingDefaults {
   tobaccoTypeId: string
   leafTypeId: string
-  packingTypeId: string
   moisturePercent: string
   packingWeight: string
   customerId: number
@@ -161,32 +170,47 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
   useRealtime(laneId, [realtimeRefetch])
 
   const [searchTerm, setSearchTerm] = useState("")
-  const [storedDefaults] = useState<StoredGradingDefaults | null>(() => loadStoredDefaults(laneId))
   const [tobaccoTypeId, setTobaccoTypeId] = useState(
-    () => storedDefaults?.tobaccoTypeId ?? (tobaccoTypes.length === 1 ? String(tobaccoTypes[0].id) : "")
+    tobaccoTypes.length === 1 ? String(tobaccoTypes[0].id) : ""
   )
-  const [leafTypeId, setLeafTypeId] = useState(
-    () => storedDefaults?.leafTypeId ?? (leafTypes.length === 1 ? String(leafTypes[0].id) : "")
-  )
-  const [packingTypeId, setPackingTypeId] = useState(
-    () => storedDefaults?.packingTypeId ?? (packingTypes.length === 1 ? String(packingTypes[0].id) : "")
-  )
-  const [moisturePercent, setMoisturePercent] = useState(storedDefaults?.moisturePercent ?? String(defaultMoisturePercent))
-  const [packingWeight, setPackingWeight] = useState(storedDefaults?.packingWeight ?? "2.00")
+  const [leafTypeId, setLeafTypeId] = useState(leafTypes.length === 1 ? String(leafTypes[0].id) : "")
+  const [packingTypeId, setPackingTypeId] = useState("")
+  const [moisturePercent, setMoisturePercent] = useState(String(defaultMoisturePercent))
+  const [packingWeight, setPackingWeight] = useState("2.00")
   const defaultCustomerId = customers.find((c) => c.name === "Gudang Sendiri")?.id ?? customers[0]?.id ?? 0
-  const [customerId, setCustomerId] = useState(storedDefaults?.customerId || defaultCustomerId)
+  const [customerId, setCustomerId] = useState(defaultCustomerId)
+
+  useEffect(() => {
+    const d = loadStoredDefaults(laneId)
+    if (!d) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time mount hydration of persisted defaults
+    setTobaccoTypeId(d.tobaccoTypeId)
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time mount hydration of persisted defaults
+    setLeafTypeId(d.leafTypeId)
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time mount hydration of persisted defaults
+    setMoisturePercent(d.moisturePercent)
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time mount hydration of persisted defaults
+    setPackingWeight(d.packingWeight)
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time mount hydration of persisted defaults
+    setCustomerId(d.customerId)
+  }, [laneId])
 
   const [selectedGrade, setSelectedGrade] = useState<string | null>(null)
   const [selectedPrice, setSelectedPrice] = useState<number | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  const [printMode, setPrintMode] = useState<PrintMode>(() => {
+  const [printMode, setPrintMode] = useState<PrintMode>("manual")
+
+  useEffect(() => {
     try {
-      return window.localStorage.getItem("tobak:print-mode") === "auto" ? "auto" : "manual"
+      if (window.localStorage.getItem("tobak:print-mode") === "auto") {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time mount hydration of persisted preference
+        setPrintMode("auto")
+      }
     } catch {
-      return "manual"
+      // preferensi cetak diabaikan jika gagal
     }
-  })
+  }, [])
 
   useEffect(() => {
     try {
@@ -200,12 +224,12 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
     try {
       window.localStorage.setItem(
         `tobak:grading-defaults:${laneId}`,
-        JSON.stringify({ tobaccoTypeId, leafTypeId, packingTypeId, moisturePercent, packingWeight, customerId })
+        JSON.stringify({ tobaccoTypeId, leafTypeId, moisturePercent, packingWeight, customerId })
       )
     } catch {
       // penyimpanan preferensi diabaikan jika gagal
     }
-  }, [laneId, tobaccoTypeId, leafTypeId, packingTypeId, moisturePercent, packingWeight, customerId])
+  }, [laneId, tobaccoTypeId, leafTypeId, moisturePercent, packingWeight, customerId])
 
   const [startingNew, setStartingNew] = useState(false)
   const [txDialogOpen, setTxDialogOpen] = useState(false)
@@ -222,7 +246,10 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
   } | null>(null)
 
   const selectedFarmer = farmerList.find((f) => f.id === farmerId)
-  const currentGrades = tobaccoTypes.find((t) => t.id === Number(tobaccoTypeId))?.grades ?? []
+  const currentGrades =
+    tobaccoTypes.find((t) => t.id === Number(tobaccoTypeId))?.grades
+      ? [...tobaccoTypes.find((t) => t.id === Number(tobaccoTypeId))!.grades].sort((a, b) => b.defaultPrice - a.defaultPrice)
+      : []
   const filteredFarmers = useMemo(() => {
     const q = searchTerm.toLowerCase()
     if (!q) return farmerList
@@ -537,9 +564,9 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
     </PageHeader>
 
         {/* ===== 3-COLUMN GRID ===== */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {/* ===== KOLOM A: Petani & Transaksi ===== */}
-          <div className="bg-panel border border-border rounded-xl p-4 pb-[18px] flex flex-col">
+          <div className="bg-panel border border-border rounded-xl p-3.5 pb-[14px] flex flex-col">
             <div className="flex items-center justify-between gap-2 mb-3">
               <p className="card-title-wf" style={{ margin: 0 }}>Petani &amp; Transaksi</p>
               <Button
@@ -674,7 +701,7 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
           </div>
 
           {/* ===== KOLOM B: Data Bale ===== */}
-          <div className="bg-panel border border-border rounded-xl p-4 pb-[18px]">
+          <div className="bg-panel border border-border rounded-xl p-3.5 pb-[14px]">
             <p className="card-title-wf">Data Bale</p>
 
             {/* Jenis Tembakau */}
@@ -697,7 +724,7 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
                 <select
                   value={leafTypeId}
                   onChange={(e) => setLeafTypeId(e.target.value)}
-                  className="field-input"
+                  className="field-input font-mono text-[14px]"
                 >
                   <option value="">Pilih…</option>
                   {leafTypes.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
@@ -730,7 +757,7 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
                     const found = packingTypes.find((p) => p.id === Number(val))
                     if (found) setPackingWeight(String(found.deductionWeight))
                   }}
-                  className="field-input"
+                  className="field-input font-mono text-[14px]"
                 >
                   <option value="">Pilih…</option>
                   {packingTypes.map((p) => (
@@ -798,7 +825,7 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
           </div>
 
           {/* ===== KOLOM C: Grade & Simpan ===== */}
-          <div className="bg-panel border border-border rounded-xl p-4 pb-[18px] flex flex-col">
+          <div className="bg-panel border border-border rounded-xl p-3.5 pb-[14px] flex flex-col md:col-span-2 lg:col-span-1">
             <p className="card-title-wf">Grade &amp; Harga</p>
 
             {/* Grade Grid */}
@@ -815,9 +842,15 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
                       key={g.id}
                       type="button"
                       onClick={() => handleGradeSelect(g.name, g.defaultPrice)}
-                      className={cn("grade-btn", isSelected && "grade-btn-active")}
+                      className={cn("grade-btn grade-btn-lg", isSelected && "grade-btn-active")}
                     >
-                      {g.name}
+                      <span className="inline-flex items-center gap-1.5">
+                        {!isSelected && (
+                          <span className={cn("size-2 rounded-full shrink-0", gradeTierClass(g.name, currentGrades))} />
+                        )}
+                        <span>{g.name}</span>
+                        {isSelected && <Check className="size-4 shrink-0" strokeWidth={3} />}
+                      </span>
                     </button>
                   )
                 })}
@@ -846,96 +879,91 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
           </div>
         </div>
 
-        {/* ===== STRIP: STICKER PREVIEW + MODE CETAK ===== */}
-        <div className="bg-panel border border-border rounded-xl p-4 pb-[18px]">
-          <div className="flex items-center justify-between gap-2 mb-3">
-            <p className="card-title-wf" style={{ margin: 0 }}>Sticker Barcode Preview</p>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setPreviewOpen((v) => !v)}
-              aria-expanded={previewOpen}
-              className="shrink-0"
-            >
-              {previewOpen ? (
-                <>
-                  <ChevronUp data-icon="inline-start" />
-                  Sembunyikan
-                </>
-              ) : (
-                <>
-                  <ChevronDown data-icon="inline-start" />
-                  Tampilkan
-                </>
-              )}
-            </Button>
-          </div>
+        {/* ===== STICKER PREVIEW (1 KOLOM) + DAFTAR BALE ===== */}
+        <div className="flex flex-col lg:flex-row gap-3">
+          {/* KOLOM STICKER */}
+          <div className="bg-panel border border-border rounded-xl p-3.5 pb-[14px] w-full lg:w-[190px] shrink-0">
+            <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+              <p className="card-title-wf" style={{ margin: 0 }}>QRcode Preview</p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => setPreviewOpen((v) => !v)}
+                aria-expanded={previewOpen}
+                aria-label={previewOpen ? "Sembunyikan preview sticker" : "Tampilkan preview sticker"}
+                className="shrink-0 size-7"
+              >
+                {previewOpen ? <ChevronUp /> : <ChevronDown />}
+              </Button>
+            </div>
 
-          {previewOpen && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
-              <StickerPreview
-                labelCode={previewLabelCode}
-                grade={previewGrade}
-                warehouse={warehouse}
-                lane={shortLane}
-                farmerName={previewFarmerName}
-              />
+            {previewOpen && (
+              <div className="flex flex-col gap-3 items-center">
+                <StickerPreview
+                  labelCode={previewLabelCode}
+                  grade={previewGrade}
+                  warehouse={warehouse}
+                  lane={shortLane}
+                  farmerName={previewFarmerName}
+                  size={72}
+                  className="w-[132px]"
+                />
 
-              <div>
-                <p className="text-[11px] font-medium text-muted-2 mb-1.5">Mode Cetak</p>
-                <ToggleGroup
-                  value={printMode === "auto" ? ["auto"] : ["manual"]}
-                  onValueChange={(v) => {
-                    const next = v[v.length - 1]
-                    if (next === "manual" || next === "auto") setPrintMode(next)
-                  }}
-                  size="sm"
-                  variant="outline"
-                  className="w-full [&_[data-slot='toggle-group-item']]:flex-1"
-                >
-                  <ToggleGroupItem value="manual">
-                    <MousePointerClick data-icon="inline-start" />
-                    Manual
-                  </ToggleGroupItem>
-                  <ToggleGroupItem value="auto">
-                    <Printer data-icon="inline-start" />
-                    Auto
-                  </ToggleGroupItem>
-                </ToggleGroup>
+                <div className="w-full">
+                  <p className="text-[10.5px] font-bold uppercase tracking-[0.06em] text-muted-2 mb-1">Mode Cetak</p>
+                  <ToggleGroup
+                    value={printMode === "auto" ? ["auto"] : ["manual"]}
+                    onValueChange={(v) => {
+                      const next = v[v.length - 1]
+                      if (next === "manual" || next === "auto") setPrintMode(next)
+                    }}
+                    size="sm"
+                    variant="outline"
+                    className="w-full [&_[data-slot='toggle-group-item']]:flex-1"
+                  >
+                    <ToggleGroupItem value="manual">
+                      <MousePointerClick data-icon="inline-start" />
+                      Manual
+                    </ToggleGroupItem>
+                    <ToggleGroupItem value="auto">
+                      <Printer data-icon="inline-start" />
+                      Auto
+                    </ToggleGroupItem>
+                  </ToggleGroup>
+                </div>
 
                 {lastItem && (
-                  <div className="pending-tag">
+                  <div className="pending-tag" style={{ marginTop: 0 }}>
                     <span className="size-1.5 rounded-full bg-amber shrink-0" />
                     <StatusPill status={lastItem.status as "GRADED" | "WEIGHED" | "CLOSED"} />
                     <span>— menunggu ditimbang</span>
                   </div>
                 )}
-              </div>
 
-              <div>
-                <p className="text-[11px] font-medium text-muted-2 mb-1.5">QR Code</p>
                 <button
                   type="button"
                   onClick={handlePrintSticker}
-                  className="btn-wf-ghost"
+                  className="w-full px-4 py-2 rounded-lg bg-panel-alt border border-border-soft text-[12px] font-bold text-foreground cursor-pointer hover:border-emerald/40 transition-colors"
                 >
                   Cetak QR Code
                 </button>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
 
-        {/* ===== TABLE: BALE HISTORY ===== */}
-        <BaleHistoryTable
-          items={farmerBaleItems}
-          syncingItems={farmerOptimisticBales}
-          pendingItems={pendingBaleItems}
-          farmerName={selectedFarmer?.name ?? null}
-          farmerNik={selectedFarmer?.nik ?? null}
-          onDelete={(id) => setBaleItems((prev) => prev.filter((b) => b.id !== id))}
-        />
+          {/* KOLOM DAFTAR BALE */}
+          <div className="flex-1 min-w-0 w-full h-full">
+            <BaleHistoryTable
+              items={farmerBaleItems}
+              syncingItems={farmerOptimisticBales}
+              pendingItems={pendingBaleItems}
+              farmerName={selectedFarmer?.name ?? null}
+              farmerNik={selectedFarmer?.nik ?? null}
+              onDelete={(id) => setBaleItems((prev) => prev.filter((b) => b.id !== id))}
+            />
+          </div>
+        </div>
 
     {/* Print Sticker hidden */}
     <div style={{ display: "none" }}>
