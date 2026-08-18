@@ -282,7 +282,9 @@ export default function LoginPage() {
         setSubmitting(false)
         return
       }
-      router.push("/")
+      const params = new URLSearchParams(window.location.search)
+      const callbackUrl = params.get("callbackUrl") ?? "/"
+      router.push(callbackUrl.startsWith("/") && !callbackUrl.startsWith("//") ? callbackUrl : "/")
     } catch {
       setError("Terjadi kesalahan koneksi. Silakan coba lagi.")
       setSubmitting(false)
