@@ -50,3 +50,13 @@ export type TobaccoTypeInput = z.infer<typeof tobaccoTypeSchema>
 export type LeafTypeInput = z.infer<typeof leafTypeSchema>
 export type PackingTypeInput = z.infer<typeof packingTypeSchema>
 export type GradeInput = z.infer<typeof gradeSchema>
+
+export const cashEntrySchema = z.object({
+  category: z.enum(["KAS_PEMBELIAN", "KAS_OPERASIONAL"]),
+  type: z.enum(["MASUK", "KELUAR"]),
+  amount: z.number().positive("Jumlah harus lebih dari 0"),
+  note: z.string().max(500, "Keterangan terlalu panjang").optional(),
+  warehouseId: z.number().int().positive("Gudang harus dipilih").optional(),
+})
+
+export type CashEntryInput = z.infer<typeof cashEntrySchema>

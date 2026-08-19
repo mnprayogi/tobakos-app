@@ -129,12 +129,23 @@ export async function disburseLoan(input: DisburseInput) {
       }
     }
 
-    await tx.loanEntry.create({
+    const entry = await tx.loanEntry.create({
       data: {
         loanId: loan.id,
         type: "DISBURSEMENT",
         amount,
         note: input.note?.trim() || null,
+        createdBy: actor,
+      },
+    })
+
+    await tx.cashEntry.create({
+      data: {
+        warehouseId: loan.warehouseId,
+        category: "KAS_PEMBELIAN",
+        type: "KELUAR",
+        amount,
+        loanEntryId: entry.id,
         createdBy: actor,
       },
     })
@@ -147,7 +158,9 @@ export async function disburseLoan(input: DisburseInput) {
 
   revalidatePath("/admin/loans")
   revalidatePath("/admin/transactions")
+  revalidatePath("/admin/kas")
   publishEvent("loan.updated")
+  publishEvent("cash.updated")
   return result
 }
 
@@ -189,13 +202,24 @@ export async function repayLoanCash(input: RepayInput) {
       throw new Error("Jumlah pembayaran harus kelipatan 100 Rupiah")
     }
 
-    await tx.loanEntry.create({
+    const entry = await tx.loanEntry.create({
       data: {
         loanId: loan.id,
         type: "REPAYMENT",
         method: "TUNAI",
         amount,
         note: input.note?.trim() || null,
+        createdBy: actor,
+      },
+    })
+
+    await tx.cashEntry.create({
+      data: {
+        warehouseId: loan.warehouseId,
+        category: "KAS_PEMBELIAN",
+        type: "MASUK",
+        amount,
+        loanEntryId: entry.id,
         createdBy: actor,
       },
     })
@@ -211,7 +235,9 @@ export async function repayLoanCash(input: RepayInput) {
 
   revalidatePath("/admin/loans")
   revalidatePath("/admin/transactions")
+  revalidatePath("/admin/kas")
   publishEvent("loan.updated")
+  publishEvent("cash.updated")
   return result
 }
 

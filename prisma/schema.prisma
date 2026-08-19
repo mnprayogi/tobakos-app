@@ -84,12 +84,13 @@ model Warehouse {
   code      String   @unique
   name      String
   address   String?  @db.Text
-  active    Boolean  @default(true)
-  lanes     Lane[]
-  purchases Purchase[]
-  loans     FarmerLoan[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  active      Boolean      @default(true)
+  lanes       Lane[]
+  purchases   Purchase[]
+  loans       FarmerLoan[]
+  cashEntries CashEntry[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 
   @@map("warehouses")
 }
@@ -138,6 +139,7 @@ model Purchase {
   items             PurchaseItem[]
   payments          Payment[]
   loanEntries       LoanEntry[]
+  cashEntries       CashEntry[]
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
 
@@ -157,6 +159,7 @@ model Payment {
   voidedAt       DateTime?
   voidedBy       String?
   loanEntry      LoanEntry?
+  cashEntry      CashEntry?
 
   @@map("payments")
 }
@@ -242,8 +245,32 @@ model LoanEntry {
   createdAt  DateTime       @default(now())
   voidedAt   DateTime?
   voidedBy   String?
+  cashEntry  CashEntry?
 
   @@map("loan_entries")
+}
+
+model CashEntry {
+  id          Int           @id @default(autoincrement())
+  warehouse   Warehouse     @relation(fields: [warehouseId], references: [id])
+  warehouseId Int
+  category    CashCategory
+  type        CashFlowType
+  amount      Decimal       @db.Decimal(15, 2)
+  note        String?       @db.Text
+  purchase    Purchase?     @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+  purchaseId  Int?
+  payment     Payment?      @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  paymentId   Int?          @unique
+  loanEntry   LoanEntry?    @relation(fields: [loanEntryId], references: [id], onDelete: SetNull)
+  loanEntryId Int?          @unique
+  createdBy   String?
+  createdAt   DateTime      @default(now())
+  voidedAt    DateTime?
+  voidedBy    String?
+
+  @@index([warehouseId, createdAt])
+  @@map("cash_entries")
 }
 
 model Account {
@@ -344,4 +371,14 @@ enum LoanEntryType {
 enum LoanMethod {
   TUNAI
   POTONG_TRANSAKSI
+}
+
+enum CashCategory {
+  KAS_PEMBELIAN
+  KAS_OPERASIONAL
+}
+
+enum CashFlowType {
+  MASUK
+  KELUAR
 }

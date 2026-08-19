@@ -174,6 +174,20 @@ export async function recordPayment(purchaseId: number, input: PaymentInput) {
       },
     })
 
+    if (input.method === "TUNAI" && amount > 0.005 && purchase.warehouseId != null) {
+      await tx.cashEntry.create({
+        data: {
+          warehouseId: purchase.warehouseId,
+          category: "KAS_PEMBELIAN",
+          type: "KELUAR",
+          amount,
+          purchaseId,
+          paymentId: payment.id,
+          createdBy: actor,
+        },
+      })
+    }
+
     let loanEntryId: number | null = null
     if (loanDeduction > 0.005) {
       const isLoanSettled = newLoanBalance != null && Math.abs(newLoanBalance) <= 0.005
@@ -244,7 +258,9 @@ export async function recordPayment(purchaseId: number, input: PaymentInput) {
   revalidatePath("/admin/transactions")
   revalidatePath("/admin/debt")
   revalidatePath("/admin/loans")
+  revalidatePath("/admin/kas")
   publishEvent("payment.recorded", purchaseLaneId)
+  publishEvent("cash.updated")
   return result
 }
 
@@ -284,6 +300,11 @@ export async function voidPayment(purchaseId: number, paymentId: number) {
 
     await tx.payment.update({
       where: { id: paymentId },
+      data: { voidedAt: new Date(), voidedBy: actor },
+    })
+
+    await tx.cashEntry.updateMany({
+      where: { paymentId },
       data: { voidedAt: new Date(), voidedBy: actor },
     })
 
@@ -347,8 +368,10 @@ export async function voidPayment(purchaseId: number, paymentId: number) {
 
   revalidatePath("/admin/transactions")
   revalidatePath("/admin/debt")
+  revalidatePath("/admin/kas")
   if (result.loanTouched) revalidatePath("/admin/loans")
   publishEvent("payment.voided", purchaseLaneId)
+  publishEvent("cash.updated")
   if (result.loanTouched) publishEvent("loan.updated")
   return result
 }
