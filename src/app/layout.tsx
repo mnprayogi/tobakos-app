@@ -49,6 +49,9 @@ export default function RootLayout({
       className={`${inter.variable} ${jetbrainsMono.variable} h-full antialiased dark`}
       suppressHydrationWarning
     >
+      <head>
+        <meta name="interactive-widget" content="resizes-content" />
+      </head>
       <body className="min-h-full">
         <SerwistProvider swUrl="/serwist/sw.js">
           {children}
