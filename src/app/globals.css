@@ -314,9 +314,11 @@
   font-size: 14px;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
-  &:hover {
-    border-color: rgba(34, 201, 141, 0.45);
-    background: #16233a;
+  @media (hover: hover) {
+    &:hover {
+      border-color: rgba(34, 201, 141, 0.45);
+      background: #16233a;
+    }
   }
 }
 
@@ -325,6 +327,13 @@
   color: #04150e;
   border-color: #22c98d;
   box-shadow: 0 0 0 3px rgba(34, 201, 141, 0.25);
+  @media (hover: hover) {
+    &:hover {
+      background: #22c98d;
+      border-color: #22c98d;
+      box-shadow: 0 0 0 3px rgba(34, 201, 141, 0.25);
+    }
+  }
 }
 
 @utility grade-btn-lg {
