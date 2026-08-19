@@ -340,6 +340,16 @@ model SystemSetting {
   @@map("system_settings")
 }
 
+model AppEvent {
+  id     BigInt   @id @default(autoincrement())
+  type   String
+  laneId Int?
+  at     DateTime @default(now())
+
+  @@index([at])
+  @@map("app_events")
+}
+
 enum PurchaseStatus {
   DRAFT
   WEIGHED
