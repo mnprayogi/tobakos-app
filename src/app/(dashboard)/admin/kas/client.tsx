@@ -220,7 +220,7 @@ export function CashClient({
                         <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border ${
                           e.category === "KAS_PEMBELIAN"
                             ? "bg-amber/12 text-amber border-amber/35"
-                            : "bg-muted/12 text-muted border-border"
+                            : "bg-blue/12 text-blue border-blue/40"
                         }`}>
                           {categoryLabel(e.category)}
                         </span>

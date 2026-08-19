@@ -4,7 +4,7 @@ const DONUT_COLORS: Record<string, string> = {
   DRAFT: "#f2b64c",
   WEIGHED: "#22c98d",
   APPROVED: "#60a5fa",
-  PAID: "#7c8aa8",
+  PAID: "#60a5fa",
 }
 
 const STATUS_LABEL: Record<string, string> = {

@@ -117,7 +117,7 @@ export function LoansClient({
                     <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border ${
                       l.status === "ACTIVE" && l.balance > 0.005
                         ? "bg-amber/12 text-amber border-amber/35"
-                        : "bg-muted/12 text-muted border-border"
+                        : "bg-blue/12 text-blue border-blue/40"
                     }`}>
                       {l.status === "ACTIVE" && l.balance > 0.005 ? "Berhutang" : "Lunas"}
                     </span>

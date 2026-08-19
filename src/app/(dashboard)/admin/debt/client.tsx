@@ -17,7 +17,7 @@ import { useSse } from "@/hooks/useSse"
 const statusStyle: Record<DebtStatus, string> = {
   HUTANG: "bg-amber/12 text-amber border border-amber/35",
   DP: "bg-emerald/12 text-emerald border border-emerald/35",
-  LUNAS: "bg-muted/12 text-muted border border-border",
+  LUNAS: "bg-blue/12 text-blue border border-blue/40",
 }
 
 const statusLabel: Record<DebtStatus, string> = {
@@ -39,7 +39,7 @@ const filterActiveStyle: Record<DebtFilter, string> = {
   SEMUA: "bg-emerald text-primary-foreground border-emerald",
   HUTANG: "bg-amber/15 text-amber border-amber/40",
   DP: "bg-emerald/15 text-emerald border-emerald/40",
-  LUNAS: "bg-muted/15 text-muted border-border-soft",
+  LUNAS: "bg-blue/15 text-blue border-blue/40",
 }
 
 export function DebtClient({

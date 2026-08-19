@@ -75,7 +75,7 @@ export function LoanBookClient({ book, companyName, userName }: { book: LoanBook
             </span>
           </div>
           <span className={`inline-block px-2.5 py-1 rounded-full text-[10.5px] font-bold border ${
-            active ? "bg-amber/12 text-amber border-amber/35" : "bg-muted/12 text-muted border-border"
+            active ? "bg-amber/12 text-amber border-amber/35" : "bg-blue/12 text-blue border-blue/40"
           }`}>
             {active ? "Berhutang" : "Lunas"}
           </span>
