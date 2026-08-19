@@ -93,6 +93,7 @@ export interface DisburseInput {
   farmerId: number
   amount: number
   note?: string | null
+  warehouseId?: number
 }
 
 export async function disburseLoan(input: DisburseInput) {
@@ -103,8 +104,10 @@ export async function disburseLoan(input: DisburseInput) {
   if (!isMultipleOf100(amount)) throw new Error("Jumlah pinjaman harus kelipatan 100 Rupiah")
 
   const scope = await resolveWarehouseScope()
-  const warehouseId = scope.mode === "scoped" ? scope.warehouseId : null
-  if (warehouseId == null) throw new Error("Akun Anda belum ditugaskan ke gudang")
+  const warehouseId = scope.mode === "scoped" ? scope.warehouseId : input.warehouseId
+  if (warehouseId == null) throw new Error("Pilih gudang terlebih dahulu")
+  const warehouseExists = await prisma.warehouse.findUnique({ where: { id: warehouseId }, select: { id: true } })
+  if (!warehouseExists) throw new Error("Gudang tidak ditemukan")
 
   const farmer = await prisma.farmer.findUnique({ where: { id: input.farmerId } })
   if (!farmer) throw new Error("Petani tidak ditemukan")

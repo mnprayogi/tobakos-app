@@ -20,13 +20,23 @@ export default async function LoansPage() {
     )
   }
 
-  const [loans, farmers] = await Promise.all([
+  const [loans, farmers, warehouses] = await Promise.all([
     getLoansData(),
     prisma.farmer.findMany({
       orderBy: { name: "asc" },
       select: { id: true, name: true, nik: true },
     }),
+    scope.mode === "all"
+      ? prisma.warehouse.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } })
+      : Promise.resolve([]),
   ])
 
-  return <LoansClient loans={loans} farmers={farmers.map((f) => ({ id: f.id, name: f.name, nik: f.nik }))} scope={scope} />
+  return (
+    <LoansClient
+      loans={loans}
+      farmers={farmers.map((f) => ({ id: f.id, name: f.name, nik: f.nik }))}
+      warehouses={warehouses.map((w) => ({ id: w.id, name: w.name }))}
+      scope={scope}
+    />
+  )
 }

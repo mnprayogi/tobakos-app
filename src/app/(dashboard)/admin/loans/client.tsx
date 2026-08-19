@@ -6,6 +6,7 @@ import { formatCurrency } from "@/lib/utils"
 import { getLoansData, type LoanAccount } from "@/lib/actions/loans"
 import type { WarehouseScope } from "@/lib/actions/scope"
 import { LoanDialog, type LoanDialogState, type LoanFarmer } from "@/components/admin/loan-dialog"
+import type { LoanWarehouse } from "@/components/admin/loan-dialog"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Wallet } from "lucide-react"
 import { PageHeader } from "@/components/shared/page-header"
@@ -14,10 +15,12 @@ import { useSse } from "@/hooks/useSse"
 export function LoansClient({
   loans: initial,
   farmers,
+  warehouses,
   scope,
 }: {
   loans: LoanAccount[]
   farmers: LoanFarmer[]
+  warehouses: LoanWarehouse[]
   scope: WarehouseScope
 }) {
   const [loans, setLoans] = useState(initial)
@@ -145,6 +148,7 @@ export function LoansClient({
       <LoanDialog
         state={dialog}
         farmers={farmers}
+        warehouses={warehouses}
         warehouseName={scoped ? scope.warehouseName : undefined}
         onClose={() => setDialog(null)}
         onDone={refresh}

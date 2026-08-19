@@ -55,7 +55,7 @@ export const cashEntrySchema = z.object({
   category: z.enum(["KAS_PEMBELIAN", "KAS_OPERASIONAL"]),
   type: z.enum(["MASUK", "KELUAR"]),
   amount: z.number().positive("Jumlah harus lebih dari 0"),
-  note: z.string().max(500, "Keterangan terlalu panjang").optional(),
+  note: z.string().max(500, "Keterangan terlalu panjang").nullish(),
   warehouseId: z.number().int().positive("Gudang harus dipilih").optional(),
 })
 

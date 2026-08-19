@@ -13,6 +13,11 @@ export interface LoanFarmer {
   nik: string | null
 }
 
+export interface LoanWarehouse {
+  id: number
+  name: string
+}
+
 export interface LoanDialogState {
   mode: "disburse" | "repay"
   loanId?: number
@@ -23,13 +28,15 @@ export interface LoanDialogState {
 interface Props {
   state: LoanDialogState | null
   farmers?: LoanFarmer[]
+  warehouses?: LoanWarehouse[]
   warehouseName?: string
   onClose: () => void
   onDone?: () => void
 }
 
-export function LoanDialog({ state, farmers = [], warehouseName, onClose, onDone }: Props) {
+export function LoanDialog({ state, farmers = [], warehouses = [], warehouseName, onClose, onDone }: Props) {
   const [farmerId, setFarmerId] = useState<number | null>(null)
+  const [warehouseId, setWarehouseId] = useState<number | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [amount, setAmount] = useState("")
   const [note, setNote] = useState("")
@@ -60,10 +67,15 @@ export function LoanDialog({ state, farmers = [], warehouseName, onClose, onDone
         toast.error("Pilih petani terlebih dahulu")
         return
       }
+      if (warehouses.length > 0 && warehouseId == null) {
+        toast.error("Pilih gudang terlebih dahulu")
+        return
+      }
       if (!isMultipleOf100(parsed)) {
         toast.error("Jumlah pinjaman harus kelipatan 100 Rupiah")
         return
-      }    }
+      }
+    }
     if (state.mode === "repay" && parsed > maxAmount + 0.005) {
       toast.error(`Melebihi sisa hutang (${formatCurrency(maxAmount)})`)
       return
@@ -71,7 +83,7 @@ export function LoanDialog({ state, farmers = [], warehouseName, onClose, onDone
     setSubmitting(true)
     try {
       if (state.mode === "disburse") {
-        await disburseLoan({ farmerId: farmerId!, amount: roundMoney(parsed), note: note || null })
+        await disburseLoan({ farmerId: farmerId!, amount: roundMoney(parsed), note: note || null, warehouseId: warehouseId ?? undefined })
         toast.success("Pinjaman dicatat")
       } else {
         await repayLoanCash({ loanId: state.loanId!, amount: roundMoney(parsed), note: note || null })
@@ -90,6 +102,7 @@ export function LoanDialog({ state, farmers = [], warehouseName, onClose, onDone
     if (!open) {
       onClose()
       setFarmerId(null)
+      setWarehouseId(null)
       setSearchTerm("")
       setAmount("")
       setNote("")
@@ -112,6 +125,23 @@ export function LoanDialog({ state, farmers = [], warehouseName, onClose, onDone
               <p className="text-[10.5px] text-muted-2">
                 Pinjaman dicatat ke buku <b className="text-foreground">{warehouseName}</b>.
               </p>
+            )}
+            {state.mode === "disburse" && warehouses.length > 0 && (
+              <div>
+                <label className="block text-[11px] font-bold text-muted-foreground mb-1">Gudang *</label>
+                <select
+                  value={warehouseId ?? ""}
+                  onChange={(e) => setWarehouseId(e.target.value ? Number(e.target.value) : null)}
+                  className="w-full p-2 bg-panel-alt border border-border-soft text-foreground text-sm rounded-lg outline-none"
+                >
+                  <option value="">Pilih gudang…</option>
+                  {warehouses.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             )}
             {state.mode === "disburse" && (
               <div>
