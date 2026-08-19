@@ -720,7 +720,7 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
             {/* Jenis Daun */}
             <div className="field-wf">
               <label className="field-wf-label">Jenis Daun</label>
-              {leafTypes.length > 5 ? (
+              {leafTypes.length > 2 ? (
                 <select
                   value={leafTypeId}
                   onChange={(e) => setLeafTypeId(e.target.value)}
@@ -748,7 +748,7 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
             {/* Jenis Packing */}
             <div className="field-wf">
               <label className="field-wf-label">Jenis Packing</label>
-              {packingTypes.length > 5 ? (
+              {packingTypes.length > 2 ? (
                 <select
                   value={packingTypeId}
                   onChange={(e) => {
