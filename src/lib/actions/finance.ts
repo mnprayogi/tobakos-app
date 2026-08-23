@@ -2,7 +2,14 @@
 
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/db"
-import { isMultipleOf100, negotiateItems, roundMoney, roundRupiah } from "@/lib/calculations"
+import {
+  calculateSubtotal,
+  isMultipleOf100,
+  negotiateItems,
+  roundMoney,
+  roundRupiah,
+  roundWeight,
+} from "@/lib/calculations"
 import { requireRoles } from "@/lib/roles"
 import { publishEvent } from "@/lib/events"
 import { resolveWarehouseScope } from "@/lib/actions/scope"
@@ -381,7 +388,14 @@ export async function reopenTransaction(purchaseId: number) {
 
   const purchase = await prisma.purchase.findUnique({
     where: { id: purchaseId },
-    include: { payments: { where: { voidedAt: null }, select: { id: true } } },
+    include: {
+      payments: { where: { voidedAt: null }, select: { id: true } },
+      items: {
+        where: { status: { in: ["GRADED", "WEIGHED", "CLOSED"] } },
+        orderBy: { inputOrder: "asc" },
+        select: { id: true, netWeight: true, pricePerKg: true },
+      },
+    },
   })
   if (!purchase) throw new Error("Transaksi tidak ditemukan")
   if (purchase.status !== "APPROVED" && purchase.status !== "PAID")
@@ -391,16 +405,42 @@ export async function reopenTransaction(purchaseId: number) {
   if (purchase.payments.length > 0)
     throw new Error("Transaksi sudah memiliki pembayaran — tidak bisa dibuka kembali")
 
-  await prisma.$transaction([
-    prisma.purchase.update({
+  const hadNegotiation = purchase.originalTotalPrice != null
+
+  await prisma.$transaction(async (tx) => {
+    for (const item of purchase.items) {
+      const subtotal = roundWeight(
+        calculateSubtotal(Number(item.netWeight ?? 0), Number(item.pricePerKg ?? 0)),
+        "normal",
+        2
+      )
+      await tx.purchaseItem.update({
+        where: { id: item.id },
+        data: { priceAdjustment: 0, subtotal },
+      })
+    }
+
+    await tx.purchase.update({
       where: { id: purchaseId },
-      data: { status: "WEIGHED", approvedBy: null, paidBy: null },
-    }),
-    prisma.purchaseItem.updateMany({
+      data: {
+        status: "WEIGHED",
+        approvedBy: null,
+        paidBy: null,
+        ...(hadNegotiation
+          ? {
+              totalPrice: purchase.originalTotalPrice!,
+              originalTotalPrice: null,
+              priceReviewNote: null,
+            }
+          : {}),
+      },
+    })
+
+    await tx.purchaseItem.updateMany({
       where: { purchaseId, status: "CLOSED" },
       data: { status: "WEIGHED", closedBy: null },
-    }),
-  ])
+    })
+  })
 
   revalidatePath("/admin/transactions")
   revalidatePath("/admin/debt")
