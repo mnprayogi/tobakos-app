@@ -9,6 +9,7 @@ export default async function Home() {
   }
 
   const role = session.user.role
+  if (role === "CUSTOMER") redirect("/portal")
   if (role === "ADMIN") redirect("/dashboard")
   if (role === "GRADER") redirect("/dashboard")
   if (role === "OPERATOR") redirect("/dashboard")

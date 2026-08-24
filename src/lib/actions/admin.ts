@@ -247,6 +247,16 @@ export async function deleteGrade(id: number) {
 
 // ─── User ────────────────────────────────────────────
 
+function resolveCustomerLink(role: string, customerId?: number | null): number | null {
+  if (role === "CUSTOMER") {
+    if (customerId == null) {
+      throw new Error("Akun CUSTOMER wajib ditautkan ke mitra bisnis")
+    }
+    return customerId
+  }
+  return null
+}
+
 export async function createUser(data: {
   name: string
   username: string
@@ -254,11 +264,21 @@ export async function createUser(data: {
   password?: string
   role: string
   laneId?: number | null
+  customerId?: number | null
 }) {
   await requireRoles("ADMIN")
+  const customerId = resolveCustomerLink(data.role, data.customerId)
   try {
     const user = await prisma.user.create({
-      data: { ...data, laneId: data.laneId ?? null },
+      data: {
+        name: data.name,
+        username: data.username,
+        email: data.email,
+        password: data.password,
+        role: data.role,
+        laneId: data.role === "CUSTOMER" ? null : data.laneId ?? null,
+        customerId,
+      },
     })
     revalidatePath("/admin/master-data")
     return user
@@ -269,13 +289,36 @@ export async function createUser(data: {
 
 export async function updateUser(
   id: string,
-  data: { name: string; username: string; email?: string; role: string; laneId?: number | null }
+  data: { name: string; username: string; email?: string; role: string; laneId?: number | null; customerId?: number | null }
 ) {
   await requireRoles("ADMIN")
+  let customerId: number | null
+  try {
+    customerId = resolveCustomerLink(data.role, data.customerId)
+  } catch (err) {
+    // saat edit boleh mempertahankan link lama bila tidak dikirim
+    if (data.customerId == null) {
+      const existing = await prisma.user.findUnique({ where: { id }, select: { role: true, customerId: true } })
+      if (!existing) throw new Error("User tidak ditemukan")
+      customerId = data.role === "CUSTOMER" ? existing.customerId : null
+      if (data.role === "CUSTOMER" && customerId == null) {
+        throw new Error("Akun CUSTOMER wajib ditautkan ke mitra bisnis")
+      }
+    } else {
+      throw err
+    }
+  }
   try {
     const user = await prisma.user.update({
       where: { id },
-      data: { ...data, laneId: data.laneId ?? null },
+      data: {
+        name: data.name,
+        username: data.username,
+        email: data.email,
+        role: data.role,
+        laneId: data.role === "CUSTOMER" ? null : data.laneId ?? null,
+        customerId,
+      },
     })
     revalidatePath("/admin/master-data")
     return user

@@ -17,6 +17,15 @@ export const proxy = auth((req) => {
     return NextResponse.next()
   }
 
+  const isPortal = pathname === "/portal" || pathname.startsWith("/portal/")
+  if (isPortal) {
+    if (role !== "CUSTOMER") return deny()
+    return NextResponse.next()
+  }
+  if (role === "CUSTOMER") {
+    return NextResponse.redirect(new URL("/portal", req.url))
+  }
+
   if (pathname.startsWith("/pos-1") && role !== "GRADER" && role !== "ADMIN") {
     return deny()
   }

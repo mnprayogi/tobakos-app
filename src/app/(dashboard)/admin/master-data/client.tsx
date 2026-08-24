@@ -72,6 +72,8 @@ interface User {
     name: string
     warehouse: { id: number; code: string; name: string }
   } | null
+  customerId: number | null
+  customer: { id: number; name: string } | null
 }
 interface WarehouseData { id: number; code: string; name: string; address: string | null; active: boolean }
 interface LaneData { id: number; code: string; name: string; warehouseId: number; active: boolean; warehouse: { id: number; code: string; name: string } }
@@ -142,7 +144,7 @@ export function MasterDataClient(props: Props) {
       {activeTab === "grade" && <GradesTab grades={props.grades} tobaccoTypes={props.tobaccoTypes} />}
       {activeTab === "gudang" && <WarehousesTab warehouses={props.warehouses} />}
       {activeTab === "jalur" && <LanesTab lanes={props.lanes} warehouses={props.warehouses} />}
-      {activeTab === "users" && <UsersTab users={props.users} lanes={props.lanes} />}
+      {activeTab === "users" && <UsersTab users={props.users} lanes={props.lanes} customers={props.customers} />}
     </div>
   )
 }
@@ -917,41 +919,46 @@ function LanesTab({ lanes: initial, warehouses }: { lanes: LaneData[]; warehouse
   )
 }
 
-function UsersTab({ users: initial, lanes }: { users: User[]; lanes: LaneData[] }) {
+function UsersTab({ users: initial, lanes, customers }: { users: User[]; lanes: LaneData[]; customers: Customer[] }) {
   const [list, setList] = useState(initial)
   const [nama, setNama] = useState("")
   const [username, setUsername] = useState("")
   const [email, setEmail] = useState("")
   const [role, setRole] = useState("GRADER")
   const [laneId, setLaneId] = useState("")
+  const [customerId, setCustomerId] = useState("")
   const [password, setPassword] = useState("")
   const [editing, setEditing] = useState<User | null>(null)
 
-  function resetForm() { setNama(""); setUsername(""); setEmail(""); setRole("GRADER"); setLaneId(""); setPassword(""); setEditing(null) }
+  function resetForm() { setNama(""); setUsername(""); setEmail(""); setRole("GRADER"); setLaneId(""); setCustomerId(""); setPassword(""); setEditing(null) }
 
   function startEdit(u: User) {
-    setEditing(u); setNama(u.name ?? ""); setUsername(u.username ?? ""); setEmail(u.email ?? ""); setRole(u.role); setLaneId(u.laneId ? String(u.laneId) : ""); setPassword(""); window.scrollTo({ top: 0, behavior: "smooth" })
+    setEditing(u); setNama(u.name ?? ""); setUsername(u.username ?? ""); setEmail(u.email ?? ""); setRole(u.role); setLaneId(u.laneId ? String(u.laneId) : ""); setCustomerId(u.customerId ? String(u.customerId) : ""); setPassword(""); window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
   function normalizeUser(u: Awaited<ReturnType<typeof createUser>>): User {
     const lane = lanes.find((l) => l.id === u.laneId) ?? null
+    const customer = customers.find((c) => c.id === u.customerId) ?? null
     return {
       ...u,
       lane: lane ? { id: lane.id, code: lane.code, name: lane.name, warehouse: lane.warehouse } : null,
+      customer: customer ? { id: customer.id, name: customer.name } : null,
     }
   }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
     if (!nama.trim() || !username.trim()) { toast.error("Nama dan username harus diisi"); return }
-    const assignedLaneId = laneId ? Number(laneId) : null
+    const assignedLaneId = role === "CUSTOMER" ? null : laneId ? Number(laneId) : null
+    const assignedCustomerId = role === "CUSTOMER" ? (customerId ? Number(customerId) : null) : null
+    if (role === "CUSTOMER" && assignedCustomerId == null) { toast.error("Akun CUSTOMER wajib ditautkan ke mitra bisnis"); return }
     try {
       if (editing) {
-        const updated = await updateUser(editing.id, { name: nama, username, email: email || undefined, role, laneId: assignedLaneId })
+        const updated = await updateUser(editing.id, { name: nama, username, email: email || undefined, role, laneId: assignedLaneId, customerId: assignedCustomerId })
         setList((prev) => prev.map((u) => (u.id === updated.id ? normalizeUser(updated) : u)))
         toast.success("User diperbarui")
       } else {
-        const created = await createUser({ name: nama, username, email: email || undefined, password: password || undefined, role, laneId: assignedLaneId })
+        const created = await createUser({ name: nama, username, email: email || undefined, password: password || undefined, role, laneId: assignedLaneId, customerId: assignedCustomerId })
         setList((prev) => [...prev, normalizeUser(created)])
         toast.success("User ditambahkan")
       }
@@ -969,7 +976,7 @@ function UsersTab({ users: initial, lanes }: { users: User[]; lanes: LaneData[] 
     } catch (err) { toast.error((err as Error).message) }
   }
 
-  const roleOptions = ["GRADER", "OPERATOR", "FINANCE", "ADMIN", "OWNER", "SUPER_ADMIN"]
+  const roleOptions = ["GRADER", "OPERATOR", "FINANCE", "ADMIN", "OWNER", "CUSTOMER", "SUPER_ADMIN"]
 
   const lanesByWarehouse = lanes.reduce<Record<string, LaneData[]>>((acc, lane) => {
     const key = lane.warehouse.code
@@ -1006,20 +1013,32 @@ function UsersTab({ users: initial, lanes }: { users: User[]; lanes: LaneData[] 
             {roleOptions.map((r) => <option key={r} value={r}>{r}</option>)}
           </select>
         </div>
-        <div>
-          <label className="block text-[11px] font-bold text-muted-foreground mb-1">Jalur Kerja</label>
-          <select value={laneId} onChange={(e) => setLaneId(e.target.value)}
-            className="w-full p-2 bg-panel-alt border border-border-soft text-foreground text-xs font-semibold rounded-lg outline-none">
-            <option value="">Tidak ditugaskan (pilih manual)</option>
-            {Object.entries(lanesByWarehouse).map(([warehouseCode, warehouseLanes]) => (
-              <optgroup key={warehouseCode} label={`${warehouseCode} · ${warehouseLanes[0].warehouse.name}`}>
-                {warehouseLanes.map((lane) => (
-                  <option key={lane.id} value={lane.id}>{lane.code} — {lane.name}</option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
-        </div>
+        {role === "CUSTOMER" ? (
+          <div>
+            <label className="block text-[11px] font-bold text-muted-foreground mb-1">Mitra Bisnis *</label>
+            <select required value={customerId} onChange={(e) => setCustomerId(e.target.value)}
+              className="w-full p-2 bg-panel-alt border border-border-soft text-foreground text-xs font-semibold rounded-lg outline-none">
+              <option value="">— Pilih Mitra Bisnis —</option>
+              {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <p className="mt-1 text-[10px] text-muted-2">Akun ini hanya bisa mengakses Portal Mitra (read-only).</p>
+          </div>
+        ) : (
+          <div>
+            <label className="block text-[11px] font-bold text-muted-foreground mb-1">Jalur Kerja</label>
+            <select value={laneId} onChange={(e) => setLaneId(e.target.value)}
+              className="w-full p-2 bg-panel-alt border border-border-soft text-foreground text-xs font-semibold rounded-lg outline-none">
+              <option value="">Tidak ditugaskan (pilih manual)</option>
+              {Object.entries(lanesByWarehouse).map(([warehouseCode, warehouseLanes]) => (
+                <optgroup key={warehouseCode} label={`${warehouseCode} · ${warehouseLanes[0].warehouse.name}`}>
+                  {warehouseLanes.map((lane) => (
+                    <option key={lane.id} value={lane.id}>{lane.code} — {lane.name}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </div>
+        )}
         {!editing && (
           <div>
             <label className="block text-[11px] font-bold text-muted-foreground mb-1">Password</label>
@@ -1047,7 +1066,15 @@ function UsersTab({ users: initial, lanes }: { users: User[]; lanes: LaneData[] 
                 <div className="text-muted-foreground font-mono text-[11px] mt-0.5">
                   @{u.username} {u.email && `• ${u.email}`}
                 </div>
-                {u.lane ? (
+                {u.role === "CUSTOMER" ? (
+                  u.customer ? (
+                    <div className="text-[11px] text-foreground/70 mt-1">
+                      <span className="font-mono text-blue font-bold">Mitra</span> — {u.customer.name}
+                    </div>
+                  ) : (
+                    <div className="text-[11px] text-red-deduction mt-1">Belum ditautkan ke mitra</div>
+                  )
+                ) : u.lane ? (
                   <div className="text-[11px] text-foreground/70 mt-1">
                     <span className="font-mono text-emerald font-bold">{u.lane.code}</span> — {u.lane.warehouse.code} · {u.lane.name}
                   </div>
@@ -1057,7 +1084,7 @@ function UsersTab({ users: initial, lanes }: { users: User[]; lanes: LaneData[] 
               </div>
               <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                  u.role === "ADMIN" ? "bg-amber/12 text-amber" : u.role === "SUPER_ADMIN" ? "bg-emerald/12 text-emerald" : u.role === "OPERATOR" ? "bg-emerald/12 text-emerald" : u.role === "FINANCE" ? "bg-amber/12 text-amber" : "bg-muted text-muted-foreground"
+                  u.role === "ADMIN" ? "bg-amber/12 text-amber" : u.role === "SUPER_ADMIN" ? "bg-emerald/12 text-emerald" : u.role === "OPERATOR" ? "bg-emerald/12 text-emerald" : u.role === "FINANCE" ? "bg-amber/12 text-amber" : u.role === "CUSTOMER" ? "bg-blue/12 text-blue" : "bg-muted text-muted-foreground"
                 }`}>
                   {u.role}
                 </span>

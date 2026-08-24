@@ -27,6 +27,7 @@ model Customer {
   phone         String?
   address       String?        @db.Text
   purchaseItems PurchaseItem[]
+  users         User[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
@@ -314,6 +315,8 @@ model User {
   role           String    @default("GRADER")
   lane           Lane?     @relation(fields: [laneId], references: [id], onDelete: SetNull)
   laneId         Int?
+  customer       Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  customerId     Int?
   accounts       Account[]
   sessions       Session[]
   createdAt      DateTime  @default(now())
