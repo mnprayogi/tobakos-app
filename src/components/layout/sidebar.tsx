@@ -48,6 +48,18 @@ const navItems = [
         ),
       },
       {
+        href: "/pos-2/susulan",
+        label: "Pos 2 · Susulan",
+        roles: ["OPERATOR", "ADMIN"],
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="8" y="2" width="8" height="4" rx="1" />
+            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+            <path d="M9 12h6M9 16h6" />
+          </svg>
+        ),
+      },
+      {
         href: "/pos-2/transactions",
         label: "Pos 2 · Transaksi",
         roles: ["OPERATOR", "ADMIN", "FINANCE"],

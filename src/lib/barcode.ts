@@ -5,14 +5,21 @@ export function laneToken(lane: string, warehouse: string): string {
   return lane.startsWith(prefix) ? lane.slice(prefix.length) : lane
 }
 
-export function generateLabelCode(warehouse: string, lane: string, sequence: number): string {
-  const date = format(new Date(), "yyyyMMdd")
-  return `${warehouse}-${laneToken(lane, warehouse)}-${date}-${String(sequence).padStart(4, "0")}`
+export function generateLabelCode(
+  warehouse: string,
+  lane: string,
+  sequence: number,
+  date: Date = new Date()
+): string {
+  return `${warehouse}-${laneToken(lane, warehouse)}-${format(date, "yyyyMMdd")}-${String(sequence).padStart(4, "0")}`
 }
 
-export function generateTransactionCode(laneCode: string, sequence: number): string {
-  const date = format(new Date(), "yyyyMMdd")
-  return `TRX-${laneCode}-${date}-${String(sequence).padStart(3, "0")}`
+export function generateTransactionCode(
+  laneCode: string,
+  sequence: number,
+  date: Date = new Date()
+): string {
+  return `TRX-${laneCode}-${format(date, "yyyyMMdd")}-${String(sequence).padStart(3, "0")}`
 }
 
 export function parseLabelCode(code: string): {
