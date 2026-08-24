@@ -395,7 +395,7 @@ export async function exportPortalExcel(data: PortalExportData): Promise<void> {
   ]
 
   // Sheet 2 � Alokasi Bale (detail)
-  const bWidths = [12, 18, 20, 22, 14, 14, 10, 11, 12, 12, 11, 13, 15, 11, 11]
+  const bWidths = [12, 18, 20, 22, 14, 14, 10, 11, 12, 12, 11, 13, 15, 15, 11, 11]
   const baleColumns = bWidths.map((width) => ({ width }))
   const baleData: SheetData = [
     titleRow(`ALOKASI BALE � Periode ${range}`, baleColumns.length),
@@ -412,6 +412,7 @@ export async function exportPortalExcel(data: PortalExportData): Promise<void> {
       "Pot. MC (kg)",
       "Netto (kg)",
       "Harga (Rp/kg)",
+      "Adj. Harga (Rp/kg)",
       "Subtotal (Rp)",
       "Status Bale",
       "Status Nota",
@@ -430,6 +431,7 @@ export async function exportPortalExcel(data: PortalExportData): Promise<void> {
         n(i.moistureDeduction, KG_FMT),
         n(i.netWeight, KG_FMT),
         i.pricePerKg != null ? n(i.pricePerKg, MONEY_FMT) : { value: "", ...border },
+        n(i.priceAdjustment, "#,##0.##;-#,##0.##;0"),
         n(i.subtotal, MONEY_FMT),
         txt(i.status, { align: "center" }),
         txt(i.purchaseStatus, { align: "center" }),
@@ -447,6 +449,7 @@ export async function exportPortalExcel(data: PortalExportData): Promise<void> {
       n(sum((i: PortalBale) => i.packingWeight, items), KG_FMT, "right", true),
       n(sum((i: PortalBale) => i.moistureDeduction ?? 0, items), KG_FMT, "right", true),
       n(totalNetto, KG_FMT, "right", true),
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
       { value: "", ...border, backgroundColor: "#f2f2f2" },
       n(totalNilai, MONEY_FMT, "right", true),
       { value: "", ...border, backgroundColor: "#f2f2f2" },

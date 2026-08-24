@@ -20,6 +20,7 @@ export interface PortalBale {
   moistureDeduction: number | null
   netWeight: number | null
   pricePerKg: number | null
+  priceAdjustment: number
   subtotal: number
   status: string
   purchaseStatus: string
@@ -146,6 +147,7 @@ export async function getCustomerPortalData(opts?: {
       moistureDeduction: i.moistureDeduction,
       netWeight: i.netWeight,
       pricePerKg: i.pricePerKg != null ? Number(i.pricePerKg) : null,
+      priceAdjustment: Number(i.priceAdjustment ?? 0),
       subtotal: Number(i.subtotal ?? 0),
       status: i.status,
       purchaseStatus: i.purchase.status,
