@@ -27,6 +27,8 @@ export interface PortalBale {
 
 export interface CustomerPortalData {
   customerName: string
+  from: string | null
+  to: string | null
   totalBales: number
   totalNetWeight: number
   totalSubtotal: number
@@ -42,7 +44,25 @@ function todayStart(): Date {
   return d
 }
 
-export async function getCustomerPortalData(): Promise<CustomerPortalData> {
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
+
+function parseRange(from?: string, to?: string): { gte?: Date; lte?: Date } {
+  const range: { gte?: Date; lte?: Date } = {}
+  if (from && ISO_DATE.test(from)) {
+    const d = new Date(`${from}T00:00:00`)
+    if (!Number.isNaN(d.getTime())) range.gte = d
+  }
+  if (to && ISO_DATE.test(to)) {
+    const d = new Date(`${to}T23:59:59.999`)
+    if (!Number.isNaN(d.getTime())) range.lte = d
+  }
+  return range
+}
+
+export async function getCustomerPortalData(opts?: {
+  from?: string
+  to?: string
+}): Promise<CustomerPortalData> {
   await requireRoles("CUSTOMER")
 
   const session = await auth()
@@ -57,6 +77,13 @@ export async function getCustomerPortalData(): Promise<CustomerPortalData> {
   }
 
   const start = todayStart()
+  const transactionDate = parseRange(opts?.from, opts?.to)
+  const hasRange = "gte" in transactionDate || "lte" in transactionDate
+
+  const itemWhere = {
+    customerId: user.customerId,
+    ...(hasRange ? { purchase: { transactionDate } } : {}),
+  }
 
   const [customer, allAgg, todayAgg, awaitingWeigh, items] = await Promise.all([
     prisma.customer.findUnique({
@@ -64,7 +91,7 @@ export async function getCustomerPortalData(): Promise<CustomerPortalData> {
       select: { name: true },
     }),
     prisma.purchaseItem.aggregate({
-      where: { customerId: user.customerId },
+      where: itemWhere,
       _count: { _all: true },
       _sum: { netWeight: true, subtotal: true },
     }),
@@ -74,12 +101,11 @@ export async function getCustomerPortalData(): Promise<CustomerPortalData> {
       _sum: { subtotal: true },
     }),
     prisma.purchaseItem.count({
-      where: { customerId: user.customerId, status: "GRADED" },
+      where: { ...itemWhere, status: "GRADED" },
     }),
     prisma.purchaseItem.findMany({
-      where: { customerId: user.customerId },
-      orderBy: { createdAt: "desc" },
-      take: 200,
+      where: itemWhere,
+      orderBy: [{ purchase: { transactionDate: "desc" } }, { inputOrder: "asc" }],
       include: {
         purchase: {
           select: {
@@ -97,6 +123,8 @@ export async function getCustomerPortalData(): Promise<CustomerPortalData> {
 
   return {
     customerName: customer?.name ?? "Mitra",
+    from: opts?.from ?? null,
+    to: opts?.to ?? null,
     totalBales: allAgg._count._all,
     totalNetWeight: roundMoney(Number(allAgg._sum.netWeight ?? 0)),
     totalSubtotal: roundMoney(Number(allAgg._sum.subtotal ?? 0)),

@@ -14,16 +14,34 @@ import { formatCurrency, formatDate, formatWeight } from "@/lib/utils"
 import { PageHeader } from "@/components/shared/page-header"
 import { StatusPill } from "@/components/shared/status-pill"
 import { KpiCard, KpiSectionTitle } from "@/components/dashboard/kpi-card"
-import { PrintButton } from "@/components/portal/print-button"
+import { PortalFilterBar } from "@/components/portal/filter-bar"
+import { PortalExportButton } from "@/components/portal/export-button"
 
 export const dynamic = "force-dynamic"
 
-export default async function PortalPage() {
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
+const TABLE_LIMIT = 200
+
+function safeParam(v?: string | string[]): string | null {
+  const s = Array.isArray(v) ? v[0] : v
+  return s && ISO_DATE.test(s) ? s : null
+}
+
+export default async function PortalPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string | string[]; to?: string | string[] }>
+}) {
   const session = await auth()
   if (!session?.user) redirect("/login")
   if (session.user.role !== "CUSTOMER") redirect("/")
 
-  const data = await getCustomerPortalData()
+  const params = await searchParams
+  const from = safeParam(params.from)
+  const to = safeParam(params.to)
+
+  const data = await getCustomerPortalData({ from: from ?? undefined, to: to ?? undefined })
+  const visibleItems = data.items.slice(0, TABLE_LIMIT)
 
   return (
     <div className="space-y-5">
@@ -32,14 +50,18 @@ export default async function PortalPage() {
         title={`Alokasi untuk ${data.customerName}`}
         subtitle="Rekap bale tembakau yang dialokasikan ke mitra Anda"
       >
-        <PrintButton />
+        <PortalExportButton
+          data={{ customerName: data.customerName, from, to, items: data.items }}
+        />
       </PageHeader>
 
+      <PortalFilterBar from={from} to={to} />
+
       <section className="space-y-2.5">
-        <KpiSectionTitle label="Total Alokasi" />
+        <KpiSectionTitle label={from || to ? "Total Periode" : "Total Alokasi"} />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <KpiCard label="Total Bale" value={`${data.totalBales}`} icon={Package} />
-          <KpiCard label="Total Netto" value={`${formatWeight(data.totalNetWeight)} kg`} icon={Scale} />
+          <KpiCard label="Total Netto" value={`${formatWeight(data.totalNetWeight)}`} icon={Scale} />
           <KpiCard
             label="Total Nilai Alokasi"
             value={formatCurrency(data.totalSubtotal)}
@@ -49,7 +71,7 @@ export default async function PortalPage() {
         </div>
       </section>
 
-      <section className="space-y-2.5 print:hidden">
+      <section className="space-y-2.5">
         <KpiSectionTitle label="Hari Ini" />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <KpiCard label="Bale Masuk Hari Ini" value={`${data.todayBales}`} icon={CalendarClock} tone="blue" />
@@ -75,18 +97,20 @@ export default async function PortalPage() {
               </tr>
             </thead>
             <tbody>
-              {data.items.length === 0 ? (
+              {visibleItems.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="px-3 py-14 text-center">
                     <PackageSearch className="mx-auto size-8 text-muted-2" />
-                    <p className="mt-3 text-sm font-bold text-muted-foreground">Belum ada alokasi bale</p>
+                    <p className="mt-3 text-sm font-bold text-muted-foreground">
+                      {from || to ? "Tidak ada alokasi pada periode ini" : "Belum ada alokasi bale"}
+                    </p>
                     <p className="mt-1 text-xs text-muted-2">
                       Bale yang dialokasikan ke mitra ini akan tampil di sini.
                     </p>
                   </td>
                 </tr>
               ) : (
-                data.items.map((bale) => {
+                visibleItems.map((bale) => {
                   const deduction =
                     bale.grossWeight != null && bale.netWeight != null
                       ? bale.grossWeight - bale.netWeight
@@ -154,9 +178,9 @@ export default async function PortalPage() {
             </tbody>
           </table>
         </div>
-        {data.items.length >= 200 && (
-          <p className="border-t border-border px-3 py-2 text-center text-[11px] text-muted-2 print:hidden">
-            Menampilkan 200 alokasi terbaru dari {data.totalBales} total bale.
+        {data.items.length > visibleItems.length && (
+          <p className="border-t border-border px-3 py-2 text-center text-[11px] text-muted-2">
+            Menampilkan {visibleItems.length} dari {data.items.length} alokasi — unduh Excel untuk daftar lengkap.
           </p>
         )}
       </section>

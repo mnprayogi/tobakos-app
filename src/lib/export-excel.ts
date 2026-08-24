@@ -1,6 +1,7 @@
 import writeExcelFile, { type CellObject, type Row, type SheetData } from "write-excel-file/browser"
 import type { FarmerSummaryRow, PeriodSummaryRow, TransactionDetailRow } from "@/lib/actions/reports"
 import type { TxnExportRow } from "@/lib/actions/transactions"
+import type { PortalBale } from "@/lib/actions/portal"
 
 const MONEY_FMT = "#,##0.##"
 const KG_FMT = "#,##0.00"
@@ -313,4 +314,268 @@ export async function exportTransactionsExcel(rows: TxnExportRow[]): Promise<voi
     [{ sheet: "Transaksi", columns, data, stickyRowsCount: 2, showGridLines: false }],
     { fontFamily: "Calibri", fontSize: 11 }
   ).toFile(`Transaksi_${dateLabel}.xlsx`)
+}
+
+export interface PortalExportData {
+  customerName: string
+  from: string | null
+  to: string | null
+  items: PortalBale[]
+}
+
+function groupPortal<T>(
+  items: PortalBale[],
+  keyFn: (i: PortalBale) => string,
+  init: (i: PortalBale) => T,
+  add: (acc: T, i: PortalBale) => void
+): T[] {
+  const map = new Map<string, T>()
+  for (const i of items) {
+    const key = keyFn(i)
+    const existing = map.get(key)
+    if (existing) {
+      add(existing, i)
+    } else {
+      const acc = init(i)
+      add(acc, i)
+      map.set(key, acc)
+    }
+  }
+  return [...map.values()]
+}
+
+export async function exportPortalExcel(data: PortalExportData): Promise<void> {
+  const { customerName, items } = data
+  if (items.length === 0) throw new Error("Tidak ada data untuk diekspor")
+  const range = `${data.from || "awal"} s/d ${data.to || "sekarang"}`
+
+  const nettoOf = (i: PortalBale) => i.netWeight ?? 0
+  const nilaiOf = (i: PortalBale) => i.subtotal ?? 0
+  const totalNetto = sum(nettoOf, items)
+  const totalNilai = sum(nilaiOf, items)
+
+  const statusOrder = ["GRADED", "WEIGHED", "CLOSED"] as const
+  const statusRows = statusOrder.map((status) => {
+    const rows = items.filter((i) => i.status === status)
+    return {
+      label:
+        status === "GRADED"
+          ? "GRADED (Menunggu Timbang)"
+          : status === "WEIGHED"
+            ? "WEIGHED (Menunggu Penutupan)"
+            : "CLOSED (Selesai)",
+      bales: rows.length,
+      netto: sum(nettoOf, rows),
+      nilai: sum(nilaiOf, rows),
+    }
+  })
+
+  // Sheet 1 � Ringkasan
+  const rWidths = [34, 10, 14, 18]
+  const ringkasanColumns = rWidths.map((width) => ({ width }))
+  const ringkasanData: SheetData = [
+    titleRow(`LAPORAN ALOKASI MITRA � ${customerName}`, ringkasanColumns.length),
+    [{ value: `Periode: ${range}`, align: "center", ...border }, { value: "", ...border }, { value: "", ...border }, { value: "", ...border }],
+    headerRow(["Metrik", "Bale", "Netto (kg)", "Nilai (Rp)"]),
+    totalRow([
+      txt("Total Alokasi"),
+      n(items.length, COUNT_FMT, "center", true),
+      n(totalNetto, KG_FMT, "right", true),
+      n(totalNilai, MONEY_FMT, "right", true),
+    ]),
+    ...statusRows.map(
+      (r) =>
+        [
+          txt(r.label),
+          n(r.bales, COUNT_FMT, "center"),
+          n(r.netto, KG_FMT),
+          n(r.nilai, MONEY_FMT),
+        ] as Row
+    ),
+  ]
+
+  // Sheet 2 � Alokasi Bale (detail)
+  const bWidths = [12, 18, 20, 22, 14, 14, 10, 11, 12, 12, 11, 13, 15, 11, 11]
+  const baleColumns = bWidths.map((width) => ({ width }))
+  const baleData: SheetData = [
+    titleRow(`ALOKASI BALE � Periode ${range}`, baleColumns.length),
+    headerRow([
+      "Tanggal",
+      "No. Transaksi",
+      "Barcode",
+      "Petani",
+      "Jenis Daun",
+      "Jenis Tembakau",
+      "Grade",
+      "Bruto (kg)",
+      "Pot. Packing (kg)",
+      "Pot. MC (kg)",
+      "Netto (kg)",
+      "Harga (Rp/kg)",
+      "Subtotal (Rp)",
+      "Status Bale",
+      "Status Nota",
+    ]),
+    ...items.map((i) =>
+      [
+        txt(fmtDate(i.transactionDate)),
+        txt(i.transactionCode),
+        txt(i.labelCode, { fontWeight: "bold" }),
+        txt(i.farmerName),
+        txt(i.leafTypeName),
+        txt(i.tobaccoTypeName),
+        txt(i.grade),
+        n(i.grossWeight, KG_FMT),
+        n(i.packingWeight, KG_FMT),
+        n(i.moistureDeduction, KG_FMT),
+        n(i.netWeight, KG_FMT),
+        i.pricePerKg != null ? n(i.pricePerKg, MONEY_FMT) : { value: "", ...border },
+        n(i.subtotal, MONEY_FMT),
+        txt(i.status, { align: "center" }),
+        txt(i.purchaseStatus, { align: "center" }),
+      ] as Row
+    ),
+    totalRow([
+      txt("TOTAL"),
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
+      n(sum((i: PortalBale) => i.grossWeight ?? 0, items), KG_FMT, "right", true),
+      n(sum((i: PortalBale) => i.packingWeight, items), KG_FMT, "right", true),
+      n(sum((i: PortalBale) => i.moistureDeduction ?? 0, items), KG_FMT, "right", true),
+      n(totalNetto, KG_FMT, "right", true),
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
+      n(totalNilai, MONEY_FMT, "right", true),
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
+    ]),
+  ]
+
+  // Sheet 3 � Rekap per Transaksi
+  interface TxnAcc { code: string; date: Date; bales: number; netto: number; nilai: number; purchaseStatus: string }
+  const txnRows = groupPortal<TxnAcc>(
+    items,
+    (i) => i.transactionCode,
+    (i) => ({ code: i.transactionCode, date: i.transactionDate, bales: 0, netto: 0, nilai: 0, purchaseStatus: i.purchaseStatus }),
+    (acc, i) => {
+      acc.bales += 1
+      acc.netto += nettoOf(i)
+      acc.nilai += nilaiOf(i)
+    }
+  )
+  const tWidths = [18, 12, 8, 12, 16, 12]
+  const txnColumns = tWidths.map((width) => ({ width }))
+  const txnData: SheetData = [
+    titleRow(`REKAP PER TRANSAKSI � Periode ${range}`, txnColumns.length),
+    headerRow(["No. Transaksi", "Tanggal", "Bale", "Netto (kg)", "Nilai (Rp)", "Status Nota"]),
+    ...txnRows.map(
+      (r) =>
+        [
+          txt(r.code, { fontWeight: "bold" }),
+          txt(fmtDate(r.date)),
+          n(r.bales, COUNT_FMT, "center"),
+          n(r.netto, KG_FMT),
+          n(r.nilai, MONEY_FMT),
+          txt(r.purchaseStatus, { align: "center" }),
+        ] as Row
+    ),
+    totalRow([
+      txt("TOTAL"),
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
+      n(sum((r: TxnAcc) => r.bales, txnRows), COUNT_FMT, "center", true),
+      n(sum((r: TxnAcc) => r.netto, txnRows), KG_FMT, "right", true),
+      n(sum((r: TxnAcc) => r.nilai, txnRows), MONEY_FMT, "right", true),
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
+    ]),
+  ]
+
+  // Sheet 4 � Rekap per Grade
+  interface GradeAcc { grade: string; leafType: string; tobaccoType: string; bales: number; netto: number; nilai: number }
+  const gradeRows = groupPortal<GradeAcc>(
+    items,
+    (i) => `${i.grade}|${i.leafTypeName}|${i.tobaccoTypeName}`,
+    (i) => ({ grade: i.grade, leafType: i.leafTypeName, tobaccoType: i.tobaccoTypeName, bales: 0, netto: 0, nilai: 0 }),
+    (acc, i) => {
+      acc.bales += 1
+      acc.netto += nettoOf(i)
+      acc.nilai += nilaiOf(i)
+    }
+  )
+  gradeRows.sort((a, b) => b.nilai - a.nilai)
+  const gWidths = [12, 16, 16, 8, 12, 16]
+  const gradeColumns = gWidths.map((width) => ({ width }))
+  const gradeData: SheetData = [
+    titleRow(`REKAP PER GRADE � Periode ${range}`, gradeColumns.length),
+    headerRow(["Grade", "Jenis Daun", "Jenis Tembakau", "Bale", "Netto (kg)", "Nilai (Rp)"]),
+    ...gradeRows.map(
+      (r) =>
+        [
+          txt(r.grade, { fontWeight: "bold" }),
+          txt(r.leafType),
+          txt(r.tobaccoType),
+          n(r.bales, COUNT_FMT, "center"),
+          n(r.netto, KG_FMT),
+          n(r.nilai, MONEY_FMT),
+        ] as Row
+    ),
+    totalRow([
+      txt("TOTAL"),
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
+      n(sum((r: GradeAcc) => r.bales, gradeRows), COUNT_FMT, "center", true),
+      n(sum((r: GradeAcc) => r.netto, gradeRows), KG_FMT, "right", true),
+      n(sum((r: GradeAcc) => r.nilai, gradeRows), MONEY_FMT, "right", true),
+    ]),
+  ]
+
+  // Sheet 5 � Rekap per Petani
+  interface FarmerAcc { farmerName: string; bales: number; netto: number; nilai: number }
+  const farmerRows = groupPortal<FarmerAcc>(
+    items,
+    (i) => i.farmerName,
+    (i) => ({ farmerName: i.farmerName, bales: 0, netto: 0, nilai: 0 }),
+    (acc, i) => {
+      acc.bales += 1
+      acc.netto += nettoOf(i)
+      acc.nilai += nilaiOf(i)
+    }
+  )
+  farmerRows.sort((a, b) => b.nilai - a.nilai)
+  const fWidths = [26, 8, 12, 16]
+  const farmerColumns = fWidths.map((width) => ({ width }))
+  const farmerData: SheetData = [
+    titleRow(`REKAP PER PETANI PEMASOK � Periode ${range}`, farmerColumns.length),
+    headerRow(["Petani", "Bale", "Netto (kg)", "Nilai (Rp)"]),
+    ...farmerRows.map(
+      (r) =>
+        [
+          txt(r.farmerName, { fontWeight: "bold" }),
+          n(r.bales, COUNT_FMT, "center"),
+          n(r.netto, KG_FMT),
+          n(r.nilai, MONEY_FMT),
+        ] as Row
+    ),
+    totalRow([
+      txt("TOTAL"),
+      n(sum((r: FarmerAcc) => r.bales, farmerRows), COUNT_FMT, "center", true),
+      n(sum((r: FarmerAcc) => r.netto, farmerRows), KG_FMT, "right", true),
+      n(sum((r: FarmerAcc) => r.nilai, farmerRows), MONEY_FMT, "right", true),
+    ]),
+  ]
+
+  const safeName = customerName.replace(/[^\w-]+/g, "-")
+  const dateLabel = new Date().toISOString().slice(0, 10).replace(/-/g, "")
+  await writeExcelFile(
+    [
+      { sheet: "Ringkasan", columns: ringkasanColumns, data: ringkasanData, stickyRowsCount: 3, showGridLines: false },
+      { sheet: "Alokasi Bale", columns: baleColumns, data: baleData, stickyRowsCount: 2, showGridLines: false },
+      { sheet: "Rekap Transaksi", columns: txnColumns, data: txnData, stickyRowsCount: 2, showGridLines: false },
+      { sheet: "Rekap Grade", columns: gradeColumns, data: gradeData, stickyRowsCount: 2, showGridLines: false },
+      { sheet: "Rekap Petani", columns: farmerColumns, data: farmerData, stickyRowsCount: 2, showGridLines: false },
+    ],
+    { fontFamily: "Calibri", fontSize: 11 }
+  ).toFile(`Laporan-Mitra-${safeName}_${dateLabel}.xlsx`)
 }
