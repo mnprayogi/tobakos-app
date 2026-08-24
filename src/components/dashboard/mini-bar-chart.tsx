@@ -10,6 +10,7 @@ export function formatCompact(n: number): string {
 
 export interface MiniBarChartRow {
   label: string
+  title?: string
   value: number
 }
 
@@ -32,7 +33,7 @@ export function MiniBarChart({
             <div
               key={i}
               className="flex min-w-0 flex-1 flex-col items-center justify-end gap-1"
-              title={`${r.label}: ${r.value}`}
+              title={`${r.title ?? r.label}: ${r.value}`}
             >
               <span className="max-w-full truncate font-mono text-[9px] font-bold text-muted-2">
                 {formatValue(r.value)}
@@ -48,11 +49,12 @@ export function MiniBarChart({
           )
         })}
       </div>
-      <div className="mt-1.5 flex gap-1.5">
+      <div className="mt-2 flex gap-1.5 pb-0.5">
         {rows.map((r, i) => (
           <span
             key={i}
-            className="min-w-0 flex-1 truncate text-center font-mono text-[9px] text-muted-2"
+            title={r.title ?? r.label}
+            className="min-w-0 flex-1 truncate text-center font-mono text-[9px] leading-tight text-muted-2"
           >
             {r.label}
           </span>

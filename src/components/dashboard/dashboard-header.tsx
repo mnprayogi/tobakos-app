@@ -1,9 +1,10 @@
 "use client"
 
+import Link from "next/link"
 import { useEffect, useState } from "react"
 
 import { cn } from "@/lib/utils"
-import { LayoutDashboard } from "lucide-react"
+import { LayoutDashboard, Plus } from "lucide-react"
 import { PageHeader } from "@/components/shared/page-header"
 
 const ROLE_META: Record<string, { label: string; cls: string }> = {
@@ -13,6 +14,12 @@ const ROLE_META: Record<string, { label: string; cls: string }> = {
   ADMIN: { label: "Administrator", cls: "bg-emerald/12 text-emerald border-emerald/35" },
   OWNER: { label: "Owner", cls: "bg-muted/12 text-muted-foreground border-border-soft" },
   SUPER_ADMIN: { label: "Super Admin", cls: "bg-red-deduction/12 text-red-deduction border-red-deduction/35" },
+}
+
+const QUICK_ACTION: Record<string, { href: string; label: string }> = {
+  GRADER: { href: "/pos-1/grading", label: "Input Grade Baru" },
+  OPERATOR: { href: "/pos-2/weighing", label: "Mulai Penimbangan" },
+  FINANCE: { href: "/admin/transactions", label: "Bayar Nota / Transaksi" },
 }
 
 export function DashboardHeader({ userName, role }: { userName: string; role: string }) {
@@ -36,6 +43,7 @@ export function DashboardHeader({ userName, role }: { userName: string; role: st
   }).format(now)
 
   const meta = ROLE_META[role] ?? ROLE_META.GRADER
+  const action = QUICK_ACTION[role]
 
   return (
     <PageHeader
@@ -43,6 +51,15 @@ export function DashboardHeader({ userName, role }: { userName: string; role: st
       title="Dashboard"
       subtitle={`Halo, ${userName} · ${dateLabel}`}
     >
+      {action && (
+        <Link
+          href={action.href}
+          className="flex items-center gap-1.5 rounded-lg bg-emerald px-3 py-1.5 text-[11.5px] font-bold text-primary-foreground transition-all hover:bg-emerald/90 active:translate-y-px"
+        >
+          <Plus className="size-3.5" />
+          {action.label}
+        </Link>
+      )}
       <span
         className={cn("rounded-full border px-2.5 py-1 text-[10.5px] font-bold", meta.cls)}
       >

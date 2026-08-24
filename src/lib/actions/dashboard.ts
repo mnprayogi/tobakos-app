@@ -51,6 +51,7 @@ export interface StatusCount {
 
 export interface TrendRow {
   label: string
+  title: string
   transactionCount: number
   totalBales: number
   totalNetWeight: number
@@ -76,21 +77,20 @@ async function getSevenDayTrend(): Promise<TrendRow[]> {
     },
   })
 
-  const days: { label: string; date: string }[] = []
+  const days: { label: string; title: string; date: string }[] = []
   for (let i = 6; i >= 0; i--) {
     const d = new Date()
     d.setDate(d.getDate() - i)
+    const fmt = (opts: Intl.DateTimeFormatOptions) =>
+      new Intl.DateTimeFormat("id-ID", opts).format(d)
     days.push({
-      label: new Intl.DateTimeFormat("id-ID", {
-        weekday: "short",
-        day: "2-digit",
-        month: "2-digit",
-      }).format(d),
+      label: fmt({ day: "2-digit", month: "2-digit" }),
+      title: fmt({ weekday: "short", day: "2-digit", month: "2-digit" }),
       date: toDateKey(d),
     })
   }
 
-  const map = new Map<string, Omit<TrendRow, "label">>()
+  const map = new Map<string, Omit<TrendRow, "label" | "title">>()
   for (const p of purchases) {
     const key = toDateKey(new Date(p.transactionDate))
     const totalPrice = Number(p.totalPrice)
@@ -117,6 +117,7 @@ async function getSevenDayTrend(): Promise<TrendRow[]> {
     const t = map.get(d.date)
     return {
       label: d.label,
+      title: d.title,
       transactionCount: t?.transactionCount ?? 0,
       totalBales: t?.totalBales ?? 0,
       totalNetWeight: roundMoney(t?.totalNetWeight ?? 0),
@@ -273,6 +274,8 @@ export async function getOperatorDashboard(): Promise<OperatorDashboard> {
 
 export interface FinanceDashboard {
   awaitingReview: number
+  omzet: number
+  totalReceived: number
   debtTotal: number
   debtPaid: number
   debtRemaining: number
@@ -290,26 +293,30 @@ export async function getFinanceDashboard(): Promise<FinanceDashboard> {
   const start = todayStart()
   const yStart = yesterdayStart()
 
-  const [debt, loans, awaitingReview, payments, todayPayAgg, yesterdayPayAgg] = await Promise.all([
-    getDebtSummary(),
-    getLoansData(),
-    prisma.purchase.count({ where: { status: "WEIGHED" } }),
-    prisma.payment.findMany({
-      orderBy: { paidAt: "desc" },
-      take: 10,
-      include: { purchase: { include: { farmer: true } } },
-    }),
-    prisma.payment.aggregate({
-      where: { paidAt: { gte: start } },
-      _count: { _all: true },
-      _sum: { amount: true },
-    }),
-    prisma.payment.aggregate({
-      where: { paidAt: { gte: yStart, lt: start } },
-      _count: { _all: true },
-      _sum: { amount: true },
-    }),
-  ])
+  const [debt, loans, awaitingReview, payments, todayPayAgg, yesterdayPayAgg, txAgg] =
+    await Promise.all([
+      getDebtSummary(),
+      getLoansData(),
+      prisma.purchase.count({ where: { status: "WEIGHED" } }),
+      prisma.payment.findMany({
+        orderBy: { paidAt: "desc" },
+        take: 10,
+        include: { purchase: { include: { farmer: true } } },
+      }),
+      prisma.payment.aggregate({
+        where: { paidAt: { gte: start } },
+        _count: { _all: true },
+        _sum: { amount: true },
+      }),
+      prisma.payment.aggregate({
+        where: { paidAt: { gte: yStart, lt: start } },
+        _count: { _all: true },
+        _sum: { amount: true },
+      }),
+      prisma.purchase.aggregate({
+        _sum: { totalPrice: true, paidAmount: true },
+      }),
+    ])
 
   const debtTotal = debt.reduce((s, f) => s + f.totalTagihan, 0)
   const debtPaid = debt.reduce((s, f) => s + f.totalDibayar, 0)
@@ -319,6 +326,8 @@ export async function getFinanceDashboard(): Promise<FinanceDashboard> {
 
   return {
     awaitingReview,
+    omzet: roundMoney(Number(txAgg._sum.totalPrice ?? 0)),
+    totalReceived: roundMoney(Number(txAgg._sum.paidAmount ?? 0)),
     debtTotal: roundMoney(debtTotal),
     debtPaid: roundMoney(debtPaid),
     debtRemaining: roundMoney(debtRemaining),

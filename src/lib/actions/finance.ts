@@ -23,7 +23,7 @@ export interface ReviewInput {
 }
 
 export async function reviewAndApprove(purchaseId: number, input: ReviewInput) {
-  const actor = await requireRoles("ADMIN", "FINANCE")
+  const actor = await requireRoles("ADMIN", "FINANCE", "OWNER")
 
   const purchase = await prisma.purchase.findUnique({
     where: { id: purchaseId },
@@ -103,7 +103,7 @@ export interface PaymentInput {
 }
 
 export async function recordPayment(purchaseId: number, input: PaymentInput) {
-  const actor = await requireRoles("ADMIN", "FINANCE")
+  const actor = await requireRoles("ADMIN", "FINANCE", "OWNER")
 
   const amount = roundMoney(input.amount)
   if (amount < 0) throw new Error("Jumlah pembayaran tidak boleh negatif")
@@ -384,7 +384,7 @@ export async function voidPayment(purchaseId: number, paymentId: number) {
 }
 
 export async function reopenTransaction(purchaseId: number) {
-  await requireRoles("ADMIN", "FINANCE")
+  await requireRoles("ADMIN", "FINANCE", "OWNER")
 
   const purchase = await prisma.purchase.findUnique({
     where: { id: purchaseId },

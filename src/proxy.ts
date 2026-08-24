@@ -10,17 +10,34 @@ export const proxy = auth((req) => {
   }
 
   const role = session?.user?.role
+  const deny = () =>
+    NextResponse.redirect(new URL(session?.user ? "/dashboard" : "/login", req.url))
 
   if (role === "SUPER_ADMIN") {
     return NextResponse.next()
   }
 
   if (pathname.startsWith("/pos-1") && role !== "GRADER" && role !== "ADMIN") {
-    return NextResponse.redirect(new URL("/login", req.url))
+    return deny()
   }
 
-  if (pathname.startsWith("/pos-2") && role !== "OPERATOR" && role !== "ADMIN") {
-    return NextResponse.redirect(new URL("/login", req.url))
+  const isPos2Transactions =
+    pathname === "/pos-2/transactions" || pathname.startsWith("/pos-2/transactions/")
+  if (
+    isPos2Transactions &&
+    role !== "OPERATOR" &&
+    role !== "ADMIN" &&
+    role !== "FINANCE"
+  ) {
+    return deny()
+  }
+  if (
+    pathname.startsWith("/pos-2") &&
+    !isPos2Transactions &&
+    role !== "OPERATOR" &&
+    role !== "ADMIN"
+  ) {
+    return deny()
   }
 
   if (pathname === "/admin" || pathname.startsWith("/admin/")) {
@@ -35,16 +52,16 @@ export const proxy = auth((req) => {
     const isReadOnly = readOnly.some((p) => pathname === p || pathname.startsWith(p + "/"))
 
     if (isAdminOnly && role !== "ADMIN") {
-      return NextResponse.redirect(new URL("/login", req.url))
+      return deny()
     }
-    if (isStaff && role !== "ADMIN" && role !== "FINANCE") {
-      return NextResponse.redirect(new URL("/login", req.url))
+    if (isStaff && role !== "ADMIN" && role !== "FINANCE" && role !== "OWNER") {
+      return deny()
     }
     if (isReadOnly && role !== "ADMIN" && role !== "FINANCE" && role !== "OWNER") {
-      return NextResponse.redirect(new URL("/login", req.url))
+      return deny()
     }
     if (!isAdminOnly && !isStaff && !isReadOnly) {
-      return NextResponse.redirect(new URL("/login", req.url))
+      return deny()
     }
   }
 

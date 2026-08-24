@@ -97,7 +97,7 @@ export interface DisburseInput {
 }
 
 export async function disburseLoan(input: DisburseInput) {
-  const actor = await requireRoles("ADMIN", "FINANCE")
+  const actor = await requireRoles("ADMIN", "FINANCE", "OWNER")
 
   const amount = roundMoney(input.amount)
   if (amount <= 0) throw new Error("Jumlah pinjaman harus lebih dari 0")
@@ -174,7 +174,7 @@ export interface RepayInput {
 }
 
 export async function repayLoanCash(input: RepayInput) {
-  const actor = await requireRoles("ADMIN", "FINANCE")
+  const actor = await requireRoles("ADMIN", "FINANCE", "OWNER")
 
   const amount = roundMoney(input.amount)
   if (amount <= 0) throw new Error("Jumlah pembayaran harus lebih dari 0")

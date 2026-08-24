@@ -9,7 +9,7 @@ interface PageProps {
 }
 
 export default async function ReviewPage({ params }: PageProps) {
-  if (!(await canAccess(["ADMIN", "FINANCE"]))) redirect("/")
+  if (!(await canAccess(["ADMIN", "FINANCE", "OWNER"]))) redirect("/")
 
   const { id } = await params
   const purchaseId = Number(id)

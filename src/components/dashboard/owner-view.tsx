@@ -14,7 +14,7 @@ import {
 import { formatCurrency, formatDateTime } from "@/lib/utils"
 import type { OwnerDashboard } from "@/lib/actions/dashboard"
 import { StatusPill } from "@/components/shared/status-pill"
-import { KpiCard } from "./kpi-card"
+import { KpiCard, KpiSectionTitle } from "./kpi-card"
 import { MiniBarChart, formatCompact } from "./mini-bar-chart"
 import { StatusDonut } from "./status-donut"
 import { Panel } from "./panel"
@@ -22,23 +22,29 @@ import { Panel } from "./panel"
 export function OwnerView({ data }: { data: OwnerDashboard }) {
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <KpiCard label="Total transaksi" value={String(data.totalTransactions)} icon={ClipboardList} />
-        <KpiCard label="Total bale" value={String(data.totalBales)} icon={Boxes} />
-        <KpiCard label="Total netto" value={`${data.totalNetWeight.toFixed(1)} kg`} icon={Scale} />
-        <KpiCard label="Omzet" value={formatCurrency(data.totalPrice)} icon={Wallet} />
-      </div>
+      <section className="space-y-2.5">
+        <KpiSectionTitle label="Operasional" />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <KpiCard label="Total transaksi" value={String(data.totalTransactions)} icon={ClipboardList} />
+          <KpiCard label="Total bale" value={String(data.totalBales)} icon={Boxes} />
+          <KpiCard label="Total netto" value={`${data.totalNetWeight.toFixed(1)} kg`} icon={Scale} />
+        </div>
+      </section>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <KpiCard label="Diterima" value={formatCurrency(data.totalPaid)} icon={TrendingUp} tone="emerald" />
-        <KpiCard label="Sisa tagihan" value={formatCurrency(data.totalRemaining)} icon={TrendingDown} tone="red" />
-        <KpiCard label="Hutang transaksi" value={formatCurrency(data.debtRemaining)} icon={HandCoins} />
-        <KpiCard label="Hutang modal beredar" value={formatCurrency(data.loanOutstanding)} icon={Landmark} />
-      </div>
+      <section className="space-y-2.5">
+        <KpiSectionTitle label="Keuangan" />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <KpiCard label="Omzet" value={formatCurrency(data.totalPrice)} icon={Wallet} tone="blue" />
+          <KpiCard label="Diterima" value={formatCurrency(data.totalPaid)} icon={TrendingUp} tone="emerald" />
+          <KpiCard label="Sisa tagihan" value={formatCurrency(data.totalRemaining)} icon={TrendingDown} tone="red" />
+          <KpiCard label="Hutang transaksi" value={formatCurrency(data.debtRemaining)} icon={HandCoins} />
+          <KpiCard label="Hutang modal beredar" value={formatCurrency(data.loanOutstanding)} icon={Landmark} />
+        </div>
+      </section>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <Panel title="Tren 7 hari · omzet">
-          <MiniBarChart rows={data.trend.map((t) => ({ label: t.label, value: t.totalPrice }))} formatValue={formatCompact} />
+          <MiniBarChart rows={data.trend.map((t) => ({ label: t.label, title: t.title, value: t.totalPrice }))} formatValue={formatCompact} />
         </Panel>
         <Panel title="Status transaksi">
           <StatusDonut data={data.byStatus} />

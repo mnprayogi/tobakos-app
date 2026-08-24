@@ -56,6 +56,15 @@ function DeltaChip({ value, compare, inverse }: KpiDelta) {
   return <Chip tone={good ? "up" : "down"} label={`${rising ? "↑" : "↓"} ${formatted}`} />
 }
 
+export function KpiSectionTitle({ label }: { label: string }) {
+  return (
+    <p className="text-[10px] uppercase tracking-[0.14em] font-bold text-muted-2">
+      <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-emerald/60 align-middle" />
+      {label}
+    </p>
+  )
+}
+
 export function KpiCard({
   label,
   value,

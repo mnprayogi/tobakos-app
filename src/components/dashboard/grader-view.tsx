@@ -46,7 +46,7 @@ export function GraderView({ data }: { data: GraderDashboard }) {
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <Panel title="Tren 7 hari · bale di-grade">
-          <MiniBarChart rows={data.trend.map((t) => ({ label: t.label, value: t.totalBales }))} />
+          <MiniBarChart rows={data.trend.map((t) => ({ label: t.label, title: t.title, value: t.totalBales }))} />
         </Panel>
         <Panel title="Bale terbaru hari ini">
           <BaleTable items={data.recentBales} empty="Belum ada bale yang di-grade hari ini." />

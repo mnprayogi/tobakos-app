@@ -47,7 +47,7 @@ export function OperatorView({ data }: { data: OperatorDashboard }) {
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <Panel title="Tren 7 hari · aktivitas">
-          <MiniBarChart rows={data.trend.map((t) => ({ label: t.label, value: t.totalBales }))} />
+          <MiniBarChart rows={data.trend.map((t) => ({ label: t.label, title: t.title, value: t.totalBales }))} />
         </Panel>
         <Panel title="Bale terakhir ditimbang">
           <BaleTable items={data.recentWeighed} empty="Belum ada bale yang ditimbang." />

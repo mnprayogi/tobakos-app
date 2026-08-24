@@ -26,7 +26,7 @@ export interface TxnExportRow {
 }
 
 export async function getTransactionsExport(q: string, status: string): Promise<TxnExportRow[]> {
-  await requireRoles("ADMIN", "FINANCE")
+  await requireRoles("ADMIN", "FINANCE", "OWNER")
 
   const scope = await resolveWarehouseScope()
   const warehouseWhere = scope.mode === "scoped" ? { warehouseId: scope.warehouseId } : {}

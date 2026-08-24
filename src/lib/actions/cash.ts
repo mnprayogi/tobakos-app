@@ -79,7 +79,7 @@ export interface CreateCashEntryInput {
 }
 
 export async function createCashEntry(input: CreateCashEntryInput) {
-  const actor = await requireRoles("ADMIN", "FINANCE")
+  const actor = await requireRoles("ADMIN", "FINANCE", "OWNER")
 
   const parsed = cashEntrySchema.safeParse(input)
   if (!parsed.success) {
@@ -114,7 +114,7 @@ export async function createCashEntry(input: CreateCashEntryInput) {
 }
 
 export async function voidCashEntry(entryId: number) {
-  const actor = await requireRoles("ADMIN", "FINANCE")
+  const actor = await requireRoles("ADMIN", "FINANCE", "OWNER")
 
   const entry = await prisma.cashEntry.findUnique({ where: { id: entryId } })
   if (!entry) throw new Error("Mutasi kas tidak ditemukan")

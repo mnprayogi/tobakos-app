@@ -21,7 +21,7 @@ export default async function TransactionsPage({
 }: {
   searchParams?: Promise<TransactionsSearchParams>
 }) {
-  if (!(await canAccess(["ADMIN", "FINANCE"]))) redirect("/")
+  if (!(await canAccess(["ADMIN", "FINANCE", "OWNER"]))) redirect("/")
 
   const session = await auth()
   const role = session?.user?.role ?? ""
