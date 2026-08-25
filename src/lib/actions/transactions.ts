@@ -32,13 +32,15 @@ export async function getTransactionsExport(q: string, status: string): Promise<
   const warehouseWhere = scope.mode === "scoped" ? { warehouseId: scope.warehouseId } : {}
 
   const query = (q ?? "").trim()
-  const statusValues = ["DRAFT", "WEIGHED", "APPROVED", "PAID"] as const
+  const statusValues = ["DRAFT", "WEIGHED", "APPROVED", "PAID", "VOIDED"] as const
   type TxnStatus = (typeof statusValues)[number]
   const statusFilter = (statusValues as readonly string[]).includes(status) ? (status as TxnStatus) : "ALL"
 
   const where: Record<string, unknown> = {
     ...warehouseWhere,
-    ...(statusFilter !== "ALL" ? { status: statusFilter } : {}),
+    ...(statusFilter !== "ALL"
+      ? { status: statusFilter }
+      : { status: { not: "VOIDED" } }),
     ...(query
       ? {
           OR: [

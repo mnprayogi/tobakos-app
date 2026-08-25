@@ -40,7 +40,7 @@ export async function getRecentBales(laneId: number, take = 50): Promise<RecentB
   const items = await prisma.purchaseItem.findMany({
     take,
     orderBy: { createdAt: "desc" },
-    where: { purchase: { laneId } },
+    where: { purchase: { laneId, status: { not: "VOIDED" } } },
     include: {
       purchase: { include: { farmer: true } },
       tobaccoType: true,
@@ -76,7 +76,7 @@ export async function getFarmerTodayTransactions(farmerId: number): Promise<Tran
   const todayStart = new Date()
   todayStart.setHours(0, 0, 0, 0)
   const purchases = await prisma.purchase.findMany({
-    where: { farmerId, transactionDate: { gte: todayStart } },
+    where: { farmerId, transactionDate: { gte: todayStart }, status: { not: "VOIDED" } },
     orderBy: { createdAt: "asc" },
     include: {
       warehouse: true,

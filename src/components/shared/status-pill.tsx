@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 
-type Status = "GRADED" | "WEIGHED" | "CLOSED" | "DRAFT" | "APPROVED" | "PAID" | "PENDING" | "SYNCING"
+type Status = "GRADED" | "WEIGHED" | "CLOSED" | "DRAFT" | "APPROVED" | "PAID" | "PENDING" | "SYNCING" | "VOIDED"
 
 const variantMap: Record<Status, string> = {
   DRAFT: "bg-amber/12 text-amber border-amber/35",
@@ -12,6 +12,7 @@ const variantMap: Record<Status, string> = {
   PAID: "bg-blue/12 text-blue border-blue/35",
   PENDING: "bg-amber/12 text-amber border-amber/35",
   SYNCING: "bg-blue/12 text-blue border-blue/35",
+  VOIDED: "bg-red-deduction/12 text-red-deduction border-red-deduction/35",
 }
 
 export function StatusPill({ status }: { status: Status }) {

@@ -6,7 +6,7 @@ import { roundMoney } from "@/lib/calculations"
 import { resolveWarehouseScope, type WarehouseScope } from "@/lib/actions/scope"
 import { TransactionsClient } from "./client"
 
-const STATUS_VALUES = ["DRAFT", "WEIGHED", "APPROVED", "PAID"] as const
+const STATUS_VALUES = ["DRAFT", "WEIGHED", "APPROVED", "PAID", "VOIDED"] as const
 type TxnStatus = (typeof STATUS_VALUES)[number]
 
 interface TransactionsSearchParams {
@@ -49,7 +49,7 @@ export default async function TransactionsPage({
   const warehouseWhere = scope.mode === "scoped" ? { warehouseId: scope.warehouseId } : {}
   const where = {
     ...warehouseWhere,
-    ...(status !== "ALL" ? { status } : {}),
+    ...(status !== "ALL" ? { status } : { status: { not: "VOIDED" as const } }),
     ...(q
       ? {
           OR: [
@@ -165,6 +165,9 @@ export default async function TransactionsPage({
     weighedBy: p.weighedBy,
     approvedBy: p.approvedBy,
     paidBy: p.paidBy,
+    voidedAt: p.voidedAt,
+    voidedBy: p.voidedBy,
+    voidNote: p.voidNote,
     items: p.items.map((i) => ({
       id: i.id,
       status: i.status,

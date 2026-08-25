@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE `tobacco_purchases` ADD COLUMN `voidNote` TEXT NULL,
+    ADD COLUMN `voidedAt` DATETIME(3) NULL,
+    ADD COLUMN `voidedBy` VARCHAR(191) NULL,
+    MODIFY `status` ENUM('DRAFT', 'WEIGHED', 'APPROVED', 'PAID', 'VOIDED') NOT NULL DEFAULT 'DRAFT';

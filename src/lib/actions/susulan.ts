@@ -91,7 +91,7 @@ export async function checkSusulanDuplicate(
   const dayEnd = new Date(date)
   dayEnd.setHours(23, 59, 59, 999)
   const existing = await prisma.purchase.findFirst({
-    where: { farmerId, laneId: lane.id, transactionDate: { gte: date, lte: dayEnd } },
+    where: { farmerId, laneId: lane.id, transactionDate: { gte: date, lte: dayEnd }, status: { not: "VOIDED" } },
     select: { transactionCode: true, status: true },
   })
   return existing ? `${existing.transactionCode} (${existing.status})` : null

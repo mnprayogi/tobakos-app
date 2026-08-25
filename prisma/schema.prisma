@@ -134,9 +134,12 @@ model Purchase {
   taxRate           Float          @default(0)
   taxAmount         Decimal        @default(0.00) @db.Decimal(15, 2)
   netAmount         Decimal        @default(0.00) @db.Decimal(15, 2)
-  originalTotalPrice Decimal?       @db.Decimal(15, 2)
-  priceReviewNote   String?        @db.Text
-  paidAmount        Decimal        @default(0.00) @db.Decimal(15, 2)
+  originalTotalPrice    Decimal?       @db.Decimal(15, 2)
+  priceReviewNote       String?        @db.Text
+  paidAmount            Decimal        @default(0.00) @db.Decimal(15, 2)
+  voidedAt              DateTime?
+  voidedBy              String?
+  voidNote              String?        @db.Text
   items             PurchaseItem[]
   payments          Payment[]
   loanEntries       LoanEntry[]
@@ -358,6 +361,7 @@ enum PurchaseStatus {
   WEIGHED
   APPROVED
   PAID
+  VOIDED
 }
 
 enum PurchaseItemStatus {

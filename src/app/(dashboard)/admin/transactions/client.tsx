@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { reopenTransaction } from "@/lib/actions/finance"
+import { reopenTransaction, voidTransaction } from "@/lib/actions/finance"
 import { getTransactionsExport } from "@/lib/actions/transactions"
 import { useSse } from "@/hooks/useSse"
 import { formatCurrency, formatDate } from "@/lib/utils"
@@ -59,6 +59,9 @@ interface Purchase {
   weighedBy: string | null
   approvedBy: string | null
   paidBy: string | null
+  voidedAt?: Date | null
+  voidedBy?: string | null
+  voidNote?: string | null
   items: PurchaseItem[]
   payments: Payment[]
   loanBalance: number
@@ -84,6 +87,7 @@ const STATUS_FILTERS: { key: string; label: string }[] = [
   { key: "WEIGHED", label: "Menunggu" },
   { key: "APPROVED", label: "Disetujui" },
   { key: "PAID", label: "Lunas" },
+  { key: "VOIDED", label: "Void" },
 ]
 
 const filterActiveStyle: Record<string, string> = {
@@ -92,6 +96,7 @@ const filterActiveStyle: Record<string, string> = {
   WEIGHED: "bg-amber/15 text-amber border-amber/40",
   APPROVED: "bg-emerald/15 text-emerald border-emerald/40",
   PAID: "bg-blue/15 text-blue border-blue/40",
+  VOIDED: "bg-red-deduction/15 text-red-deduction border-red-deduction/40",
 }
 
 function buildTxnUrl(opts: { q: string; status: string; page: number; pageSize: number }) {
@@ -127,6 +132,7 @@ export function TransactionsClient({
   const [statusFilter, setStatusFilter] = useState(status)
   const [payTarget, setPayTarget] = useState<PayPurchase | null>(null)
   const [receiptTarget, setReceiptTarget] = useState<number | null>(null)
+  const [voidTarget, setVoidTarget] = useState<Purchase | null>(null)
   const [exporting, setExporting] = useState(false)
 
   useSse(null, (event) => {
@@ -135,6 +141,7 @@ export function TransactionsClient({
       event.type === "payment.recorded" ||
       event.type === "payment.voided" ||
       event.type === "purchase.reopened" ||
+      event.type === "purchase.voided" ||
       event.type === "session.ended" ||
       event.type === "bale.weighed"
     ) {
@@ -178,6 +185,10 @@ export function TransactionsClient({
       )
       toast.success("Transaksi dibuka kembali")
     } catch (err) { toast.error((err as Error).message) }
+  }
+
+  async function handleVoidConfirmed(id: number) {
+    setPurchases((prev) => prev.filter((p) => p.id !== id))
   }
 
   function changeStatus(next: string) {
@@ -339,8 +350,13 @@ export function TransactionsClient({
                       {formatCurrency(remaining)}
                     </td>
                     <td className="py-2 px-2 border-b border-border-soft">
-                      <StatusPill status={p.status as "DRAFT" | "WEIGHED" | "APPROVED" | "PAID"} />
-                      {p.priceReviewNote && (
+                      <StatusPill status={p.status as "DRAFT" | "WEIGHED" | "APPROVED" | "PAID" | "VOIDED"} />
+                      {p.status === "VOIDED" && p.voidNote && (
+                        <span className="block text-[10px] text-red-deduction/80 italic mt-1 max-w-[160px] truncate" title={`${p.voidedBy ?? ""}: ${p.voidNote}`}>
+                          {p.voidNote}
+                        </span>
+                      )}
+                      {p.status !== "VOIDED" && p.priceReviewNote && (
                         <span className="block text-[10px] text-muted-2 italic mt-1 max-w-[160px] truncate" title={p.priceReviewNote}>
                           {p.priceReviewNote}
                         </span>
@@ -358,42 +374,56 @@ export function TransactionsClient({
                       </div>
                     </td>
                     <td className="py-2 pl-2 border-b border-border-soft">
-                      {p.status === "DRAFT" && (
-                        <span className="text-[11px] text-muted-2">{allWeighed ? "Menunggu ditimbang Pos 2" : "Proses grading"}</span>
-                      )}
-                      {p.status === "WEIGHED" && (
-                        <Link
-                          href={`/admin/transactions/${p.id}/review`}
-                          className="text-[11px] font-bold text-emerald cursor-pointer hover:underline"
-                        >
-                          Review &amp; Setujui
-                        </Link>
-                      )}
-                      {p.status === "APPROVED" && (
+                      {p.status === "VOIDED" ? (
+                        <span className="text-[11px] text-muted-2">Dibatalkan</span>
+                      ) : (
                         <div className="flex flex-col gap-1">
-                          {remaining > 0.005 && (
-                            <button onClick={() => setPayTarget(payPurchase)} className="text-[11px] font-bold text-emerald cursor-pointer hover:underline">
-                              Catat Pembayaran
+                          {p.status === "DRAFT" && (
+                            <span className="text-[11px] text-muted-2">{allWeighed ? "Menunggu ditimbang Pos 2" : "Proses grading"}</span>
+                          )}
+                          {p.status === "WEIGHED" && (
+                            <Link
+                              href={`/admin/transactions/${p.id}/review`}
+                              className="text-[11px] font-bold text-emerald cursor-pointer hover:underline"
+                            >
+                              Review &amp; Setujui
+                            </Link>
+                          )}
+                          {p.status === "APPROVED" && (
+                            <>
+                              {remaining > 0.005 && (
+                                <button onClick={() => setPayTarget(payPurchase)} className="text-left text-[11px] font-bold text-emerald cursor-pointer hover:underline">
+                                  Catat Pembayaran
+                                </button>
+                              )}
+                              {remaining <= 0.005 && <span className="text-[11px] text-muted-2">Lunas</span>}
+                              {p.paidAmount <= 0.005 && (
+                                <button
+                                  onClick={() => handleReopen(p.id)}
+                                  className="text-left mt-1 pt-1 border-t border-border-soft text-[11px] font-bold text-amber cursor-pointer hover:underline"
+                                >
+                                  Buka
+                                </button>
+                              )}
+                            </>
+                          )}
+                          {p.status === "PAID" && (
+                            <button
+                              onClick={() => setReceiptTarget(p.id)}
+                              className="text-left text-[11px] font-bold text-emerald cursor-pointer hover:underline"
+                            >
+                              Cetak Bukti
                             </button>
                           )}
-                          {remaining <= 0.005 && <span className="text-[11px] text-muted-2">Lunas</span>}
-                          {p.paidAmount <= 0.005 && (
+                          {role === "SUPER_ADMIN" && (
                             <button
-                              onClick={() => handleReopen(p.id)}
-                              className="mt-1 pt-1 border-t border-border-soft text-[11px] font-bold text-amber cursor-pointer hover:underline"
+                              onClick={() => setVoidTarget(p)}
+                              className="text-left mt-1 pt-1 border-t border-border-soft text-[11px] font-bold text-red-deduction cursor-pointer hover:underline"
                             >
-                              Buka
+                              Void
                             </button>
                           )}
                         </div>
-                      )}
-                      {p.status === "PAID" && (
-                        <button
-                          onClick={() => setReceiptTarget(p.id)}
-                          className="text-[11px] font-bold text-emerald cursor-pointer hover:underline"
-                        >
-                          Cetak Bukti
-                        </button>
                       )}
                     </td>
                   </tr>
@@ -427,6 +457,129 @@ export function TransactionsClient({
         purchaseId={receiptTarget}
         onClose={() => setReceiptTarget(null)}
       />
+
+      <VoidDialog
+        purchase={voidTarget}
+        onClose={() => setVoidTarget(null)}
+        onVoided={handleVoidConfirmed}
+      />
+    </div>
+  )
+}
+
+function VoidDialog({
+  purchase,
+  onClose,
+  onVoided,
+}: {
+  purchase: Purchase | null
+  onClose: () => void
+  onVoided: (id: number) => void
+}) {
+  const [note, setNote] = useState("")
+  const [busy, setBusy] = useState(false)
+  const open = purchase != null
+
+  useEffect(() => {
+    if (open) setNote("")
+  }, [open])
+
+  if (!open || !purchase) return null
+
+  const activePayments = purchase.payments.filter((pay) => !pay.voidedAt)
+  const paidCash = activePayments.reduce((s, pay) => s + pay.amount, 0)
+  const loanCut = activePayments.reduce((s, pay) => s + pay.loanDeduction, 0)
+
+  async function submit() {
+    if (!purchase) return
+    if (!note.trim()) {
+      toast.error("Alasan void wajib diisi")
+      return
+    }
+    setBusy(true)
+    try {
+      await voidTransaction(purchase.id, note.trim())
+      toast.success(`Transaksi ${purchase.transactionCode} dibatalkan`)
+      onVoided(purchase.id)
+      onClose()
+    } catch (err) {
+      toast.error((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-md rounded-xl border border-red-deduction/35 bg-card p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-sm font-bold text-red-deduction uppercase tracking-wide">
+          Void Transaksi
+        </h2>
+        <p className="mt-1 font-mono text-[12px] text-foreground">
+          {purchase.transactionCode} · {purchase.farmer.name}
+        </p>
+
+        <div className="mt-3 rounded-lg border border-border-soft bg-panel-alt p-3 text-[11.5px] space-y-1">
+          <p className="text-muted-foreground">
+            Status saat ini: <StatusPill status={purchase.status as "DRAFT" | "WEIGHED" | "APPROVED" | "PAID"} />
+          </p>
+          {activePayments.length > 0 ? (
+            <>
+              <p className="text-muted-foreground">
+                Pembayaran aktif:{" "}
+                <span className="font-mono text-emerald font-bold">
+                  {activePayments.length}× {formatCurrency(paidCash)}
+                </span>
+              </p>
+              {loanCut > 0.005 && (
+                <p className="text-muted-foreground">
+                  Potongan hutang ikut dibatalkan:{" "}
+                  <span className="font-mono text-amber font-bold">{formatCurrency(loanCut)}</span>{" "}
+                  (saldo hutang petani dipulihkan)
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="text-muted-foreground">Belum ada pembayaran tercatat.</p>
+          )}
+          <p className="text-red-deduction/90 pt-1">
+            Semua bale & pembayaran transaksi ini dibatalkan permanen dan tidak masuk laporan.
+          </p>
+        </div>
+
+        <label className="block mt-3 text-[11px] font-bold text-muted-foreground uppercase">
+          Alasan Void <span className="text-red-deduction">*</span>
+        </label>
+        <textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          rows={3}
+          placeholder="Contoh: salah input petani / duplikat transaksi"
+          className="mt-1 w-full rounded-lg border border-border-soft bg-panel-alt px-3 py-2 text-[12px] text-foreground outline-none placeholder:text-muted-2 focus:border-red-deduction/50 resize-none"
+        />
+
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            className="h-9 px-4 rounded-lg border border-border-soft bg-panel-alt text-[12px] font-bold text-muted-foreground cursor-pointer hover:border-emerald/50 disabled:opacity-50"
+          >
+            Batal
+          </button>
+          <button
+            type="button"
+            onClick={submit}
+            disabled={busy || !note.trim()}
+            className="h-9 px-4 rounded-lg border border-red-deduction/40 bg-red-deduction/15 text-[12px] font-bold text-red-deduction cursor-pointer hover:bg-red-deduction/25 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {busy ? "Memproses…" : "Void Permanen"}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

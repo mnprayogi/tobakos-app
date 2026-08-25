@@ -383,6 +383,115 @@ export async function voidPayment(purchaseId: number, paymentId: number) {
   return result
 }
 
+export async function voidTransaction(purchaseId: number, note: string) {
+  const actor = await requireRoles("SUPER_ADMIN")
+
+  const trimmedNote = note.trim()
+  if (!trimmedNote) throw new Error("Alasan void wajib diisi")
+
+  let purchaseLaneId: number | null = null
+  let loanTouched = false
+
+  const result = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM tobacco_purchases WHERE id = ${purchaseId} FOR UPDATE`
+
+    const purchase = await tx.purchase.findUnique({
+      where: { id: purchaseId },
+      include: { payments: { orderBy: { paidAt: "asc" } } },
+    })
+    if (!purchase) throw new Error("Transaksi tidak ditemukan")
+    if (purchase.status === "VOIDED") throw new Error("Transaksi sudah dibatalkan")
+    purchaseLaneId = purchase.laneId
+
+    const activePayments = purchase.payments.filter((p) => !p.voidedAt)
+    const activeLoanDeduction = activePayments.reduce(
+      (sum, p) => sum + Number(p.loanDeduction ?? 0),
+      0
+    )
+    if (activeLoanDeduction > 0.005) {
+      await tx.$queryRaw`SELECT id FROM farmer_loans WHERE farmerId = ${purchase.farmerId} FOR UPDATE`
+      loanTouched = true
+    }
+
+    if (activePayments.length > 0) {
+      await tx.payment.updateMany({
+        where: { purchaseId, voidedAt: null },
+        data: { voidedAt: new Date(), voidedBy: actor },
+      })
+    }
+
+    await tx.cashEntry.updateMany({
+      where: {
+        voidedAt: null,
+        OR: [
+          { purchaseId },
+          ...(activePayments.length > 0
+            ? [{ paymentId: { in: activePayments.map((p) => p.id) } }]
+            : []),
+        ],
+      },
+      data: { voidedAt: new Date(), voidedBy: actor },
+    })
+
+    if (activePayments.length > 0) {
+      await tx.loanEntry.updateMany({
+        where: { voidedAt: null, paymentId: { in: activePayments.map((p) => p.id) } },
+        data: { voidedAt: new Date(), voidedBy: actor },
+      })
+    }
+
+    await tx.purchase.update({
+      where: { id: purchaseId },
+      data: {
+        status: "VOIDED",
+        voidedAt: new Date(),
+        voidedBy: actor,
+        voidNote: trimmedNote,
+      },
+    })
+
+    if (loanTouched) {
+      const loan = await tx.farmerLoan.findUnique({
+        where: { farmerId: purchase.farmerId },
+        include: { entries: { select: { type: true, amount: true, voidedAt: true } } },
+      })
+      if (loan) {
+        const balance = loanTotals(loan.entries).balance
+        const isSettled = balance <= 0.005
+        await tx.farmerLoan.update({
+          where: { id: loan.id },
+          data: {
+            status: isSettled ? "SETTLED" : "ACTIVE",
+            ...(isSettled ? { settledAt: new Date() } : { settledAt: null }),
+            updatedAt: new Date(),
+          },
+        })
+      }
+    }
+
+    return {
+      voidedPayments: activePayments.length,
+      paidAmountReversed: roundMoney(
+        activePayments.reduce(
+          (sum, p) => sum + Number(p.amount) + Number(p.loanDeduction ?? 0),
+          0
+        )
+      ),
+      loanTouched,
+    }
+  })
+
+  revalidatePath("/admin/transactions")
+  revalidatePath("/admin/debt")
+  revalidatePath("/admin/kas")
+  revalidatePath("/dashboard")
+  if (result.loanTouched) revalidatePath("/admin/loans")
+  publishEvent("purchase.voided", purchaseLaneId)
+  publishEvent("cash.updated")
+  if (result.loanTouched) publishEvent("loan.updated")
+  return result
+}
+
 export async function reopenTransaction(purchaseId: number) {
   await requireRoles("ADMIN", "FINANCE", "OWNER")
 

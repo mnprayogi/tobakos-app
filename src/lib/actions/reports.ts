@@ -108,7 +108,8 @@ function dateRange(filters: ReportFilters): { from: Date; to: Date } {
 type ReportStatus = "DRAFT" | "WEIGHED" | "APPROVED" | "PAID"
 
 function statusWhere(status?: string | null) {
-  return status ? { status: status as ReportStatus } : {}
+  if (status) return { status: status as ReportStatus }
+  return { status: { not: "VOIDED" as const } }
 }
 
 export async function getFarmerSummary(filters: ReportFilters): Promise<FarmerSummaryRow[]> {
