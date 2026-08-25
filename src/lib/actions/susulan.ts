@@ -15,6 +15,8 @@ import {
   calculateNetWeight,
   calculateSubtotal,
   roundMoney,
+  roundWeight,
+  type RoundMode,
 } from "@/lib/calculations"
 
 export interface SusulanBaleInput {
@@ -26,6 +28,7 @@ export interface SusulanBaleInput {
   packingWeight: number
   customerId: number
   grossWeight: number | null
+  roundingMode?: RoundMode
 }
 
 export interface SusulanBatchInput {
@@ -48,6 +51,8 @@ export interface SusulanBatchResult {
   warehouseCode: string
   farmerName: string
   transactionDate: string
+  status: string
+  sessionEnded: boolean
   weighedCount: number
   gradedCount: number
   totalNetWeight: number
@@ -184,13 +189,17 @@ export async function saveSusulanBatch(input: SusulanBatchInput): Promise<Susula
     let order = 0
     let weighedCount = 0
     let gradedCount = 0
+    let totalGrossWeight = 0
     let totalNetWeight = 0
+    let totalPrice = 0
 
     for (const bale of input.bales) {
       order += 1
       const seq = await nextSequence(`bale:${lane.code}`, tx, transactionDate)
       const labelCode = generateLabelCode(lane.warehouse.code, lane.code, seq, transactionDate)
       const pricePerKg = priceMap.get(`${bale.tobaccoTypeId}|${bale.grade.trim()}`)!
+      const roundingMode: RoundMode = bale.roundingMode ?? "normal"
+      const weightDecimals = roundingMode === "normal" ? 1 : 0
 
       const hasGross = bale.grossWeight != null && Number.isFinite(bale.grossWeight)
       let weightAfterPacking: number | undefined
@@ -200,13 +209,27 @@ export async function saveSusulanBatch(input: SusulanBatchInput): Promise<Susula
       let status: "GRADED" | "WEIGHED" = "GRADED"
 
       if (hasGross) {
-        weightAfterPacking = calculateWeightAfterPacking(bale.grossWeight!, bale.packingWeight)
-        moistureDeduction = calculateMoistureDeduction(weightAfterPacking, bale.moisturePercent)
-        netWeight = roundMoney(calculateNetWeight(weightAfterPacking, moistureDeduction))
-        subtotal = roundMoney(calculateSubtotal(netWeight, Number(pricePerKg)))
+        weightAfterPacking = roundWeight(
+          calculateWeightAfterPacking(bale.grossWeight!, bale.packingWeight),
+          roundingMode,
+          weightDecimals
+        )
+        moistureDeduction = roundWeight(
+          calculateMoistureDeduction(weightAfterPacking, bale.moisturePercent),
+          roundingMode,
+          weightDecimals
+        )
+        netWeight = roundWeight(
+          calculateNetWeight(weightAfterPacking, moistureDeduction),
+          roundingMode,
+          weightDecimals
+        )
+        subtotal = roundWeight(calculateSubtotal(netWeight, Number(pricePerKg)), "normal", 2)
         status = "WEIGHED"
         weighedCount += 1
+        totalGrossWeight += bale.grossWeight!
         totalNetWeight += netWeight
+        totalPrice += subtotal
       } else {
         gradedCount += 1
       }
@@ -243,18 +266,38 @@ export async function saveSusulanBatch(input: SusulanBatchInput): Promise<Susula
       })
     }
 
+    const sessionEnded = gradedCount === 0 && weighedCount > 0
+
     await tx.purchase.update({
       where: { id: purchase.id },
-      data: { totalItems: input.bales.length },
+      data: {
+        totalItems: input.bales.length,
+        totalGrossWeight,
+        totalNetWeight,
+        totalPrice,
+        ...(sessionEnded ? { status: "WEIGHED", weighedBy: actor } : {}),
+      },
     })
 
-    return { purchase, farmerName: farmer.name, labels, weighedCount, gradedCount, totalNetWeight }
+    return {
+      purchase,
+      farmerName: farmer.name,
+      labels,
+      weighedCount,
+      gradedCount,
+      totalGrossWeight,
+      totalNetWeight,
+      totalPrice,
+      sessionEnded,
+    }
   })
 
   revalidatePath("/pos-1/grading")
   revalidatePath("/pos-2/weighing")
+  revalidatePath("/pos-2/transactions")
   revalidatePath("/admin/transactions")
   publishEvent("bale.created", lane.id)
+  if (result.sessionEnded) publishEvent("session.ended", lane.id)
 
   return {
     purchaseId: result.purchase.id,
@@ -262,6 +305,8 @@ export async function saveSusulanBatch(input: SusulanBatchInput): Promise<Susula
     warehouseCode: lane.warehouse.code,
     farmerName: result.farmerName,
     transactionDate: input.transactionDate,
+    status: result.sessionEnded ? "WEIGHED" : "DRAFT",
+    sessionEnded: result.sessionEnded,
     weighedCount: result.weighedCount,
     gradedCount: result.gradedCount,
     totalNetWeight: roundMoney(result.totalNetWeight),
