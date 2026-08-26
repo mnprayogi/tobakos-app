@@ -31,7 +31,7 @@ export function LanePicker({
     <div className="flex flex-col items-center justify-center min-h-[60vh] sm:min-h-[80vh] px-4">
       <div className="text-center mb-8">
         <h1 className="font-sans text-2xl font-bold text-foreground tracking-tight">{title}</h1>
-        <p className="font-sans text-sm text-muted mt-2">{subtitle}</p>
+        <p className="font-sans text-sm text-[#9BA8C2] mt-2">{subtitle}</p>
       </div>
 
       <div className="grid gap-6 w-full max-w-3xl">

@@ -582,3 +582,61 @@ export async function exportPortalExcel(data: PortalExportData): Promise<void> {
     { fontFamily: "Calibri", fontSize: 11 }
   ).toFile(`Laporan-Mitra-${safeName}_${dateLabel}.xlsx`)
 }
+
+function buildCashSheet(
+  label: string,
+  rows: { createdAt: Date; type: string; uraian: string; transactionCode: string | null; note: string | null; amount: number; createdBy: string | null; balance: number }[],
+  from: string,
+  to: string
+): XlsxSheet {
+  const widths = [18, 12, 30, 22, 28, 16, 16, 18]
+  const columns = widths.map((width) => ({ width }))
+  const dateRange = `${from || "awal"} s/d ${to || "sekarang"}`
+
+  const totalMasuk = rows.filter((r) => r.type === "MASUK").reduce((s, r) => s + r.amount, 0)
+  const totalKeluar = rows.filter((r) => r.type === "KELUAR").reduce((s, r) => s + r.amount, 0)
+
+  const data: SheetData = [
+    titleRow(`BUKU KAS ${label.toUpperCase()} — Periode ${dateRange}`, columns.length),
+    headerRow(["Tanggal", "Jenis", "Uraian", "Ref Transaksi", "Catatan", "Jumlah Masuk", "Jumlah Keluar", "Saldo"]),
+    ...rows.map((r) => [
+      txt(fmtDate(r.createdAt)),
+      txt(r.type === "MASUK" ? "Masuk" : "Keluar"),
+      txt(r.uraian, { fontWeight: r.transactionCode ? "bold" : undefined }),
+      txt(r.transactionCode ?? "—"),
+      txt(r.note ?? "—"),
+      r.type === "MASUK" ? n(r.amount, MONEY_FMT) : { value: "", ...border },
+      r.type === "KELUAR" ? n(r.amount, MONEY_FMT) : { value: "", ...border },
+      n(r.balance, MONEY_FMT),
+    ] as Row),
+    totalRow([
+      txt("TOTAL", { backgroundColor: "#f2f2f2" }),
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
+      n(totalMasuk, MONEY_FMT, "right", true),
+      n(totalKeluar, MONEY_FMT, "right", true),
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
+    ]),
+  ]
+  return { sheet: label, columns, data, stickyRowsCount: 2, showGridLines: false }
+}
+
+export interface CashExportData {
+  pembelian: { createdAt: Date; type: string; uraian: string; transactionCode: string | null; note: string | null; amount: number; createdBy: string | null; balance: number }[]
+  operasional: { createdAt: Date; type: string; uraian: string; transactionCode: string | null; note: string | null; amount: number; createdBy: string | null; balance: number }[]
+}
+
+export async function exportCashExcel(data: CashExportData, from: string, to: string): Promise<void> {
+  const sheets: XlsxSheet[] = []
+  if (data.pembelian.length > 0) sheets.push(buildCashSheet("Kas Pembelian", data.pembelian, from, to))
+  if (data.operasional.length > 0) sheets.push(buildCashSheet("Kas Operasional", data.operasional, from, to))
+
+  if (sheets.length === 0) throw new Error("Tidak ada data kas untuk diekspor")
+
+  const range = `${from || "semua"}_${to || "semua"}`
+  await writeExcelFile(sheets, { fontFamily: "Calibri", fontSize: 11 }).toFile(
+    `Laporan-Kas_${range}.xlsx`
+  )
+}

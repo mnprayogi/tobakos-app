@@ -107,7 +107,7 @@ export default async function TransactionsPage({
       _count: { _all: true },
     }),
     prisma.purchase.aggregate({
-      where: warehouseWhere,
+      where: { ...warehouseWhere, status: { not: "VOIDED" as const } },
       _count: { _all: true },
     }),
     prisma.purchase.aggregate({

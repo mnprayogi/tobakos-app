@@ -5,7 +5,7 @@ export const proxy = auth((req) => {
   const { pathname } = req.nextUrl
   const session = req.auth
 
-  if (!session?.user && pathname !== "/login") {
+  if (!session?.user && pathname !== "/login" && pathname !== "/") {
     return NextResponse.redirect(new URL("/login", req.url))
   }
 

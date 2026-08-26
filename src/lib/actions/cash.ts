@@ -17,6 +17,7 @@ export interface CashEntryInfo {
   note: string | null
   refLabel: string | null
   transactionCode: string | null
+  farmerName: string | null
   createdBy: string | null
   createdAt: Date
   voided: boolean
@@ -37,7 +38,7 @@ export async function getCashData(): Promise<CashData> {
     where: scope.mode === "scoped" ? { warehouseId: scope.warehouseId } : {},
     orderBy: { createdAt: "desc" },
     include: {
-      purchase: { select: { transactionCode: true } },
+      purchase: { select: { transactionCode: true, farmer: { select: { name: true } } } },
       loanEntry: { select: { type: true } },
     },
   })
@@ -45,9 +46,11 @@ export async function getCashData(): Promise<CashData> {
   const info: CashEntryInfo[] = entries.map((e) => {
     let refLabel: string | null = null
     let transactionCode: string | null = null
+    let farmerName: string | null = null
     if (e.paymentId != null) {
-      refLabel = e.purchase?.transactionCode ? `Pembayaran ${e.purchase.transactionCode}` : "Pembayaran transaksi"
       transactionCode = e.purchase?.transactionCode ?? null
+      farmerName = e.purchase?.farmer?.name ?? null
+      refLabel = transactionCode ? `Pembayaran ${transactionCode}` : "Pembayaran transaksi"
     } else if (e.loanEntryId != null) {
       refLabel = e.loanEntry?.type === "DISBURSEMENT" ? "Pencairan pinjaman" : "Bayar hutang tunai"
     }
@@ -59,6 +62,7 @@ export async function getCashData(): Promise<CashData> {
       note: e.note,
       refLabel,
       transactionCode,
+      farmerName,
       createdBy: e.createdBy,
       createdAt: e.createdAt,
       voided: e.voidedAt != null,
@@ -68,6 +72,79 @@ export async function getCashData(): Promise<CashData> {
   })
 
   return { entries: info, totals: cashTotalsByCategory(info) }
+}
+
+export interface CashExportRow {
+  createdAt: Date
+  type: CashFlowTypeValue
+  uraian: string
+  transactionCode: string | null
+  note: string | null
+  amount: number
+  createdBy: string | null
+  balance: number
+}
+
+export async function getCashExportData(
+  from?: string,
+  to?: string
+): Promise<{ pembelian: CashExportRow[]; operasional: CashExportRow[] }> {
+  await requireRoles("ADMIN", "FINANCE", "OWNER")
+  const scope = await resolveWarehouseScope()
+
+  const where: Record<string, unknown> = { voidedAt: null }
+  if (scope.mode === "scoped") where.warehouseId = scope.warehouseId
+  if (from || to) {
+    where.createdAt = {
+      ...(from ? { gte: new Date(`${from}T00:00:00`) } : {}),
+      ...(to ? { lte: new Date(`${to}T23:59:59.999`) } : {}),
+    }
+  }
+
+  const entries = await prisma.cashEntry.findMany({
+    where,
+    orderBy: { createdAt: "asc" },
+    include: {
+      purchase: { select: { transactionCode: true, farmer: { select: { name: true } } } },
+      loanEntry: { select: { type: true } },
+    },
+  })
+
+  const toRow = (e: (typeof entries)[number]): CashExportRow => {
+    let uraian = "Manual"
+    if (e.paymentId != null) {
+      const farmer = e.purchase?.farmer?.name
+      const code = e.purchase?.transactionCode ?? ""
+      uraian = farmer ? `Pembayaran ${code} — ${farmer}` : code ? `Pembayaran ${code}` : "Pembayaran transaksi"
+    } else if (e.loanEntryId != null) {
+      uraian = e.loanEntry?.type === "DISBURSEMENT" ? "Pencairan pinjaman" : "Bayar hutang tunai"
+    }
+    return {
+      createdAt: e.createdAt,
+      type: e.type as CashFlowTypeValue,
+      uraian,
+      transactionCode: e.purchase?.transactionCode ?? null,
+      note: e.note,
+      amount: Number(e.amount),
+      createdBy: e.createdBy,
+    }
+  }
+
+  const pembelianRows = entries.filter((e) => e.category === "KAS_PEMBELIAN").map(toRow)
+  const operasionalRows = entries.filter((e) => e.category === "KAS_OPERASIONAL").map(toRow)
+
+  let bal = 0
+  const pembelian = pembelianRows.map((r) => {
+    bal += r.type === "MASUK" ? r.amount : -r.amount
+    return { ...r, balance: bal }
+  })
+  let balOp = 0
+  const operasional = operasionalRows.map((r) => {
+    balOp += r.type === "MASUK" ? r.amount : -r.amount
+    return { ...r, balance: balOp }
+  })
+
+  return { pembelian, operasional }
 }
 
 export interface CreateCashEntryInput {

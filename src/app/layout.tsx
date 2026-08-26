@@ -26,6 +26,10 @@ export const metadata: Metadata = {
     statusBarStyle: "black-translucent",
     title: "TobakOS Pos 1",
   },
+  icons: {
+    icon: "/icons/icon-192.png",
+    apple: "/icons/icon-512.png",
+  },
   formatDetection: {
     telephone: false,
   },

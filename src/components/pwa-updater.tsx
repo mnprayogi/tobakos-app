@@ -1,11 +1,13 @@
 "use client"
 
 import { useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { useSerwist } from "@serwist/turbopack/react"
 import { toast } from "sonner"
 
 export function PwaUpdater() {
   const { serwist } = useSerwist()
+  const router = useRouter()
 
   useEffect(() => {
     if (!serwist) return
@@ -21,7 +23,9 @@ export function PwaUpdater() {
     }
 
     const onControlling = (event: { isUpdate?: boolean }) => {
-      if (event.isUpdate) window.location.reload()
+      if (event.isUpdate) {
+        router.refresh()
+      }
     }
 
     serwist.addEventListener("waiting", onWaiting)
@@ -31,7 +35,7 @@ export function PwaUpdater() {
       serwist.removeEventListener("waiting", onWaiting)
       serwist.removeEventListener("controlling", onControlling)
     }
-  }, [serwist])
+  }, [serwist, router])
 
   return null
 }

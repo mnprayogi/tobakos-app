@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from "react"
 import { flushSync } from "react-dom"
 import { formatCurrency, formatDateTime } from "@/lib/utils"
 import { usePrintDocument, printBaseStyle } from "@/lib/print"
-import { getCashData, voidCashEntry, type CashData, type CashEntryInfo } from "@/lib/actions/cash"
+import { getCashData, getCashExportData, voidCashEntry, type CashData, type CashEntryInfo } from "@/lib/actions/cash"
 import type { WarehouseScope } from "@/lib/actions/scope"
 import { CashDialog, type CashWarehouse } from "@/components/admin/cash-dialog"
 import { CashBookPrint } from "@/components/admin/cash-book-print"
@@ -19,10 +19,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Banknote, Printer, Wallet } from "lucide-react"
+import { Banknote, Download, Printer, Wallet } from "lucide-react"
 import { PageHeader } from "@/components/shared/page-header"
 import { useSse } from "@/hooks/useSse"
 import { toast } from "sonner"
+import { exportCashExcel } from "@/lib/export-excel"
 
 function categoryLabel(category: string): string {
   return category === "KAS_PEMBELIAN" ? "Kas Pembelian" : "Kas Operasional"
@@ -52,6 +53,9 @@ export function CashClient({
   const [voidTarget, setVoidTarget] = useState<CashEntryInfo | null>(null)
   const [voiding, setVoiding] = useState(false)
   const [printedAt, setPrintedAt] = useState<Date | null>(null)
+  const [fromDate, setFromDate] = useState("")
+  const [toDate, setToDate] = useState("")
+  const [exporting, setExporting] = useState(false)
   const printRef = useRef<HTMLDivElement>(null)
   const handlePrint = usePrintDocument(printRef, printBaseStyle, { documentTitle: "Buku-Kas" })
 
@@ -98,6 +102,19 @@ export function CashClient({
     }
   }
 
+  async function handleExport() {
+    setExporting(true)
+    try {
+      const data = await getCashExportData(fromDate || undefined, toDate || undefined)
+      await exportCashExcel(data, fromDate, toDate)
+      toast.success("File Excel berhasil diunduh")
+    } catch (err) {
+      toast.error((err as Error).message)
+    } finally {
+      setExporting(false)
+    }
+  }
+
   const tabs: { key: typeof filter; label: string }[] = [
     { key: "SEMUA", label: "Semua" },
     { key: "KAS_PEMBELIAN", label: "Kas Pembelian" },
@@ -120,6 +137,31 @@ export function CashClient({
           <Printer className="w-3.5 h-3.5" />
           Cetak
         </button>
+        <div className="flex items-center gap-1.5">
+          <input
+            type="date"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            className="field-input !py-1.5 !text-[11px] !w-[130px]"
+            placeholder="Dari"
+          />
+          <span className="text-[11px] text-muted-foreground">—</span>
+          <input
+            type="date"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            className="field-input !py-1.5 !text-[11px] !w-[130px]"
+            placeholder="Sampai"
+          />
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="rounded-lg bg-panel-alt px-3.5 py-2 font-bold text-[12px] text-foreground border border-border-soft cursor-pointer inline-flex items-center gap-1.5 disabled:opacity-50"
+          >
+            <Download className="w-3.5 h-3.5" />
+            {exporting ? "Export…" : "Excel"}
+          </button>
+        </div>
         <button
           onClick={() => setDialogOpen(true)}
           className="rounded-lg bg-emerald px-3.5 py-2 font-bold text-[12px] text-primary-foreground cursor-pointer"
@@ -238,6 +280,7 @@ export function CashClient({
                       </td>
                       <td className="py-2 px-2 border-b border-border-soft">
                         <p className="font-bold text-foreground">{entryUraian(e)}</p>
+                        {e.farmerName && <p className="text-[11px] text-muted-foreground">Petani: {e.farmerName}</p>}
                         {e.note && <p className="text-[11px] text-muted-foreground">{e.note}</p>}
                         {e.transactionCode && <p className="font-mono text-[10.5px] text-emerald">{e.transactionCode}</p>}
                         {e.voided && e.voidedBy && (
