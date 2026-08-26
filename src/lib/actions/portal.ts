@@ -63,6 +63,7 @@ function parseRange(from?: string, to?: string): { gte?: Date; lte?: Date } {
 export async function getCustomerPortalData(opts?: {
   from?: string
   to?: string
+  status?: string
 }): Promise<CustomerPortalData> {
   await requireRoles("CUSTOMER")
 
@@ -81,9 +82,15 @@ export async function getCustomerPortalData(opts?: {
   const transactionDate = parseRange(opts?.from, opts?.to)
   const hasRange = "gte" in transactionDate || "lte" in transactionDate
 
-  const itemWhere = {
+  const itemWhere: Record<string, unknown> = {
     customerId: user.customerId,
-    ...(hasRange ? { purchase: { transactionDate } } : {}),
+    purchase: {
+      status: { not: "VOIDED" as const },
+      ...(hasRange ? { transactionDate } : {}),
+    },
+  }
+  if (opts?.status && ["GRADED", "WEIGHED", "CLOSED"].includes(opts.status)) {
+    itemWhere.status = opts.status
   }
 
   const [customer, allAgg, todayAgg, awaitingWeigh, items] = await Promise.all([
@@ -97,7 +104,7 @@ export async function getCustomerPortalData(opts?: {
       _sum: { netWeight: true, subtotal: true },
     }),
     prisma.purchaseItem.aggregate({
-      where: { customerId: user.customerId, createdAt: { gte: start } },
+      where: { customerId: user.customerId, createdAt: { gte: start }, purchase: { status: { not: "VOIDED" as const } } },
       _count: { _all: true },
       _sum: { subtotal: true },
     }),

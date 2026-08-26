@@ -30,7 +30,7 @@ function safeParam(v?: string | string[]): string | null {
 export default async function PortalPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string | string[]; to?: string | string[] }>
+  searchParams: Promise<{ from?: string | string[]; to?: string | string[]; status?: string | string[] }>
 }) {
   const session = await auth()
   if (!session?.user) redirect("/login")
@@ -39,8 +39,14 @@ export default async function PortalPage({
   const params = await searchParams
   const from = safeParam(params.from)
   const to = safeParam(params.to)
+  const statusParam = Array.isArray(params.status) ? params.status[0] : params.status
+  const status = statusParam && ["GRADED", "WEIGHED", "CLOSED"].includes(statusParam) ? statusParam : null
 
-  const data = await getCustomerPortalData({ from: from ?? undefined, to: to ?? undefined })
+  const data = await getCustomerPortalData({
+    from: from ?? undefined,
+    to: to ?? undefined,
+    status: status ?? undefined,
+  })
   const visibleItems = data.items.slice(0, TABLE_LIMIT)
 
   return (
@@ -55,7 +61,7 @@ export default async function PortalPage({
         />
       </PageHeader>
 
-      <PortalFilterBar from={from} to={to} />
+      <PortalFilterBar from={from} to={to} status={status} />
 
       <section className="space-y-2.5">
         <KpiSectionTitle label={from || to ? "Total Periode" : "Total Alokasi"} />

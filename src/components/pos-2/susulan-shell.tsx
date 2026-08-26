@@ -12,7 +12,6 @@ import {
   Printer,
   Search,
   Trash2,
-  UserRound,
   X,
 } from "lucide-react"
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog"
@@ -20,6 +19,8 @@ import { PageHeader } from "@/components/shared/page-header"
 import { StatusPill } from "@/components/shared/status-pill"
 import { PrinterManager } from "@/components/shared/printer-manager"
 import { useThermalPrinter } from "@/hooks/useThermalPrinter"
+import { usePrintDocument, printBaseStyle } from "@/lib/print"
+import { StickerBatchPrint } from "@/components/pos-2/sticker-batch-print"
 import {
   checkSusulanDuplicate,
   saveSusulanBatch,
@@ -147,6 +148,8 @@ export function SusulanShell(props: SusulanShellProps) {
   const [printedCount, setPrintedCount] = useState(0)
 
   const printer = useThermalPrinter()
+  const stickerPrintRef = useRef<HTMLDivElement>(null)
+  const handleStickerPrint = usePrintDocument(stickerPrintRef, printBaseStyle, { documentTitle: "Label-Batch" })
 
   useEffect(() => {
     let cancelled = false
@@ -1000,17 +1003,29 @@ export function SusulanShell(props: SusulanShellProps) {
                       {printedCount}/{result.labels.length}
                     </span>
                   )}
-                  <button
-                    type="button"
-                    onClick={printAllLabels}
-                    disabled={!printer.connected || printing}
-                    className="flex items-center gap-2 rounded-lg bg-emerald px-4 py-2.5 text-[12.5px] font-bold text-primary-foreground hover:bg-emerald/80 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Printer className="w-4 h-4" />
-                    {printing
-                      ? "Mencetak…"
-                      : `Cetak Semua (${result.labels.length})`}
-                  </button>
+                  {printer.connected && (
+                    <button
+                      type="button"
+                      onClick={printAllLabels}
+                      disabled={printing}
+                      className="flex items-center gap-2 rounded-lg bg-emerald px-4 py-2.5 text-[12.5px] font-bold text-primary-foreground hover:bg-emerald/80 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Printer className="w-4 h-4" />
+                      {printing
+                        ? "Mencetak…"
+                        : `Cetak Semua (${result.labels.length})`}
+                    </button>
+                  )}
+                  {!printer.connected && (
+                    <button
+                      type="button"
+                      onClick={handleStickerPrint}
+                      className="flex items-center gap-2 rounded-lg bg-panel-alt px-4 py-2.5 text-[12.5px] font-bold text-foreground border border-border-soft hover:border-emerald/40 cursor-pointer"
+                    >
+                      <Printer className="w-4 h-4" />
+                      Cetak via Browser ({result.labels.length})
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setResult(null)}
@@ -1026,6 +1041,18 @@ export function SusulanShell(props: SusulanShellProps) {
                   di Pos 2 sebelum transaksi bisa ditutup.
                 </p>
               )}
+              <div className="hidden" aria-hidden="true">
+                <StickerBatchPrint
+                  ref={stickerPrintRef}
+                  items={result.labels.map((l) => ({
+                    labelCode: l.labelCode,
+                    grade: l.grade,
+                    farmerName: result.farmerName,
+                  }))}
+                  warehouse={warehouse}
+                  lane={shortLane}
+                />
+              </div>
             </>
           )}
         </DialogContent>

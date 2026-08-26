@@ -4,17 +4,19 @@ import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
 import { Filter, X } from "lucide-react"
 
-export function PortalFilterBar({ from, to }: { from: string | null; to: string | null }) {
+export function PortalFilterBar({ from, to, status }: { from: string | null; to: string | null; status: string | null }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [fromValue, setFromValue] = useState(from ?? "")
   const [toValue, setToValue] = useState(to ?? "")
+  const [statusValue, setStatusValue] = useState(status ?? "")
 
   function apply(e: React.FormEvent) {
     e.preventDefault()
     const params = new URLSearchParams()
     if (fromValue) params.set("from", fromValue)
     if (toValue) params.set("to", toValue)
+    if (statusValue) params.set("status", statusValue)
     const qs = params.toString()
     startTransition(() => router.push(qs ? `/portal?${qs}` : "/portal"))
   }
@@ -22,6 +24,7 @@ export function PortalFilterBar({ from, to }: { from: string | null; to: string 
   function reset() {
     setFromValue("")
     setToValue("")
+    setStatusValue("")
     startTransition(() => router.push("/portal"))
   }
 
@@ -45,6 +48,17 @@ export function PortalFilterBar({ from, to }: { from: string | null; to: string 
         </label>
         <input type="date" value={toValue} onChange={(e) => setToValue(e.target.value)} className={inputCls} />
       </div>
+      <div>
+        <label className="mb-1 block text-[10px] font-bold uppercase tracking-[0.1em] text-muted-2">
+          Status
+        </label>
+        <select value={statusValue} onChange={(e) => setStatusValue(e.target.value)} className={inputCls}>
+          <option value="">Semua</option>
+          <option value="GRADED">GRADED</option>
+          <option value="WEIGHED">WEIGHED</option>
+          <option value="CLOSED">CLOSED</option>
+        </select>
+      </div>
       <button
         type="submit"
         disabled={pending}
@@ -53,7 +67,7 @@ export function PortalFilterBar({ from, to }: { from: string | null; to: string 
         <Filter className="size-3.5" />
         {pending ? "Memuat..." : "Terapkan"}
       </button>
-      {(from || to) && (
+      {(from || to || status) && (
         <button
           type="button"
           onClick={reset}
@@ -64,9 +78,10 @@ export function PortalFilterBar({ from, to }: { from: string | null; to: string 
           Reset
         </button>
       )}
-      {from || to ? (
+      {from || to || status ? (
         <span className="ml-auto font-mono text-[11px] text-muted-2">
-          Periode aktif: {from ?? "awal"} s/d {to ?? "sekarang"}
+          {from || to ? `Periode: ${from ?? "awal"} s/d ${to ?? "sekarang"}` : "Semua data"}
+          {status ? ` · Status: ${status}` : ""}
         </span>
       ) : (
         <span className="ml-auto font-mono text-[11px] text-muted-2">Menampilkan semua data</span>
