@@ -1,62 +1,93 @@
 "use client"
 
-import { useState, useRef, useCallback, useMemo } from "react"
+import { useState, useRef, useCallback, useEffect } from "react"
 import { toast } from "sonner"
-import { getWeighedTransactions, endWeighSession, getSessionUnweighed, getNotaData } from "@/lib/actions/weighing"
-import type { WeighedTransaction, NotaItem, SessionCheckResult } from "@/lib/actions/weighing"
-import { usePrintDocument, printBaseStyle } from "@/lib/print"
-import { lazyPrint } from "@/components/shared/lazy-print"
-
-const NotaTimbangan = lazyPrint(() =>
-  import("@/components/pos-2/nota-timbangan").then((m) => m.NotaTimbangan)
-)
+import { getWeighedTransactions, endWeighSession, getSessionUnweighed } from "@/lib/actions/weighing"
+import type { WeighedTransaction, SessionCheckResult } from "@/lib/actions/weighing"
 import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { formatCurrency, formatDateTime } from "@/lib/utils"
 import { StatusPill } from "@/components/shared/status-pill"
+import { Pagination } from "@/components/shared/pagination"
 import { useRealtime } from "@/hooks/useRealtime"
-
-interface NotaData {
-  transactionCode: string
-  farmerName: string
-  farmerNik: string | null
-  warehouse: string
-  laneCode: string | null
-  createdBy: string | null
-  weighedBy: string | null
-  approvedBy: string | null
-  date: string
-  items: NotaItem[]
-  totals: NotaItem
-}
+import { Search } from "lucide-react"
 
 interface Props {
   laneId: number
 }
 
+const STATUS_FILTERS = [
+  { key: "ALL", label: "Semua" },
+  { key: "DRAFT", label: "Draft" },
+  { key: "WEIGHED", label: "Ditimbang" },
+] as const
+
+const STATUS_ACTIVE_STYLE: Record<string, string> = {
+  ALL: "bg-emerald text-primary-foreground border-emerald",
+  DRAFT: "bg-amber/15 text-amber border-amber/40",
+  WEIGHED: "bg-emerald/15 text-emerald border-emerald/40",
+}
+
 export function WeighedTransactions({ laneId }: Props) {
   const [transactions, setTransactions] = useState<WeighedTransaction[]>([])
+  const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
+  const [statusFilter, setStatusFilter] = useState("ALL")
+  const [query, setQuery] = useState("")
+  const [debouncedQuery, setDebouncedQuery] = useState("")
   const [finishing, setFinishing] = useState<number | null>(null)
   const [confirmTxn, setConfirmTxn] = useState<WeighedTransaction | null>(null)
   const [sessionCheck, setSessionCheck] = useState<SessionCheckResult | null>(null)
   const [checking, setChecking] = useState(false)
-  const [notaData, setNotaData] = useState<NotaData | null>(null)
-  const notaRef = useRef<HTMLDivElement>(null)
-  const handlePrintNota = usePrintDocument(notaRef, printBaseStyle)
+  const debounceTimer = useRef<ReturnType<typeof setTimeout>>(null)
+
+  useEffect(() => {
+    debounceTimer.current = setTimeout(() => {
+      setDebouncedQuery(query)
+      setPage(1)
+    }, 300)
+    return () => { if (debounceTimer.current) clearTimeout(debounceTimer.current) }
+  }, [query])
 
   const loadTransactions = useCallback(async () => {
     try {
-      const data = await getWeighedTransactions(laneId)
-      setTransactions(data)
+      const result = await getWeighedTransactions(laneId, {
+        page,
+        pageSize,
+        status: statusFilter,
+        q: debouncedQuery,
+      })
+      setTransactions(result.data)
+      setTotal(result.total)
     } catch {
       setTransactions([])
+      setTotal(0)
       toast.error("Gagal memuat daftar transaksi")
     } finally {
       setLoading(false)
     }
-  }, [laneId])
+  }, [laneId, page, pageSize, statusFilter, debouncedQuery])
 
   useRealtime(laneId, [loadTransactions])
+
+  useEffect(() => {
+    loadTransactions()
+  }, [loadTransactions])
+
+  function handleStatusFilter(key: string) {
+    setStatusFilter(key)
+    setPage(1)
+  }
+
+  function handlePageSizeChange(size: number) {
+    setPageSize(size)
+    setPage(1)
+  }
+
+  function openNota(txnId: number) {
+    window.open(`/pos-2/nota/${txnId}?laneId=${laneId}`, "_blank")
+  }
 
   async function handleRequestFinish(txn: WeighedTransaction) {
     setConfirmTxn(txn)
@@ -76,10 +107,10 @@ export function WeighedTransactions({ laneId }: Props) {
   async function handleFinishSession(txn: WeighedTransaction) {
     setFinishing(txn.id)
     try {
-      const data = await endWeighSession(txn.id, laneId)
-      setNotaData(data)
+      await endWeighSession(txn.id, laneId)
       setConfirmTxn(null)
-      toast.success("Transaksi ditutup — Nota sementara siap dicetak")
+      toast.success("Transaksi ditutup — Nota siap dicetak")
+      openNota(txn.id)
       loadTransactions()
     } catch (err) {
       toast.error((err as Error).message)
@@ -88,153 +119,167 @@ export function WeighedTransactions({ laneId }: Props) {
     }
   }
 
-  async function handleReprintNota(txn: WeighedTransaction) {
-    try {
-      const data = await getNotaData(txn.id, laneId)
-      setNotaData(data)
-    } catch (err) {
-      toast.error((err as Error).message)
-    }
-  }
-
-  const { activeCount, endedCount, totalWeighed } = useMemo(() => {
-    let active = 0
-    let weighed = 0
-    for (const t of transactions) {
-      if (t.status === "DRAFT") active++
-      weighed += t.weighedCount
-    }
-    return { activeCount: active, endedCount: transactions.length - active, totalWeighed: weighed }
-  }, [transactions])
-
-  if (loading) {
-    return (
-      <div className="rounded-xl border border-border bg-card p-4">
-        <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted-2 mb-3">
-          Transaksi Ditimbang
-        </p>
-        <p className="text-sm text-muted-foreground">Memuat...</p>
-      </div>
-    )
-  }
-
   return (
     <>
       <div className="grid grid-cols-3 gap-3 max-sm:grid-cols-1">
         <div className="rounded-xl border border-border bg-card p-4">
           <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted-2">Total Transaksi</p>
-          <p className="font-mono font-extrabold text-2xl text-foreground mt-1">{transactions.length}</p>
+          <p className="font-mono font-extrabold text-2xl text-foreground mt-1">{total}</p>
         </div>
         <div className="rounded-xl border border-border bg-card p-4">
           <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted-2">Sedang Berjalan</p>
-          <p className="font-mono font-extrabold text-2xl text-amber mt-1">{activeCount}</p>
+          <p className="font-mono font-extrabold text-2xl text-amber mt-1">
+            {transactions.filter((t) => t.status === "DRAFT").length}
+          </p>
         </div>
         <div className="rounded-xl border border-border bg-card p-4">
           <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted-2">Bale Ditimbang</p>
-          <p className="font-mono font-extrabold text-2xl text-emerald mt-1">{totalWeighed}</p>
+          <p className="font-mono font-extrabold text-2xl text-emerald mt-1">
+            {transactions.reduce((s, t) => s + t.weighedCount, 0)}
+          </p>
         </div>
       </div>
 
-      <div className="rounded-xl border border-border bg-card p-4">
-        {transactions.length === 0 ? (
+      <div className="rounded-xl border border-border bg-card p-4 space-y-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex gap-1.5">
+            {STATUS_FILTERS.map((f) => (
+              <button
+                key={f.key}
+                type="button"
+                onClick={() => handleStatusFilter(f.key)}
+                className={`px-3 py-1.5 text-[11px] font-bold rounded-lg border transition-colors cursor-pointer ${
+                  statusFilter === f.key
+                    ? STATUS_ACTIVE_STYLE[f.key]
+                    : "border-border-soft bg-panel-alt text-muted-2 hover:text-foreground"
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+          <div className="relative flex-1 min-w-[200px] max-w-xs">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-2" />
+            <input
+              type="text"
+              placeholder="Cari kode transaksi / petani..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="w-full h-9 pl-8 pr-3 rounded-lg border border-border-soft bg-panel-alt text-[12px] text-foreground placeholder:text-muted-2 outline-none focus:border-emerald/50 transition-colors"
+            />
+          </div>
+        </div>
+
+        {loading ? (
+          <p className="py-10 text-center text-[12px] text-muted-2">Memuat...</p>
+        ) : transactions.length === 0 ? (
           <p className="py-10 text-center text-[12px] text-muted-2">
-            Belum ada transaksi yang ditimbang di jalur ini.
+            {debouncedQuery || statusFilter !== "ALL"
+              ? "Tidak ada transaksi yang cocok dengan filter."
+              : "Belum ada transaksi yang ditimbang di jalur ini."}
           </p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[960px] border-collapse text-[12.5px]">
-              <thead>
-                <tr>
-                  <th className="text-left text-[10.5px] uppercase tracking-[0.06em] font-bold text-muted-2 pb-2 pr-2 border-b border-border-soft">Transaksi</th>
-                  <th className="text-left text-[10.5px] uppercase tracking-[0.06em] font-bold text-muted-2 pb-2 px-2 border-b border-border-soft">Petani</th>
-                  <th className="text-left text-[10.5px] uppercase tracking-[0.06em] font-bold text-muted-2 pb-2 px-2 border-b border-border-soft">Tanggal</th>
-                  <th className="text-left text-[10.5px] uppercase tracking-[0.06em] font-bold text-muted-2 pb-2 px-2 border-b border-border-soft">Bale</th>
-                  <th className="text-left text-[10.5px] uppercase tracking-[0.06em] font-bold text-muted-2 pb-2 px-2 border-b border-border-soft">Netto</th>
-                  <th className="text-left text-[10.5px] uppercase tracking-[0.06em] font-bold text-muted-2 pb-2 px-2 border-b border-border-soft">Total Harga</th>
-                  <th className="text-left text-[10.5px] uppercase tracking-[0.06em] font-bold text-muted-2 pb-2 px-2 border-b border-border-soft">PIC Timbang</th>
-                  <th className="text-left text-[10.5px] uppercase tracking-[0.06em] font-bold text-muted-2 pb-2 px-2 border-b border-border-soft">Status</th>
-                  <th className="text-left text-[10.5px] uppercase tracking-[0.06em] font-bold text-muted-2 pb-2 pl-2 border-b border-border-soft">Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {transactions.map((txn) => {
-                  const canEnd = txn.status === "DRAFT" && txn.weighedCount > 0
-                  return (
-                    <tr key={txn.id}>
-                      <td className="py-2 pr-2 border-b border-border-soft">
-                        <p className="font-mono text-foreground">{txn.transactionCode}</p>
-                        <p className="text-[10px] text-muted-2 mt-0.5">
-                          {txn.laneCode && (
-                            <>
-                              <span className="font-mono">{txn.laneCode}</span>
-                              {" · "}
-                            </>
-                          )}
-                          {txn.unweighedCount > 0 && txn.status === "DRAFT"
-                            ? `${txn.unweighedCount} belum ditimbang`
-                            : "Semua bale ditimbang"}
-                        </p>
-                      </td>
-                      <td className="py-2 px-2 border-b border-border-soft">
-                        <p className="text-foreground">{txn.farmerName}</p>
-                        <p className="text-[10px] font-mono text-muted-2">{txn.farmerNik ?? "\u2014"}</p>
-                      </td>
-                      <td className="py-2 px-2 border-b border-border-soft font-mono text-[11.5px] text-foreground">
-                        {formatDateTime(txn.transactionDate)}
-                      </td>
-                      <td className="py-2 px-2 border-b border-border-soft">
-                        <span className="font-mono text-foreground">
-                          {txn.weighedCount}/{txn.totalBales}
-                        </span>
-                        {txn.unweighedCount > 0 && txn.status === "DRAFT" && (
-                          <span className="block text-[10px] font-bold text-amber mt-0.5">
-                            {txn.unweighedCount} bale sisa
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[960px] border-collapse text-[12.5px]">
+                <thead>
+                  <tr>
+                    <th className="text-left text-[10.5px] uppercase tracking-[0.06em] font-bold text-muted-2 pb-2 pr-2 border-b border-border-soft">Transaksi</th>
+                    <th className="text-left text-[10.5px] uppercase tracking-[0.06em] font-bold text-muted-2 pb-2 px-2 border-b border-border-soft">Petani</th>
+                    <th className="text-left text-[10.5px] uppercase tracking-[0.06em] font-bold text-muted-2 pb-2 px-2 border-b border-border-soft">Tanggal</th>
+                    <th className="text-left text-[10.5px] uppercase tracking-[0.06em] font-bold text-muted-2 pb-2 px-2 border-b border-border-soft">Bale</th>
+                    <th className="text-left text-[10.5px] uppercase tracking-[0.06em] font-bold text-muted-2 pb-2 px-2 border-b border-border-soft">Netto</th>
+                    <th className="text-left text-[10.5px] uppercase tracking-[0.06em] font-bold text-muted-2 pb-2 px-2 border-b border-border-soft">Total Harga</th>
+                    <th className="text-left text-[10.5px] uppercase tracking-[0.06em] font-bold text-muted-2 pb-2 px-2 border-b border-border-soft">PIC Timbang</th>
+                    <th className="text-left text-[10.5px] uppercase tracking-[0.06em] font-bold text-muted-2 pb-2 px-2 border-b border-border-soft">Status</th>
+                    <th className="text-left text-[10.5px] uppercase tracking-[0.06em] font-bold text-muted-2 pb-2 pl-2 border-b border-border-soft">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transactions.map((txn) => {
+                    const canEnd = txn.status === "DRAFT" && txn.weighedCount > 0
+                    return (
+                      <tr key={txn.id}>
+                        <td className="py-2 pr-2 border-b border-border-soft">
+                          <p className="font-mono text-foreground">{txn.transactionCode}</p>
+                          <p className="text-[10px] text-muted-2 mt-0.5">
+                            {txn.laneCode && (
+                              <>
+                                <span className="font-mono">{txn.laneCode}</span>
+                                {" · "}
+                              </>
+                            )}
+                            {txn.unweighedCount > 0 && txn.status === "DRAFT"
+                              ? `${txn.unweighedCount} belum ditimbang`
+                              : "Semua bale ditimbang"}
+                          </p>
+                        </td>
+                        <td className="py-2 px-2 border-b border-border-soft">
+                          <p className="text-foreground">{txn.farmerName}</p>
+                          <p className="text-[10px] font-mono text-muted-2">{txn.farmerNik ?? "\u2014"}</p>
+                        </td>
+                        <td className="py-2 px-2 border-b border-border-soft font-mono text-[11.5px] text-foreground">
+                          {formatDateTime(txn.transactionDate)}
+                        </td>
+                        <td className="py-2 px-2 border-b border-border-soft">
+                          <span className="font-mono text-foreground">
+                            {txn.weighedCount}/{txn.totalBales}
                           </span>
-                        )}
-                      </td>
-                      <td className="py-2 px-2 border-b border-border-soft font-mono text-foreground">
-                        {txn.totalNetWeight.toFixed(2)} kg
-                      </td>
-                      <td className="py-2 px-2 border-b border-border-soft font-mono text-amber font-bold">
-                        {formatCurrency(txn.totalPrice)}
-                      </td>
-                      <td className="py-2 px-2 border-b border-border-soft font-mono text-foreground">
-                        {txn.weighedBy ?? "\u2014"}
-                      </td>
-                      <td className="py-2 px-2 border-b border-border-soft">
-                        <StatusPill status={txn.status as "DRAFT" | "WEIGHED"} />
-                      </td>
-                      <td className="py-2 pl-2 border-b border-border-soft">
-                        {canEnd ? (
-                          <button
-                            type="button"
-                            onClick={() => handleRequestFinish(txn)}
-                            disabled={finishing === txn.id}
-                            className="px-3 py-1.5 bg-amber hover:bg-amber/80 text-primary-foreground font-extrabold text-[11px] rounded-lg transition-all cursor-pointer disabled:opacity-50"
-                          >
-                            {finishing === txn.id ? "Memproses\u2026" : "Akhiri Sesi Timbang"}
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleReprintNota(txn)}
-                            className="px-3 py-1.5 bg-emerald hover:bg-emerald/80 text-primary-foreground font-extrabold text-[11px] rounded-lg transition-all cursor-pointer"
-                          >
-                            Cetak Nota
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+                          {txn.unweighedCount > 0 && txn.status === "DRAFT" && (
+                            <span className="block text-[10px] font-bold text-amber mt-0.5">
+                              {txn.unweighedCount} bale sisa
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2 px-2 border-b border-border-soft font-mono text-foreground">
+                          {txn.totalNetWeight.toFixed(2)} kg
+                        </td>
+                        <td className="py-2 px-2 border-b border-border-soft font-mono text-amber font-bold">
+                          {formatCurrency(txn.totalPrice)}
+                        </td>
+                        <td className="py-2 px-2 border-b border-border-soft font-mono text-foreground">
+                          {txn.weighedBy ?? "\u2014"}
+                        </td>
+                        <td className="py-2 px-2 border-b border-border-soft">
+                          <StatusPill status={txn.status as "DRAFT" | "WEIGHED"} />
+                        </td>
+                        <td className="py-2 pl-2 border-b border-border-soft">
+                          {canEnd ? (
+                            <button
+                              type="button"
+                              onClick={() => handleRequestFinish(txn)}
+                              disabled={finishing === txn.id}
+                              className="px-3 py-1.5 bg-amber hover:bg-amber/80 text-primary-foreground font-extrabold text-[11px] rounded-lg transition-all cursor-pointer disabled:opacity-50"
+                            >
+                              {finishing === txn.id ? "Memproses\u2026" : "Akhiri Sesi Timbang"}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => openNota(txn.id)}
+                              className="px-3 py-1.5 bg-emerald hover:bg-emerald/80 text-primary-foreground font-extrabold text-[11px] rounded-lg transition-all cursor-pointer"
+                            >
+                              Cetak Nota
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <Pagination
+              page={page}
+              pageSize={pageSize}
+              totalItems={total}
+              onPageChange={setPage}
+              onPageSizeChange={handlePageSizeChange}
+            />
+          </>
         )}
-        <p className="text-[10.5px] text-muted-2 mt-3 text-center">
-          {endedCount > 0
-            ? `${endedCount} transaksi sudah diakhiri dan menunggu verifikasi Finance.`
-            : "Sesi timbang yang diakhiri akan menunggu verifikasi Finance."}
+        <p className="text-[10.5px] text-muted-2 text-center">
+          Sesi timbang yang diakhiri akan menunggu verifikasi Finance.
         </p>
       </div>
 
@@ -253,7 +298,7 @@ export function WeighedTransactions({ laneId }: Props) {
               {checking
                 ? "Menghitung bale yang belum ditimbang\u2026"
                 : sessionCheck && sessionCheck.unweighedCount === 0
-                ? `Semua ${sessionCheck.totalBales} bale sudah ditimbang. Lanjut tutup transaksi ${confirmTxn.transactionCode}? Nota sementara akan dicetak.`
+                ? `Semua ${sessionCheck.totalBales} bale sudah ditimbang. Lanjut tutup transaksi ${confirmTxn.transactionCode}? Nota akan dibuka di tab baru.`
                 : null}
             </DialogDescription>
 
@@ -308,38 +353,6 @@ export function WeighedTransactions({ laneId }: Props) {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      )}
-
-      {/* Nota Dialog + Print */}
-      {notaData && (
-        <div className="nota-overlay" onClick={() => setNotaData(null)}>
-          <div className="nota-dialog" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between gap-2 flex-wrap mb-4">
-              <p className="font-bold text-sm text-foreground">
-                Nota Timbangan — {notaData.farmerName}
-              </p>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={handlePrintNota}
-                  className="px-4 py-2 bg-emerald text-primary-foreground font-bold text-xs rounded-lg cursor-pointer hover:bg-emerald/80"
-                >
-                  Cetak Nota
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setNotaData(null)}
-                  className="px-4 py-2 bg-panel-alt text-foreground border border-border-soft font-bold text-xs rounded-lg cursor-pointer hover:bg-border/50"
-                >
-                  Tutup
-                </button>
-              </div>
-            </div>
-            <div className="bg-white rounded-xl p-6">
-              <NotaTimbangan ref={notaRef} {...notaData} />
-            </div>
-          </div>
-        </div>
       )}
     </>
   )

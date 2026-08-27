@@ -110,7 +110,7 @@ export async function getCashExportData(
     },
   })
 
-  const toRow = (e: (typeof entries)[number]): CashExportRow => {
+  const toRow = (e: (typeof entries)[number]): Omit<CashExportRow, "balance"> => {
     let uraian = "Manual"
     if (e.paymentId != null) {
       const farmer = e.purchase?.farmer?.name

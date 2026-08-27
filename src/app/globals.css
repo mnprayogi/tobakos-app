@@ -196,27 +196,6 @@
   box-shadow: 0 0 0 3px rgba(34, 201, 141, 0.14);
 }
 
-.nota-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  background: rgba(0, 0, 0, 0.7);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-}
-.nota-dialog {
-  width: 100%;
-  max-width: 210mm;
-  max-height: 90vh;
-  overflow-y: auto;
-  overflow-x: auto;
-  border-radius: 12px;
-  background: #101828;
-  padding: 20px;
-}
-
 @utility field-disabled {
   input:disabled,
   select:disabled {
@@ -558,6 +537,10 @@
   }
   .no-print {
     display: none !important;
+  }
+  .signature-grid {
+    display: flex !important;
+    gap: 0 !important;
   }
   .print-sticker {
     display: block !important;

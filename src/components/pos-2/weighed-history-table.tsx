@@ -2,34 +2,14 @@
 
 import { useState, useRef, useCallback, useEffect } from "react"
 import { toast } from "sonner"
-import { getWeighedHistory, endWeighSession, getSessionUnweighed, getNotaData } from "@/lib/actions/weighing"
-import { usePrintDocument, printBaseStyle } from "@/lib/print"
-import { lazyPrint } from "@/components/shared/lazy-print"
-
-const NotaTimbangan = lazyPrint(() =>
-  import("@/components/pos-2/nota-timbangan").then((m) => m.NotaTimbangan)
-)
+import { getWeighedHistory, endWeighSession, getSessionUnweighed } from "@/lib/actions/weighing"
 import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { formatCurrency } from "@/lib/utils"
 import { cn } from "@/lib/utils"
 import { StatusPill } from "@/components/shared/status-pill"
 import { useRealtime } from "@/hooks/useRealtime"
 import { ChevronDown } from "lucide-react"
-import type { NotaItem, HistoryPurchase, SessionCheckResult } from "@/lib/actions/weighing"
-
-interface NotaData {
-  transactionCode: string
-  farmerName: string
-  farmerNik: string | null
-  warehouse: string
-  laneCode: string | null
-  createdBy: string | null
-  weighedBy: string | null
-  approvedBy: string | null
-  date: string
-  items: NotaItem[]
-  totals: NotaItem
-}
+import type { HistoryPurchase, SessionCheckResult } from "@/lib/actions/weighing"
 
 interface Props {
   laneId: number
@@ -44,18 +24,14 @@ export function WeighedHistory({ laneId, farmerId, farmerName, refreshKey = 0, o
   const [purchases, setPurchases] = useState<HistoryPurchase[]>([])
   const [loadedFor, setLoadedFor] = useState<string | null>(null)
   const loading = farmerId != null && loadedFor !== `${farmerId}:${laneId}`
-  const [notaData, setNotaData] = useState<NotaData | null>(null)
   const [finishing, setFinishing] = useState<number | null>(null)
-  const [sessionEnded, setSessionEnded] = useState(false)
   const [confirmPurchase, setConfirmPurchase] = useState<HistoryPurchase | null>(null)
   const [sessionCheck, setSessionCheck] = useState<SessionCheckResult | null>(null)
   const [checking, setChecking] = useState(false)
   const [collapsedIds, setCollapsedIds] = useState<Set<number>>(new Set())
-  const notaRef = useRef<HTMLDivElement>(null)
   const activeBodyRef = useRef<HTMLDivElement | null>(null)
   const lastNewestRef = useRef<number | null>(null)
   const stickRef = useRef(true)
-  const handlePrintNota = usePrintDocument(notaRef, printBaseStyle)
 
   const loadHistory = useCallback(async () => {
     if (!farmerId) return
@@ -90,7 +66,6 @@ export function WeighedHistory({ laneId, farmerId, farmerName, refreshKey = 0, o
   useRealtime(laneId, [loadHistory])
 
   useEffect(() => {
-    // reload when the weighing page signals a new save via refreshKey
     // eslint-disable-next-line react-hooks/set-state-in-effect -- prop-key fetch; setState happens after await
     loadHistory()
   }, [loadHistory, refreshKey])
@@ -108,6 +83,10 @@ export function WeighedHistory({ laneId, farmerId, farmerName, refreshKey = 0, o
       else next.add(id)
       return next
     })
+  }
+
+  function openNota(purchaseId: number) {
+    window.open(`/pos-2/nota/${purchaseId}?laneId=${laneId}`, "_blank")
   }
 
   async function handleRequestFinish(purchase: HistoryPurchase) {
@@ -128,31 +107,15 @@ export function WeighedHistory({ laneId, farmerId, farmerName, refreshKey = 0, o
   async function handleFinishSession(purchaseId: number) {
     setFinishing(purchaseId)
     try {
-      const data = await endWeighSession(purchaseId, laneId)
-      setNotaData(data)
-      setSessionEnded(true)
+      await endWeighSession(purchaseId, laneId)
       setConfirmPurchase(null)
-      toast.success("Transaksi ditutup — Nota sementara siap dicetak")
+      toast.success("Transaksi ditutup — Nota siap dicetak")
+      openNota(purchaseId)
+      onSessionEnded?.()
     } catch (err) {
       toast.error((err as Error).message)
     } finally {
       setFinishing(null)
-    }
-  }
-
-  async function handleReprintNota(purchaseId: number) {
-    try {
-      const data = await getNotaData(purchaseId, laneId)
-      setNotaData(data)
-    } catch (err) {
-      toast.error((err as Error).message)
-    }
-  }
-
-  function handleCloseNota() {
-    setNotaData(null)
-    if (sessionEnded) {
-      onSessionEnded?.()
     }
   }
 
@@ -238,7 +201,7 @@ export function WeighedHistory({ laneId, farmerId, farmerName, refreshKey = 0, o
                   {hasWeighed && !isDraft && (
                     <button
                       type="button"
-                      onClick={() => handleReprintNota(purchase.id)}
+                      onClick={() => openNota(purchase.id)}
                       className="px-4 py-1.5 bg-emerald hover:bg-emerald/80 text-primary-foreground font-extrabold text-[11px] rounded-lg transition-all cursor-pointer"
                     >
                       Cetak Nota
@@ -323,7 +286,7 @@ export function WeighedHistory({ laneId, farmerId, farmerName, refreshKey = 0, o
               {checking
                 ? "Menghitung bale yang belum ditimbang\u2026"
                 : sessionCheck && sessionCheck.unweighedCount === 0
-                ? `Semua ${sessionCheck.totalBales} bale sudah ditimbang. Lanjut tutup transaksi? Nota sementara akan dicetak.`
+                ? `Semua ${sessionCheck.totalBales} bale sudah ditimbang. Lanjut tutup transaksi? Nota akan dibuka di tab baru.`
                 : null}
             </DialogDescription>
 
@@ -383,38 +346,6 @@ export function WeighedHistory({ laneId, farmerId, farmerName, refreshKey = 0, o
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      )}
-
-      {/* Nota Dialog + Print */}
-      {notaData && (
-        <div className="nota-overlay" onClick={handleCloseNota}>
-          <div className="nota-dialog" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between gap-2 flex-wrap mb-4">
-              <p className="font-bold text-sm text-foreground">
-                Nota Timbangan — {notaData.farmerName}
-              </p>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={handlePrintNota}
-                  className="px-4 py-2 bg-emerald text-primary-foreground font-bold text-xs rounded-lg cursor-pointer hover:bg-emerald/80"
-                >
-                  Cetak Nota
-                </button>
-                <button
-                  type="button"
-                  onClick={handleCloseNota}
-                  className="px-4 py-2 bg-panel-alt text-foreground border border-border-soft font-bold text-xs rounded-lg cursor-pointer hover:bg-border/50"
-                >
-                  Tutup
-                </button>
-              </div>
-            </div>
-            <div className="bg-white rounded-xl p-6">
-              <NotaTimbangan ref={notaRef} {...notaData} />
-            </div>
-          </div>
-        </div>
       )}
     </>
   )

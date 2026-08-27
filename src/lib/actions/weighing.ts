@@ -15,6 +15,7 @@ import { resolveActorLane } from "@/lib/lane-resolution"
 import { parseLabelCode } from "@/lib/barcode"
 import { requireRoles } from "@/lib/roles"
 import { publishEvent } from "@/lib/events"
+import { buildNotaData } from "@/lib/nota-builder"
 
 export interface WeighInput {
   labelCode: string
@@ -274,77 +275,6 @@ export async function getSessionUnweighed(purchaseId: number, laneId: number): P
   }
 }
 
-interface NotaPurchase {
-  transactionCode: string
-  transactionDate: Date
-  createdBy: string | null
-  weighedBy: string | null
-  approvedBy: string | null
-  farmer: { name: string; nik: string | null }
-  warehouse: { name: string | null; code: string | null } | null
-  lane: { code: string | null } | null
-  items: {
-    grade: string
-    grossWeight: number | null
-    packingWeight: number | null
-    moistureDeduction: number | null
-    netWeight: number | null
-    subtotal: unknown
-    status: string
-  }[]
-}
-
-function buildNotaData(purchase: NotaPurchase) {
-  const weighedItems = purchase.items.filter(
-    (i) => i.status === "WEIGHED" || i.status === "CLOSED"
-  )
-
-  const gradeMap = new Map<string, NotaItem>()
-  for (const item of weighedItems) {
-    const existing = gradeMap.get(item.grade) ?? {
-      grade: item.grade,
-      count: 0,
-      totalGross: 0,
-      totalTara: 0,
-      totalNet: 0,
-      totalSubtotal: 0,
-    }
-    existing.count++
-    existing.totalGross += Number(item.grossWeight ?? 0)
-    existing.totalTara += Number(item.packingWeight ?? 0) + Number(item.moistureDeduction ?? 0)
-    existing.totalNet += Number(item.netWeight ?? 0)
-    existing.totalSubtotal += Number(item.subtotal ?? 0)
-    gradeMap.set(item.grade, existing)
-  }
-
-  const notaItems = Array.from(gradeMap.values()).sort((a, b) =>
-    a.grade.localeCompare(b.grade)
-  )
-
-  const totals: NotaItem = {
-    grade: "TOTAL",
-    count: notaItems.reduce((s, g) => s + g.count, 0),
-    totalGross: notaItems.reduce((s, g) => s + g.totalGross, 0),
-    totalTara: notaItems.reduce((s, g) => s + g.totalTara, 0),
-    totalNet: notaItems.reduce((s, g) => s + g.totalNet, 0),
-    totalSubtotal: notaItems.reduce((s, g) => s + g.totalSubtotal, 0),
-  }
-
-  return {
-    transactionCode: purchase.transactionCode,
-    farmerName: purchase.farmer.name,
-    farmerNik: purchase.farmer.nik,
-    warehouse: purchase.warehouse?.name ?? purchase.warehouse?.code ?? "Gudang",
-    laneCode: purchase.lane?.code ?? null,
-    createdBy: purchase.createdBy,
-    weighedBy: purchase.weighedBy,
-    approvedBy: purchase.approvedBy,
-    date: purchase.transactionDate.toISOString(),
-    items: notaItems,
-    totals,
-  }
-}
-
 export async function getNotaData(purchaseId: number, laneId: number) {
   await requireRoles("OPERATOR", "ADMIN")
   const lane = await resolveActorLane({ laneId })
@@ -425,34 +355,71 @@ export interface WeighedTransaction {
   createdAt: Date
 }
 
-export async function getWeighedTransactions(laneId: number): Promise<WeighedTransaction[]> {
+export interface WeighedTransactionsResult {
+  data: WeighedTransaction[]
+  total: number
+}
+
+export async function getWeighedTransactions(
+  laneId: number,
+  opts?: { page?: number; pageSize?: number; status?: string; q?: string }
+): Promise<WeighedTransactionsResult> {
   await requireRoles("OPERATOR", "ADMIN")
   const lane = await resolveActorLane({ laneId })
-  const purchases = await prisma.purchase.findMany({
-    where: {
-      laneId: lane.id,
-      status: { in: ["DRAFT", "WEIGHED"] },
-      items: { some: { status: "WEIGHED" } },
-    },
-    orderBy: [{ status: "asc" }, { createdAt: "desc" }],
-    include: {
-      farmer: true,
-      lane: true,
-      items: {
-        where: { status: { in: ["GRADED", "WEIGHED"] } },
-        orderBy: { inputOrder: "asc" },
-        select: { labelCode: true, status: true },
-      },
-    },
-  })
 
-  return purchases.map((p, idx) => {
+  const page = Math.max(1, opts?.page ?? 1)
+  const pageSize = Math.min(100, Math.max(1, opts?.pageSize ?? 25))
+  const status = opts?.status ?? "ALL"
+  const q = (opts?.q ?? "").trim()
+
+  const statusClause =
+    status !== "ALL"
+      ? { status: status as "DRAFT" | "WEIGHED" }
+      : { status: { in: ["DRAFT", "WEIGHED"] as ("DRAFT" | "WEIGHED")[] } }
+
+  const searchClause = q
+    ? {
+        OR: [
+          { transactionCode: { contains: q } },
+          { farmer: { name: { contains: q } } },
+          { farmer: { nik: { contains: q } } },
+        ],
+      }
+    : {}
+
+  const baseWhere = {
+    laneId: lane.id,
+    ...statusClause,
+    items: { some: { status: "WEIGHED" as const } },
+    ...searchClause,
+  }
+
+  const [total, purchases] = await Promise.all([
+    prisma.purchase.count({ where: baseWhere }),
+    prisma.purchase.findMany({
+      where: baseWhere,
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      include: {
+        farmer: true,
+        lane: true,
+        items: {
+          where: { status: { in: ["GRADED", "WEIGHED"] as ("GRADED" | "WEIGHED")[] } },
+          orderBy: { inputOrder: "asc" },
+          select: { labelCode: true, status: true },
+        },
+      },
+    }),
+  ])
+
+  const data = purchases.map((p) => {
     const weighedCount = p.items.filter((i) => i.status === "WEIGHED").length
     const unweighedCount = p.items.filter((i) => i.status === "GRADED").length
     return {
       id: p.id,
       transactionCode: p.transactionCode,
-      transactionLabel: `Transaksi #${idx + 1}`,
+      transactionLabel: p.transactionCode,
       laneCode: p.lane?.code ?? "",
       farmerName: p.farmer.name,
       farmerNik: p.farmer.nik,
@@ -467,6 +434,8 @@ export async function getWeighedTransactions(laneId: number): Promise<WeighedTra
       createdAt: p.createdAt,
     }
   })
+
+  return { data, total }
 }
 
 export async function getFarmersWithBales(laneId: number): Promise<FarmerQueueItem[]> {
