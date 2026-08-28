@@ -715,6 +715,7 @@ export interface BuktiData {
   originalTotalPrice: number | null
   paidAmount: number
   totalLoanDeduction: number
+  takeHomePay: number
   remaining: number
   paidBy: string | null
   approvedBy: string | null
@@ -757,6 +758,7 @@ export async function getBuktiData(purchaseId: number): Promise<BuktiData> {
     originalTotalPrice: purchase.originalTotalPrice != null ? Number(purchase.originalTotalPrice) : null,
     paidAmount,
     totalLoanDeduction,
+    takeHomePay: roundMoney(totalPrice - totalLoanDeduction),
     remaining: roundMoney(totalPrice - paidAmount),
     paidBy: purchase.paidBy,
     approvedBy: purchase.approvedBy,

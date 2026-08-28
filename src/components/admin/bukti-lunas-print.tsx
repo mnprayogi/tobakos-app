@@ -1,6 +1,5 @@
 import { forwardRef } from "react"
 import type { CSSProperties } from "react"
-import { QRCodeSVG } from "qrcode.react"
 import type { BuktiData } from "@/lib/actions/finance"
 import { formatTerbilangRupiah } from "@/lib/terbilang"
 
@@ -42,8 +41,8 @@ function signName(name: string | null | undefined): string {
 
 const th: CSSProperties = {
   border: "1.2px solid #000",
-  padding: "2mm 2mm",
-  fontSize: "9pt",
+  padding: "2mm 3mm",
+  fontSize: "9.5pt",
   fontWeight: 800,
   textAlign: "center",
   background: "#e5e5e5",
@@ -53,8 +52,8 @@ const th: CSSProperties = {
 
 const td: CSSProperties = {
   border: "1.2px solid #000",
-  padding: "1.8mm 2mm",
-  fontSize: "9.5pt",
+  padding: "2mm 3mm",
+  fontSize: "10pt",
   color: "#000",
   fontFamily: MONO,
 }
@@ -74,6 +73,7 @@ export const BuktiLunasPrint = forwardRef<HTMLDivElement, BuktiData>(
       originalTotalPrice,
       paidAmount,
       totalLoanDeduction,
+      takeHomePay,
       remaining,
       paidBy,
       approvedBy,
@@ -116,25 +116,7 @@ export const BuktiLunasPrint = forwardRef<HTMLDivElement, BuktiData>(
             </p>
           </div>
 
-          <div style={{ width: "26%", display: "flex", justifyContent: "flex-end" }}>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-              <div style={{ background: "#fff", border: "1px solid #000", padding: "2.5mm", borderRadius: "2mm" }}>
-                <QRCodeSVG value={transactionCode} size={80} />
-              </div>
-              <div
-                style={{
-                  fontFamily: MONO,
-                  fontSize: "8.5pt",
-                  fontWeight: 700,
-                  marginTop: "1.5mm",
-                  letterSpacing: "0.04em",
-                  color: "#000",
-                }}
-              >
-                {transactionCode}
-              </div>
-            </div>
-          </div>
+          <div style={{ width: "26%" }} />
         </div>
 
         <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "5mm", fontFamily: SANS }}>
@@ -171,7 +153,8 @@ export const BuktiLunasPrint = forwardRef<HTMLDivElement, BuktiData>(
               <td style={{ fontWeight: 700, padding: "1.2mm 1mm", fontSize: "10pt", color: "#000" }}>Bale / Netto</td>
               <td style={{ padding: "1.2mm 1mm", fontSize: "10pt", color: "#000" }}>:</td>
               <td style={{ padding: "1.2mm 1mm", fontSize: "10pt", color: "#000", fontFamily: MONO }}>
-                {totalItems} bale · {totalNetWeight.toFixed(2)} kg
+                <div>{totalItems} bale</div>
+                <div>{totalNetWeight.toFixed(2)} kg</div>
               </td>
               <td style={{ fontWeight: 700, padding: "1.2mm 1mm", fontSize: "10pt", color: "#000" }}>Dibayar oleh</td>
               <td style={{ padding: "1.2mm 1mm", fontSize: "10pt", color: "#000" }}>:</td>
@@ -257,6 +240,14 @@ export const BuktiLunasPrint = forwardRef<HTMLDivElement, BuktiData>(
             )}
             <tr>
               <td style={{ fontWeight: 700, padding: "2mm 3mm", fontSize: "10.5pt", color: "#000", border: "1.2px solid #000", background: "#f5f5f5" }}>
+                Take Home Pay Petani
+              </td>
+              <td style={{ textAlign: "right", fontWeight: 700, padding: "2mm 3mm", fontSize: "10.5pt", color: "#000", border: "1.2px solid #000", background: "#f5f5f5", fontFamily: MONO }}>
+                {fmtCurrency(takeHomePay)}
+              </td>
+            </tr>
+            <tr>
+              <td style={{ fontWeight: 700, padding: "2mm 3mm", fontSize: "10.5pt", color: "#000", border: "1.2px solid #000", background: "#f5f5f5" }}>
                 Total Dibayar
               </td>
               <td style={{ textAlign: "right", fontWeight: 700, padding: "2mm 3mm", fontSize: "10.5pt", color: "#000", border: "1.2px solid #000", background: "#f5f5f5", fontFamily: MONO }}>
@@ -281,10 +272,10 @@ export const BuktiLunasPrint = forwardRef<HTMLDivElement, BuktiData>(
             { role: "MANAGER", name: approvedBy, caption: "(Tanda tangan & tanggal)" },
           ].map((s) => (
             <div key={s.role} style={{ width: "30%", textAlign: "center" }}>
-              <p style={{ fontSize: "10.5pt", fontWeight: 800, margin: "0 0 12mm", textAlign: "center", color: "#000" }}>
+              <p style={{ fontSize: "10.5pt", fontWeight: 800, margin: "0 0 15mm", textAlign: "center", color: "#000" }}>
                 {s.role}
               </p>
-              <div style={{ borderBottom: "1.5px solid #000", marginBottom: "1.5mm" }} />
+              <div style={{ borderBottom: "1.5px dashed #000", marginBottom: "1.5mm" }} />
               <p style={{ fontSize: "9pt", fontFamily: MONO, fontWeight: 700, color: "#000", margin: "0 0 1mm" }}>
                 {signName(s.name)}
               </p>
