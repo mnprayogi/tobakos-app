@@ -86,7 +86,7 @@ export function WeighedHistory({ laneId, farmerId, farmerName, refreshKey = 0, o
   }
 
   function openNota(purchaseId: number) {
-    window.open(`/pos-2/nota/${purchaseId}?laneId=${laneId}`, "_blank")
+    window.open(`/nota/${purchaseId}?laneId=${laneId}`, "_blank")
   }
 
   async function handleRequestFinish(purchase: HistoryPurchase) {

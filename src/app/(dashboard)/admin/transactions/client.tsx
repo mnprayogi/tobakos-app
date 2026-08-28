@@ -19,7 +19,6 @@ import {
   type PayPurchase,
   type PaymentUpdate,
 } from "@/components/admin/payment-dialog"
-import { BuktiLunasDialog } from "@/components/admin/bukti-lunas-dialog"
 
 interface PurchaseItem {
   id: number
@@ -131,7 +130,6 @@ export function TransactionsClient({
   const [query, setQuery] = useState(q)
   const [statusFilter, setStatusFilter] = useState(status)
   const [payTarget, setPayTarget] = useState<PayPurchase | null>(null)
-  const [receiptTarget, setReceiptTarget] = useState<number | null>(null)
   const [voidTarget, setVoidTarget] = useState<Purchase | null>(null)
   const [exporting, setExporting] = useState(false)
 
@@ -171,7 +169,7 @@ export function TransactionsClient({
           : p
       )
     )
-    if (updated.paidOff) setReceiptTarget(updated.id)
+    if (updated.paidOff) window.open(`/bukti/${updated.id}`, "_blank")
   }
 
   async function handleReopen(id: number) {
@@ -409,7 +407,7 @@ export function TransactionsClient({
                           )}
                           {p.status === "PAID" && (
                             <button
-                              onClick={() => setReceiptTarget(p.id)}
+                              onClick={() => window.open(`/bukti/${p.id}`, "_blank")}
                               className="text-left text-[11px] font-bold text-emerald cursor-pointer hover:underline"
                             >
                               Cetak Bukti
@@ -451,11 +449,6 @@ export function TransactionsClient({
         onPaid={handlePaid}
         canVoid={role === "SUPER_ADMIN" || role === "OWNER"}
         canDeduct={payTarget ? (payTarget.loanBalance ?? 0) > 0.005 : true}
-      />
-
-      <BuktiLunasDialog
-        purchaseId={receiptTarget}
-        onClose={() => setReceiptTarget(null)}
       />
 
       <VoidDialog

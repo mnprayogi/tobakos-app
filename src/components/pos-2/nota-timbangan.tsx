@@ -286,9 +286,38 @@ export function NotaTimbangan(props: Props) {
           <b>Terbilang:</b>{" "}
           <b style={{ fontFamily: MONO, textTransform: "capitalize" }}>{formatTerbilangRupiah(totals.totalSubtotal)}</b>
         </p>
+        {totals.totalNet > 0 && (
+          <p style={{ fontSize: "9.5pt", margin: "1mm 0 0", color: "#000" }}>
+            <b>Harga rata-rata:</b>{" "}
+            <b style={{ fontFamily: MONO }}>
+              {fmtCurrency(totals.totalSubtotal / totals.totalNet)} / kg
+            </b>
+          </p>
+        )}
       </div>
 
-      {/* Signatures — 2x2 grid on screen, 4-col on print */}
+      {/* Harga Setelah Apel (diisi Manager) */}
+      <div
+        style={{
+          border: "1.5px solid #000",
+          borderRadius: "2mm",
+          padding: "2mm 3mm",
+          marginBottom: "4mm",
+          background: "#fff",
+          fontFamily: SANS,
+        }}
+      >
+        <p style={{ fontSize: "9pt", fontWeight: 800, margin: "0 0 8mm", color: "#000" }}>
+          HARGA SETELAH APEL (diisi MANAGER)
+        </p>
+        <div style={{ borderBottom: "1.5px solid #000", marginBottom: "1mm" }} />
+        <p style={{ fontSize: "8.5pt", fontFamily: MONO, color: "#000", margin: "0 0 0.5mm" }}>
+          Rp ……………………………… / kg
+        </p>
+        <p style={{ fontSize: "7.5pt", color: "#333", margin: 0 }}>(Tulis harga kesepakatan akhir di sini)</p>
+      </div>
+
+      {/* Signatures — side by side on screen, 2-col on print */}
       <div
         className="signature-grid"
         style={{
@@ -300,8 +329,6 @@ export function NotaTimbangan(props: Props) {
         }}
       >
         {[
-          { role: "PETANI", name: farmerName },
-          { role: "GRADER", name: createdBy },
           { role: "OPERATOR TIMBANG", name: weighedBy },
           { role: "MANAGER", name: approvedBy },
         ].map((s) => (

@@ -86,7 +86,7 @@ export function WeighedTransactions({ laneId }: Props) {
   }
 
   function openNota(txnId: number) {
-    window.open(`/pos-2/nota/${txnId}?laneId=${laneId}`, "_blank")
+    window.open(`/nota/${txnId}?laneId=${laneId}`, "_blank")
   }
 
   async function handleRequestFinish(txn: WeighedTransaction) {

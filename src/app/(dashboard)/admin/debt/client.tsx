@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation"
 import type { DebtFarmer, DebtStatus } from "@/lib/actions/finance"
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils"
 import { ChevronDown, ChevronRight, Search, Warehouse, HandCoins } from "lucide-react"
-import { BuktiLunasDialog } from "@/components/admin/bukti-lunas-dialog"
 import {
   PaymentDialog,
   type PayPurchase,
@@ -53,7 +52,6 @@ export function DebtClient({
 }) {
   const router = useRouter()
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
-  const [receiptTarget, setReceiptTarget] = useState<number | null>(null)
   const [payTarget, setPayTarget] = useState<PayPurchase | null>(null)
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState<DebtFilter>("SEMUA")
@@ -245,7 +243,7 @@ export function DebtClient({
                                     {p.derived === "LUNAS" && (
                                       <button
                                         type="button"
-                                        onClick={() => setReceiptTarget(p.id)}
+                                        onClick={() => window.open(`/bukti/${p.id}`, "_blank")}
                                         className="text-[10.5px] font-bold text-emerald cursor-pointer hover:underline"
                                       >
                                         Cetak Bukti
@@ -309,11 +307,6 @@ export function DebtClient({
         onClose={() => setPayTarget(null)}
         onPaid={handlePaid}
         canVoid={role === "SUPER_ADMIN" || role === "OWNER"}
-      />
-
-      <BuktiLunasDialog
-        purchaseId={receiptTarget}
-        onClose={() => setReceiptTarget(null)}
       />
     </div>
   )

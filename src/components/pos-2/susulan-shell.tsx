@@ -6,6 +6,7 @@ import {
   CalendarClock,
   Check,
   CheckCircle2,
+  ChevronDown,
   ClipboardList,
   FileSpreadsheet,
   Plus,
@@ -128,12 +129,15 @@ export function SusulanShell(props: SusulanShellProps) {
 
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedFarmer, setSelectedFarmer] = useState<FarmerOption | null>(null)
-  const [dateValue, setDateValue] = useState("")
+  const [dateValue, setDateValue] = useState(todayKey)
 
   const [tobaccoTypeId, setTobaccoTypeId] = useState<number | null>(null)
   const [leafTypeId, setLeafTypeId] = useState<number | null>(null)
   const [packingTypeId, setPackingTypeId] = useState<number | null>(null)
   const [gradeName, setGradeName] = useState<string | null>(null)
+  const [gradeQuery, setGradeQuery] = useState("")
+  const [gradeOpen, setGradeOpen] = useState(false)
+  const gradeBoxRef = useRef<HTMLDivElement>(null)
   const [moisturePercent, setMoisturePercent] = useState(defaultMoisturePercent)
   const [customerId, setCustomerId] = useState<number | null>(customers[0]?.id ?? null)
   const [grossWeight, setGrossWeight] = useState("")
@@ -187,6 +191,29 @@ export function SusulanShell(props: SusulanShellProps) {
       tobaccoTypes.find((t) => t.id === tobaccoTypeId)?.grades ?? [],
     [tobaccoTypes, tobaccoTypeId]
   )
+
+  useEffect(() => {
+    setGradeName(null)
+    setGradeQuery("")
+    setGradeOpen(false)
+  }, [tobaccoTypeId])
+
+  useEffect(() => {
+    if (!gradeOpen) return
+    function onDocClick(e: MouseEvent) {
+      if (gradeBoxRef.current && !gradeBoxRef.current.contains(e.target as Node)) {
+        setGradeOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", onDocClick)
+    return () => document.removeEventListener("mousedown", onDocClick)
+  }, [gradeOpen])
+
+  const filteredGradeOptions = useMemo(() => {
+    const q = gradeQuery.trim().toLowerCase()
+    if (!q) return gradeOptions
+    return gradeOptions.filter((g) => g.name.toLowerCase().includes(q))
+  }, [gradeOptions, gradeQuery])
 
   const selectedPacking =
     packingTypes.find((p) => p.id === packingTypeId) ?? null
@@ -260,6 +287,17 @@ export function SusulanShell(props: SusulanShellProps) {
     savedBales.length > 0 &&
     !submitting
 
+  const saveBaleHint = useMemo(() => {
+    const missing: string[] = []
+    if (!tobaccoTypeId) missing.push("Jenis Tembakau")
+    if (!leafTypeId) missing.push("Jenis Daun")
+    if (!packingTypeId) missing.push("Jenis Packing")
+    if (!gradeName) missing.push("Grade")
+    if (!customerId) missing.push("Customer")
+    if (moisturePercent < 0 || moisturePercent > maxMoisturePercent) missing.push("Potongan MC")
+    return missing
+  }, [tobaccoTypeId, leafTypeId, packingTypeId, gradeName, customerId, moisturePercent, maxMoisturePercent])
+
   function handleSimpanBale() {
     if (!canSaveBale) return
     if (!tobaccoTypeId || !leafTypeId || !packingTypeId || !gradeName || !customerId) return
@@ -324,7 +362,7 @@ export function SusulanShell(props: SusulanShellProps) {
       setResult(saved)
       setSelectedFarmer(null)
       setSearchQuery("")
-      setDateValue("")
+      setDateValue(todayKey)
       setDuplicateWarning(null)
       setSavedBales([])
       setTobaccoTypeId(null)
@@ -602,21 +640,72 @@ export function SusulanShell(props: SusulanShellProps) {
             <label className="block text-[11px] font-bold text-muted-foreground mb-1">
               Grade *
             </label>
-            <select
-              className="field-input w-full h-[38px]"
-              value={gradeName ?? ""}
-              onChange={(e) => setGradeName(e.target.value || null)}
-              disabled={!tobaccoTypeId}
-            >
-              <option value="">
-                {tobaccoTypeId ? "— Pilih grade —" : "Pilih jenis tembakau dulu"}
-              </option>
-              {gradeOptions.map((g) => (
-                <option key={g.id} value={g.name}>
-                  {g.name}
-                </option>
-              ))}
-            </select>
+            <div ref={gradeBoxRef} className="relative">
+              {!tobaccoTypeId ? (
+                <div className="field-input field-input-disabled w-full h-[38px] flex items-center text-[12px] cursor-not-allowed">
+                  Pilih jenis tembakau dulu
+                </div>
+              ) : (
+                <>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={gradeName ?? gradeQuery}
+                      readOnly={!!gradeName}
+                      placeholder="Ketik untuk cari grade…"
+                      onFocus={() => setGradeOpen(true)}
+                      onChange={(e) => {
+                        setGradeName(null)
+                        setGradeQuery(e.target.value)
+                        setGradeOpen(true)
+                      }}
+                      className="field-input w-full h-[38px] pr-7"
+                    />
+                    <ChevronDown
+                      className={cn(
+                        "absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-2 pointer-events-none transition-transform",
+                        gradeOpen && "rotate-180"
+                      )}
+                    />
+                  </div>
+                  {gradeOpen && (
+                    <div className="absolute z-20 mt-1 w-full max-h-[200px] overflow-y-auto bg-panel-alt border border-border-soft rounded-lg p-1">
+                      {filteredGradeOptions.length === 0 ? (
+                        <p className="px-2 py-2 text-center text-[11px] text-muted-2">
+                          Grade tidak ditemukan
+                        </p>
+                      ) : (
+                        filteredGradeOptions.map((g) => {
+                          const active = gradeName === g.name
+                          return (
+                            <button
+                              key={g.id}
+                              type="button"
+                              onClick={() => {
+                                setGradeName(g.name)
+                                setGradeQuery("")
+                                setGradeOpen(false)
+                              }}
+                              className={cn(
+                                "w-full text-left px-2.5 py-1.5 rounded-md text-[12px] cursor-pointer border border-transparent",
+                                active
+                                  ? "bg-emerald/15 text-emerald border-emerald/40"
+                                  : "bg-transparent text-foreground hover:bg-panel hover:border-emerald/40"
+                              )}
+                            >
+                              <span className="font-bold">{g.name}</span>
+                              <span className="ml-1.5 font-mono text-[10px] text-muted-2">
+                                {formatCurrency(g.defaultPrice)}/kg
+                              </span>
+                            </button>
+                          )
+                        })
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
             {currentPreview.price != null && (
               <p className="mt-1 font-mono text-[9.5px] text-muted-2">
                 {formatCurrency(currentPreview.price)}/kg
@@ -652,6 +741,7 @@ export function SusulanShell(props: SusulanShellProps) {
                 <button
                   key={opt.value}
                   type="button"
+                  tabIndex={-1}
                   onClick={() => setRoundingMode(opt.value)}
                   className={`flex-1 px-2 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
                     roundingMode === opt.value
@@ -667,67 +757,94 @@ export function SusulanShell(props: SusulanShellProps) {
 
           {/* Berat Bruto */}
           <div>
-            <label className="block text-[11px] font-bold text-muted-foreground mb-1">
-              Berat Bruto (kg)
+            <label className="flex items-center justify-between gap-1 text-[11px] font-bold text-muted-foreground mb-1">
+              <span>Berat Bruto (kg)</span>
+              {grossWeightNum == null && (
+                <span className="inline-flex items-center rounded-full bg-amber/12 border border-amber/35 px-1.5 py-0.5 text-[9px] font-bold text-amber">
+                  belum timbang
+                </span>
+              )}
             </label>
-            <input
-              type="number"
-              min={0}
-              step={0.01}
-              placeholder="kosong = belum timbang"
-              className="field-input w-full h-[38px] text-right"
-              value={grossWeight}
-              onChange={(e) => setGrossWeight(e.target.value)}
-            />
+            <div
+              className={`relative rounded-lg transition-all ${
+                grossWeightNum == null
+                  ? "ring-2 ring-amber/50"
+                  : ""
+              }`}
+            >
+              <input
+                type="number"
+                min={0}
+                step={0.01}
+                placeholder="0.00"
+                className={`field-input w-full h-[38px] text-right font-mono ${
+                  grossWeightNum == null
+                    ? "border-amber/50 bg-amber/[0.04]"
+                    : "bg-panel-alt"
+                }`}
+                value={grossWeight}
+                onChange={(e) => setGrossWeight(e.target.value)}
+              />
+            </div>
+            <p className="mt-1 text-[10px] text-muted-2">
+              Kosongkan bila bale <span className="text-amber font-bold">belum ditimbang</span>
+            </p>
           </div>
         </div>
 
         {/* Perhitungan */}
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-muted-2 mb-1.5">
-            Perhitungan
-          </p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <div className="rounded-lg bg-panel-alt/50 border border-border-soft/60 px-2.5 py-2">
-              <p className="text-[9.5px] uppercase tracking-[0.06em] text-muted-2 mb-0.5">
-                Tara Packing
-              </p>
-              <p className="font-mono font-semibold text-[12.5px] text-red-deduction">
-                {taraKg > 0 ? `(-${taraKg.toFixed(1)} KG)` : "\u2014"}
-              </p>
-            </div>
-            <div className="rounded-lg bg-panel-alt/50 border border-border-soft/60 px-2.5 py-2">
-              <p className="text-[9.5px] uppercase tracking-[0.06em] text-muted-2 mb-0.5">
-                Setelah Packing
-              </p>
-              <p className="font-mono font-semibold text-[12.5px] text-foreground">
-                {currentPreview.afterPacking != null
-                  ? `${currentPreview.afterPacking.toFixed(1)} KG`
-                  : "\u2014"}
-              </p>
-            </div>
-            <div className="rounded-lg bg-panel-alt/50 border border-border-soft/60 px-2.5 py-2">
-              <p className="text-[9.5px] uppercase tracking-[0.06em] text-muted-2 mb-0.5">
-                Pot. Kadar Air ({moisturePercent.toFixed(2)}%)
-              </p>
-              <p className="font-mono font-semibold text-[12.5px] text-red-deduction">
-                {currentPreview.mcDeduction != null
-                  ? `(-${currentPreview.mcDeduction.toFixed(1)} KG)`
-                  : "\u2014"}
-              </p>
-            </div>
-            <div className="rounded-lg bg-panel-alt/50 border border-border-soft/60 px-2.5 py-2">
-              <p className="text-[9.5px] uppercase tracking-[0.06em] text-muted-2 mb-0.5">
-                Harga/kg
-              </p>
-              <p className="font-mono font-semibold text-[12.5px] text-amber">
-                {currentPreview.price != null
-                  ? formatCurrency(currentPreview.price)
-                  : "\u2014"}
-              </p>
+        {grossWeightNum != null && !isNaN(grossWeightNum) ? (
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-muted-2 mb-1.5">
+              Perhitungan
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="rounded-lg bg-panel-alt/50 border border-border-soft/60 px-2.5 py-2">
+                <p className="text-[9.5px] uppercase tracking-[0.06em] text-muted-2 mb-0.5">
+                  Tara Packing
+                </p>
+                <p className="font-mono font-semibold text-[12.5px] text-red-deduction">
+                  {taraKg > 0 ? `(-${taraKg.toFixed(1)} KG)` : "\u2014"}
+                </p>
+              </div>
+              <div className="rounded-lg bg-panel-alt/50 border border-border-soft/60 px-2.5 py-2">
+                <p className="text-[9.5px] uppercase tracking-[0.06em] text-muted-2 mb-0.5">
+                  Setelah Packing
+                </p>
+                <p className="font-mono font-semibold text-[12.5px] text-foreground">
+                  {currentPreview.afterPacking != null
+                    ? `${currentPreview.afterPacking.toFixed(1)} KG`
+                    : "\u2014"}
+                </p>
+              </div>
+              <div className="rounded-lg bg-panel-alt/50 border border-border-soft/60 px-2.5 py-2">
+                <p className="text-[9.5px] uppercase tracking-[0.06em] text-muted-2 mb-0.5">
+                  Pot. Kadar Air ({moisturePercent.toFixed(2)}%)
+                </p>
+                <p className="font-mono font-semibold text-[12.5px] text-red-deduction">
+                  {currentPreview.mcDeduction != null
+                    ? `(-${currentPreview.mcDeduction.toFixed(1)} KG)`
+                    : "\u2014"}
+                </p>
+              </div>
+              <div className="rounded-lg bg-panel-alt/50 border border-border-soft/60 px-2.5 py-2">
+                <p className="text-[9.5px] uppercase tracking-[0.06em] text-muted-2 mb-0.5">
+                  Harga/kg
+                </p>
+                <p className="font-mono font-semibold text-[12.5px] text-amber">
+                  {currentPreview.price != null
+                    ? formatCurrency(currentPreview.price)
+                    : "\u2014"}
+                </p>
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="flex items-center gap-2 rounded-lg border border-dashed border-border-soft/80 bg-panel-alt/40 px-3 py-2 text-[11px] text-muted-2">
+            <ClipboardList className="w-3.5 h-3.5 shrink-0 text-muted-2" />
+            Perhitungan &amp; Berat Netto muncul setelah Berat Bruto diisi.
+          </div>
+        )}
 
         {/* Netto + Simpan Bale */}
         <div className="flex items-center gap-3 flex-wrap">
@@ -750,10 +867,17 @@ export function SusulanShell(props: SusulanShellProps) {
             type="button"
             onClick={handleSimpanBale}
             disabled={!canSaveBale}
-            className={cn(
-              "flex items-center gap-2 rounded-lg px-6 py-3 text-[13.5px] font-bold shadow transition-colors",
+            title={
               canSaveBale
-                ? "bg-emerald text-primary-foreground hover:bg-emerald/80 cursor-pointer"
+                ? "Simpan bale ke riwayat"
+                : saveBaleHint.length > 0
+                  ? `Lengkapi: ${saveBaleHint.join(", ")}`
+                  : undefined
+            }
+            className={cn(
+              "flex items-center gap-2 rounded-lg px-6 py-3 text-[13.5px] font-bold shadow-lg transition-all",
+              canSaveBale
+                ? "bg-emerald text-primary-foreground hover:bg-emerald/80 cursor-pointer shadow-emerald/20 ring-1 ring-emerald"
                 : "bg-panel-alt text-muted-2 border border-border cursor-not-allowed"
             )}
           >
@@ -905,8 +1029,12 @@ export function SusulanShell(props: SusulanShellProps) {
 
       {savedBales.length === 0 && (
         <p className="text-center text-[11px] text-muted-2 flex items-center justify-center gap-1.5">
-          <ClipboardList className="w-3.5 h-3.5" /> Isi form di atas, tekan
-          &quot;Simpan Bale&quot;, bale akan muncul di riwayat.
+          <ClipboardList className="w-3.5 h-3.5" />
+          {canSaveBale
+            ? "Form sudah lengkap — tekan &quot;Simpan Bale&quot; untuk menambah bale pertama."
+            : saveBaleHint.length > 0
+              ? `Lengkapi form untuk menambah bale: ${saveBaleHint.join(", ")}`
+              : "Isi form di atas, lalu tekan &quot;Simpan Bale&quot; untuk menambah bale."}
         </p>
       )}
 
