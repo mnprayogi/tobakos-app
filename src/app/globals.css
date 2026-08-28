@@ -50,10 +50,11 @@
   --color-amber: #f2b64c;
   --color-red-deduction: #ef6b6b;
   --color-blue: #60a5fa;
+  --color-violet: #a78bfa;
   --color-panel: #101828;
   --color-panel-alt: #0c1420;
   --color-border-soft: #182236;
-  --color-muted-2: #586479;
+  --color-muted-2: #7c8aa8;
 }
 
 :root {

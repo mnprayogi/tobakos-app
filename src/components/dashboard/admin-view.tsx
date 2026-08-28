@@ -16,6 +16,8 @@ import {
 
 import { formatCurrency } from "@/lib/utils"
 import type { AdminDashboard } from "@/lib/actions/dashboard"
+import { dashboardRangeTrendDays } from "@/lib/dashboard-range"
+import type { DashboardRange } from "@/lib/dashboard-range"
 import { KpiCard, KpiSectionTitle } from "./kpi-card"
 import { MiniBarChart, formatCompact } from "./mini-bar-chart"
 import { StatusDonut } from "./status-donut"
@@ -24,7 +26,8 @@ import { QuickActions } from "./quick-actions"
 import { BaleTable } from "./bale-table"
 import { PaymentTable } from "./payment-table"
 
-export function AdminView({ data }: { data: AdminDashboard }) {
+export function AdminView({ data, range }: { data: AdminDashboard; range: DashboardRange }) {
+  const trendDays = dashboardRangeTrendDays(range)
   return (
     <div className="space-y-5">
       <section className="space-y-2.5">
@@ -83,8 +86,13 @@ export function AdminView({ data }: { data: AdminDashboard }) {
       />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <Panel title="Tren 7 hari · omzet">
-          <MiniBarChart rows={data.trend.map((t) => ({ label: t.label, title: t.title, value: t.totalPrice }))} formatValue={formatCompact} />
+        <Panel title={`Tren ${trendDays} hari · omzet`}>
+          <MiniBarChart
+            rows={data.trend.map((t) => ({ label: t.label, title: t.title, value: t.totalPrice }))}
+            formatValue={formatCompact}
+            labelStep={trendDays > 14 ? 5 : 1}
+            showValues={trendDays <= 14}
+          />
         </Panel>
         <Panel title="Status transaksi">
           <StatusDonut data={data.byStatus} />
@@ -92,8 +100,8 @@ export function AdminView({ data }: { data: AdminDashboard }) {
       </div>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <Panel title="Bale terbaru hari ini">
-          <BaleTable items={data.recentBales} empty="Belum ada bale hari ini." />
+        <Panel title={range === "today" ? "Bale terbaru hari ini" : "Bale terbaru"}>
+          <BaleTable items={data.recentBales} empty="Belum ada bale." />
         </Panel>
         <Panel title="Pembayaran terakhir">
           <PaymentTable items={data.recentPayments} empty="Belum ada pembayaran." />

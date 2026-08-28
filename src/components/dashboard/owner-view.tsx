@@ -13,13 +13,16 @@ import {
 
 import { formatCurrency, formatDateTime } from "@/lib/utils"
 import type { OwnerDashboard } from "@/lib/actions/dashboard"
+import { dashboardRangeTrendDays } from "@/lib/dashboard-range"
+import type { DashboardRange } from "@/lib/dashboard-range"
 import { StatusPill } from "@/components/shared/status-pill"
 import { KpiCard, KpiSectionTitle } from "./kpi-card"
 import { MiniBarChart, formatCompact } from "./mini-bar-chart"
 import { StatusDonut } from "./status-donut"
 import { Panel } from "./panel"
 
-export function OwnerView({ data }: { data: OwnerDashboard }) {
+export function OwnerView({ data, range }: { data: OwnerDashboard; range: DashboardRange }) {
+  const trendDays = dashboardRangeTrendDays(range)
   return (
     <div className="space-y-5">
       <section className="space-y-2.5">
@@ -43,8 +46,13 @@ export function OwnerView({ data }: { data: OwnerDashboard }) {
       </section>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <Panel title="Tren 7 hari · omzet">
-          <MiniBarChart rows={data.trend.map((t) => ({ label: t.label, title: t.title, value: t.totalPrice }))} formatValue={formatCompact} />
+        <Panel title={`Tren ${trendDays} hari · omzet`}>
+          <MiniBarChart
+            rows={data.trend.map((t) => ({ label: t.label, title: t.title, value: t.totalPrice }))}
+            formatValue={formatCompact}
+            labelStep={trendDays > 14 ? 5 : 1}
+            showValues={trendDays <= 14}
+          />
         </Panel>
         <Panel title="Status transaksi">
           <StatusDonut data={data.byStatus} />
@@ -77,7 +85,9 @@ export function OwnerView({ data }: { data: OwnerDashboard }) {
                     <span className="block text-[10.5px] text-muted-2">{w.name}</span>
                   </td>
                   <td className="border-b border-border-soft px-2 py-1.5 text-right font-mono text-foreground">{w.transactionCount}</td>
-                  <td className="border-b border-border-soft px-2 py-1.5 text-right font-mono text-foreground">{w.totalNetWeight.toFixed(1)}</td>
+                  <td className="border-b border-border-soft px-2 py-1.5 text-right font-mono text-foreground">
+                    {w.totalNetWeight.toFixed(1)} kg
+                  </td>
                   <td className="border-b border-border-soft py-1.5 pl-2 text-right font-mono font-bold text-amber">{formatCurrency(w.totalPrice)}</td>
                 </tr>
               ))}

@@ -3,7 +3,7 @@ import type { StatusCount } from "@/lib/actions/dashboard"
 const DONUT_COLORS: Record<string, string> = {
   DRAFT: "#f2b64c",
   WEIGHED: "#22c98d",
-  APPROVED: "#60a5fa",
+  APPROVED: "#a78bfa",
   PAID: "#60a5fa",
 }
 
@@ -56,17 +56,18 @@ export function StatusDonut({ data }: { data: StatusCount[] }) {
           <span className="text-[9px] uppercase tracking-[0.1em] text-muted-2">Transaksi</span>
         </div>
       </div>
-      <ul className="min-w-0 flex-1 space-y-1.5">
+      <ul className="min-w-0 flex-1 space-y-2">
         {data.map((d) => (
-          <li key={d.status} className="flex items-center justify-between gap-3 text-[12px]">
-            <span className="flex items-center gap-2 text-muted-foreground">
+          <li key={d.status} className="flex items-center text-[12px]">
+            <span className="flex items-center gap-2 shrink-0 whitespace-nowrap text-muted-foreground">
               <span
                 className="h-2 w-2 rounded-full"
                 style={{ background: DONUT_COLORS[d.status] ?? "#7c8aa8" }}
               />
               {STATUS_LABEL[d.status] ?? d.status}
             </span>
-            <span className="font-mono font-bold text-foreground">{d.count}</span>
+            <span className="mx-2 min-w-0 flex-1 border-b border-dotted border-border-soft" aria-hidden />
+            <span className="shrink-0 font-mono font-bold tabular-nums text-foreground">{d.count}</span>
           </li>
         ))}
       </ul>

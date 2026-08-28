@@ -6,6 +6,8 @@ import { requireRoles } from "@/lib/roles"
 import { getDebtSummary } from "@/lib/actions/finance"
 import { getLoansData } from "@/lib/actions/loans"
 import { toDateKey } from "@/lib/utils"
+import { dashboardRangeFrom, dashboardRangeTrendDays } from "@/lib/dashboard-range"
+import type { DashboardRange } from "@/lib/dashboard-range"
 
 function todayStart(): Date {
   const d = new Date()
@@ -59,12 +61,12 @@ export interface TrendRow {
   totalPaid: number
 }
 
-// ─── Tren 7 hari terakhir (dipakai semua role) ──────
+// ─── Tren N hari terakhir (dipakai semua role) ──────
 
-async function getSevenDayTrend(): Promise<TrendRow[]> {
+async function getTrend(days: number): Promise<TrendRow[]> {
   const from = new Date()
   from.setHours(0, 0, 0, 0)
-  from.setDate(from.getDate() - 6)
+  from.setDate(from.getDate() - (days - 1))
 
   const purchases = await prisma.purchase.findMany({
     where: { transactionDate: { gte: from }, status: { not: "VOIDED" } },
@@ -77,13 +79,13 @@ async function getSevenDayTrend(): Promise<TrendRow[]> {
     },
   })
 
-  const days: { label: string; title: string; date: string }[] = []
-  for (let i = 6; i >= 0; i--) {
+  const arr: { label: string; title: string; date: string }[] = []
+  for (let i = days - 1; i >= 0; i--) {
     const d = new Date()
     d.setDate(d.getDate() - i)
     const fmt = (opts: Intl.DateTimeFormatOptions) =>
       new Intl.DateTimeFormat("id-ID", opts).format(d)
-    days.push({
+    arr.push({
       label: fmt({ day: "2-digit", month: "2-digit" }),
       title: fmt({ weekday: "short", day: "2-digit", month: "2-digit" }),
       date: toDateKey(d),
@@ -113,7 +115,7 @@ async function getSevenDayTrend(): Promise<TrendRow[]> {
     }
   }
 
-  return days.map((d) => {
+  return arr.map((d) => {
     const t = map.get(d.date)
     return {
       label: d.label,
@@ -164,7 +166,7 @@ export async function getGraderDashboard(): Promise<GraderDashboard> {
     prisma.purchase.groupBy({ by: ["farmerId"], where: { transactionDate: { gte: start }, status: { not: "VOIDED" } } }),
     prisma.purchase.groupBy({ by: ["farmerId"], where: { transactionDate: { gte: yStart, lt: start }, status: { not: "VOIDED" } } }),
     prisma.purchaseItem.count({ where: { status: "GRADED", purchase: { status: { not: "VOIDED" } } } }),
-    getSevenDayTrend(),
+    getTrend(7),
     prisma.purchaseItem.findMany({
       where: { createdAt: { gte: start }, purchase: { status: { not: "VOIDED" } } },
       orderBy: { createdAt: "desc" },
@@ -233,7 +235,7 @@ export async function getOperatorDashboard(): Promise<OperatorDashboard> {
         where: { status: "WEIGHED", createdAt: { gte: yStart, lt: start }, purchase: { status: { not: "VOIDED" } } },
         _sum: { grossWeight: true, netWeight: true, subtotal: true },
       }),
-      getSevenDayTrend(),
+      getTrend(7),
       prisma.purchaseItem.findMany({
         where: { status: "WEIGHED", purchase: { status: { not: "VOIDED" } } },
         orderBy: { updatedAt: "desc" },
@@ -389,30 +391,39 @@ export interface OwnerDashboard {
   recentTransactions: OwnerRecentTransaction[]
 }
 
-export async function getOwnerDashboard(): Promise<OwnerDashboard> {
+export async function getOwnerDashboard(range: DashboardRange = "all"): Promise<OwnerDashboard> {
   await requireRoles("OWNER", "ADMIN", "FINANCE")
+
+  const from = dashboardRangeFrom(range)
+  const txDateFilter = from ? { gte: from } : undefined
 
   const [txAgg, byStatusAgg, baleCount, trend, debt, loans, whAgg, warehouses, recentTx] =
     await Promise.all([
       prisma.purchase.aggregate({
-        where: { status: { not: "VOIDED" } },
+        where: { transactionDate: txDateFilter, status: { not: "VOIDED" } },
         _count: { _all: true },
         _sum: { totalGrossWeight: true, totalNetWeight: true, totalPrice: true, paidAmount: true },
       }),
-      prisma.purchase.groupBy({ by: ["status"], where: { status: { not: "VOIDED" } }, _count: { _all: true } }),
-      prisma.purchaseItem.count({ where: { purchase: { status: { not: "VOIDED" } } } }),
-      getSevenDayTrend(),
+      prisma.purchase.groupBy({
+        by: ["status"],
+        where: { transactionDate: txDateFilter, status: { not: "VOIDED" } },
+        _count: { _all: true },
+      }),
+      prisma.purchaseItem.count({
+        where: { purchase: { transactionDate: txDateFilter, status: { not: "VOIDED" } } },
+      }),
+      getTrend(dashboardRangeTrendDays(range)),
       getDebtSummary(),
       getLoansData(),
       prisma.purchase.groupBy({
         by: ["warehouseId"],
-        where: { status: { not: "VOIDED" } },
+        where: { transactionDate: txDateFilter, status: { not: "VOIDED" } },
         _count: { _all: true },
         _sum: { totalNetWeight: true, totalPrice: true },
       }),
       prisma.warehouse.findMany({ select: { id: true, code: true, name: true } }),
       prisma.purchase.findMany({
-        where: { status: { not: "VOIDED" } },
+        where: { transactionDate: txDateFilter, status: { not: "VOIDED" } },
         orderBy: { transactionDate: "desc" },
         take: 8,
         include: { farmer: true, lane: true, _count: { select: { items: true } } },
@@ -502,10 +513,13 @@ export interface AdminDashboard {
   recentPayments: RecentPayment[]
 }
 
-export async function getAdminDashboard(): Promise<AdminDashboard> {
+export async function getAdminDashboard(range: DashboardRange = "all"): Promise<AdminDashboard> {
   await requireRoles("ADMIN")
   const start = todayStart()
   const yStart = yesterdayStart()
+
+  const from = dashboardRangeFrom(range)
+  const txDateFilter = from ? { gte: from } : undefined
 
   const [
     gradedToday,
@@ -542,17 +556,21 @@ export async function getAdminDashboard(): Promise<AdminDashboard> {
       _sum: { subtotal: true },
     }),
     prisma.purchase.aggregate({
-      where: { status: { not: "VOIDED" } },
+      where: { transactionDate: txDateFilter, status: { not: "VOIDED" } },
       _count: { _all: true },
       _sum: { totalPrice: true, paidAmount: true },
     }),
     prisma.purchase.count({ where: { status: "WEIGHED" } }),
     getDebtSummary(),
     getLoansData(),
-    prisma.purchase.groupBy({ by: ["status"], where: { status: { not: "VOIDED" } }, _count: { _all: true } }),
-    getSevenDayTrend(),
+    prisma.purchase.groupBy({
+      by: ["status"],
+      where: { transactionDate: txDateFilter, status: { not: "VOIDED" } },
+      _count: { _all: true },
+    }),
+    getTrend(dashboardRangeTrendDays(range)),
     prisma.purchaseItem.findMany({
-      where: { createdAt: { gte: start }, purchase: { status: { not: "VOIDED" } } },
+      where: { purchase: { transactionDate: txDateFilter, status: { not: "VOIDED" } } },
       orderBy: { createdAt: "desc" },
       take: 8,
       include: {
@@ -561,7 +579,7 @@ export async function getAdminDashboard(): Promise<AdminDashboard> {
       },
     }),
     prisma.payment.findMany({
-      where: { voidedAt: null, purchase: { status: { not: "VOIDED" } } },
+      where: { voidedAt: null, purchase: { transactionDate: txDateFilter, status: { not: "VOIDED" } } },
       orderBy: { paidAt: "desc" },
       take: 8,
       include: { purchase: { include: { farmer: true } } },
