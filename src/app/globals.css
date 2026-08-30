@@ -51,48 +51,54 @@
   --color-red-deduction: #ef6b6b;
   --color-blue: #60a5fa;
   --color-violet: #a78bfa;
-  --color-panel: #101828;
-  --color-panel-alt: #0c1420;
-  --color-border-soft: #182236;
-  --color-muted-2: #7c8aa8;
+  --color-panel: var(--panel);
+  --color-panel-alt: var(--panel-alt);
+  --color-border-soft: var(--border-soft);
+  --color-muted-2: var(--muted-2);
 }
 
 :root {
-  --background: #060a12;
-  --foreground: #e7ecf5;
-  --card: #101828;
-  --card-foreground: #e7ecf5;
-  --popover: #101828;
-  --popover-foreground: #e7ecf5;
-  --primary: #22c98d;
-  --primary-foreground: #04150e;
-  --secondary: #0c1420;
-  --secondary-foreground: #e7ecf5;
-  --muted: #0c1420;
-  --muted-foreground: #7c8aa8;
-  --accent: #0c1420;
-  --accent-foreground: #e7ecf5;
-  --destructive: #ef6b6b;
-  --border: #1f2b40;
-  --input: #0c1420;
+  color-scheme: light;
+  --background: #f4f7fb;
+  --foreground: #0f1a2e;
+  --card: #ffffff;
+  --card-foreground: #0f1a2e;
+  --popover: #ffffff;
+  --popover-foreground: #0f1a2e;
+  --primary: #0e9f6b;
+  --primary-foreground: #ffffff;
+  --secondary: #e9eef6;
+  --secondary-foreground: #1d2b45;
+  --muted: #eef2f8;
+  --muted-foreground: #5b6b85;
+  --accent: #e9eef6;
+  --accent-foreground: #1d2b45;
+  --destructive: #d84040;
+  --border: #d7dfeb;
+  --input: #ffffff;
   --ring: #22c98d;
+  --panel: #f8fafd;
+  --panel-alt: #eef2f8;
+  --border-soft: #dfe6f0;
+  --muted-2: #8493ab;
   --chart-1: #22c98d;
   --chart-2: #f2b64c;
   --chart-3: #586479;
   --chart-4: #ef6b6b;
   --chart-5: #7c8aa8;
   --radius: 0.875rem;
-  --sidebar: #101828;
-  --sidebar-foreground: #e7ecf5;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0f1a2e;
   --sidebar-primary: #22c98d;
   --sidebar-primary-foreground: #04150e;
-  --sidebar-accent: #0c1420;
-  --sidebar-accent-foreground: #e7ecf5;
-  --sidebar-border: #1f2b40;
+  --sidebar-accent: #e9eef6;
+  --sidebar-accent-foreground: #1d2b45;
+  --sidebar-border: #d7dfeb;
   --sidebar-ring: #22c98d;
 }
 
 .dark {
+  color-scheme: dark;
   --background: #060a12;
   --foreground: #e7ecf5;
   --card: #101828;
@@ -111,6 +117,10 @@
   --border: #1f2b40;
   --input: #0c1420;
   --ring: #22c98d;
+  --panel: #101828;
+  --panel-alt: #0c1420;
+  --border-soft: #182236;
+  --muted-2: #7c8aa8;
   --chart-1: #22c98d;
   --chart-2: #f2b64c;
   --chart-3: #586479;
@@ -138,6 +148,9 @@
     @apply font-sans;
   }
   input[type="date"] {
+    color-scheme: light;
+  }
+  .dark input[type="date"] {
     color-scheme: dark;
   }
 }
@@ -181,8 +194,8 @@
   display: inline-block;
   letter-spacing: 0.02em;
   background: rgba(124, 138, 168, 0.12);
-  color: #7c8aa8;
-  border: 1px solid #1f2b40;
+  color: var(--muted-2);
+  border: 1px solid var(--border);
 }
 
 @utility scan-input {
@@ -190,7 +203,7 @@
   position: relative;
   display: flex;
   align-items: center;
-  background: #0c1420;
+  background: var(--input);
   border: 1.5px solid #22c98d;
   border-radius: 9px;
   padding: 0 12px;
@@ -200,8 +213,8 @@
 @utility field-disabled {
   input:disabled,
   select:disabled {
-    color: rgba(231, 236, 245, 0.65);
-    background: #0a121f;
+    color: color-mix(in srgb, var(--foreground) 65%, transparent);
+    background: var(--panel);
     border-style: dashed;
   }
 }
@@ -219,7 +232,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #586479;
+  color: var(--muted-2);
   margin: 0 0 10px;
 }
 
@@ -230,7 +243,7 @@
 @utility field-wf-label {
   display: block;
   font-size: 11px;
-  color: #7c8aa8;
+  color: var(--muted-2);
   margin-bottom: 4px;
 }
 
@@ -248,9 +261,9 @@
 
 @utility field-input {
   width: 100%;
-  background: #0c1420;
-  border: 1px solid #182236;
-  color: #e7ecf5;
+  background: var(--input);
+  border: 1px solid var(--border-soft);
+  color: var(--foreground);
   font-family: var(--font-sans);
   font-size: 13px;
   padding: 8px 10px;
@@ -259,8 +272,8 @@
 }
 
 @utility field-input-disabled {
-  color: #7c8aa8;
-  background: #0a121f;
+  color: var(--muted-2);
+  background: var(--panel);
   border-style: dashed;
 }
 
@@ -286,9 +299,9 @@
   min-height: 60px;
   padding: 10px 8px;
   border-radius: 12px;
-  border: 1px solid #263452;
-  background: #111c2e;
-  color: #c7d2e6;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--foreground);
   font-family: var(--font-mono);
   font-weight: 700;
   font-size: 14px;
@@ -297,7 +310,7 @@
   @media (hover: hover) {
     &:hover {
       border-color: rgba(34, 201, 141, 0.45);
-      background: #16233a;
+      background: var(--panel-alt);
     }
   }
 }
@@ -318,7 +331,7 @@
 
 @utility grade-btn-lg {
   font-size: 16px;
-  border: 2px solid #3b4c6e;
+  border: 2px solid var(--border);
 }
 
 @utility price-line {
@@ -327,14 +340,14 @@
   align-items: baseline;
   padding-top: 8px;
   margin-top: 4px;
-  border-top: 1px dashed #182236;
+  border-top: 1px dashed var(--border-soft);
   font-size: 12px;
-  color: #7c8aa8;
+  color: var(--muted-2);
 }
 
 @utility price-line-value {
   font-family: var(--font-mono);
-  color: #f2b64c;
+  color: var(--amber);
   font-size: 15px;
 }
 
@@ -364,9 +377,9 @@
   cursor: pointer;
   font-family: var(--font-sans);
   letter-spacing: 0.01em;
-  background: #0c1420;
-  color: #e7ecf5;
-  border: 1px solid #182236;
+  background: var(--panel-alt);
+  color: var(--foreground);
+  border: 1px solid var(--border-soft);
 }
 
 @utility sticker-wf {
@@ -385,7 +398,7 @@
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #060a12;
+  background: var(--background);
 }
 
 @utility sticker-wf-notch-r {
@@ -397,7 +410,7 @@
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #060a12;
+  background: var(--background);
 }
 
 @utility sticker-code {
@@ -449,9 +462,9 @@
   font-family: var(--font-sans);
   font-size: 11.5px;
   font-weight: 700;
-  color: #e7ecf5;
-  background: #0c1420;
-  border: 1px solid #182236;
+  color: var(--foreground);
+  background: var(--panel-alt);
+  border: 1px solid var(--border-soft);
   border-radius: 7px;
   padding: 7px 12px;
   cursor: pointer;
@@ -468,17 +481,17 @@
   font-size: 10.5px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: #586479;
+  color: var(--muted-2);
   font-weight: 700;
   padding: 0 8px 8px;
-  border-bottom: 1px solid #182236;
+  border-bottom: 1px solid var(--border-soft);
 }
 
 @utility wf-table-td {
   padding: 9px 8px;
-  border-bottom: 1px solid #182236;
+  border-bottom: 1px solid var(--border-soft);
   font-family: var(--font-mono);
-  color: #e7ecf5;
+  color: var(--foreground);
 }
 
 @utility wf-table-tr-last {

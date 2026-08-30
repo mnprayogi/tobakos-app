@@ -44,13 +44,13 @@ export default function Home() {
   }, [router])
 
   return (
-    <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-6 bg-[#060A12] px-6">
-      <div className="flex size-16 items-center justify-center rounded-2xl border border-[#1F2B40] bg-[#101828]">
-        <span className="text-2xl font-bold text-[#22C98D]">T</span>
+    <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-6 bg-background px-6">
+      <div className="flex size-16 items-center justify-center rounded-2xl border border-border bg-card">
+        <span className="text-2xl font-bold text-emerald">T</span>
       </div>
       <div className="space-y-3 text-center">
-        <h1 className="text-xl font-semibold text-[#E7ECF5]">TobakOS</h1>
-        <p className="text-sm text-[#7C8AA8]">Memuat aplikasi...</p>
+        <h1 className="text-xl font-semibold text-foreground">TobakOS</h1>
+        <p className="text-sm text-muted-2">Memuat aplikasi...</p>
       </div>
     </div>
   )

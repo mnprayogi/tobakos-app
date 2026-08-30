@@ -36,7 +36,7 @@ export function StatusDonut({ data }: { data: StatusCount[] }) {
     <div className="flex items-center gap-5">
       <div className="relative shrink-0">
         <svg viewBox="0 0 100 100" className="h-32 w-32 -rotate-90">
-          <circle cx="50" cy="50" r={R} fill="none" stroke="#182236" strokeWidth="13" />
+          <circle cx="50" cy="50" r={R} fill="none" stroke="var(--border-soft)" strokeWidth="13" />
           {segments.map((s, i) => (
             <circle
               key={i}
@@ -44,7 +44,7 @@ export function StatusDonut({ data }: { data: StatusCount[] }) {
               cy="50"
               r={R}
               fill="none"
-              stroke={DONUT_COLORS[s.status] ?? "#7c8aa8"}
+              stroke={DONUT_COLORS[s.status] ?? "var(--muted-2)"}
               strokeWidth="13"
               strokeDasharray={`${((s.end - s.start) / total) * C} ${C}`}
               strokeDashoffset={(-(s.start / total) * C).toFixed(2)}
@@ -62,7 +62,7 @@ export function StatusDonut({ data }: { data: StatusCount[] }) {
             <span className="flex items-center gap-2 shrink-0 whitespace-nowrap text-muted-foreground">
               <span
                 className="h-2 w-2 rounded-full"
-                style={{ background: DONUT_COLORS[d.status] ?? "#7c8aa8" }}
+                style={{ background: DONUT_COLORS[d.status] ?? "var(--muted-2)" }}
               />
               {STATUS_LABEL[d.status] ?? d.status}
             </span>

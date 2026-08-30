@@ -5,6 +5,7 @@ import { Menu, PanelLeft } from "lucide-react"
 
 import { Sidebar } from "@/components/layout/sidebar"
 import { Button } from "@/components/ui/button"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 const STORAGE_KEY = "tobak:sidebar-collapsed"
 
@@ -94,6 +95,9 @@ export function AppShell({
           >
             <PanelLeft />
           </Button>
+          <div className="ml-auto">
+            <ThemeToggle />
+          </div>
         </header>
         <main className="min-w-0 flex-1 p-4 pb-16 sm:p-5 lg:p-7">
           {children}

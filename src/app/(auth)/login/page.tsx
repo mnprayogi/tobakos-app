@@ -292,7 +292,8 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-[100dvh] items-center justify-center px-4 py-10 sm:px-6 lg:px-8">
+    <div className="dark min-h-[100dvh] bg-background text-foreground">
+      <div className="flex min-h-[100dvh] items-center justify-center px-4 py-10 sm:px-6 lg:px-8">
       <div className="w-full max-w-4xl animate-fade-up overflow-hidden rounded-2xl border border-border bg-card shadow-[0_24px_80px_-24px_rgba(0,0,0,0.7)]">
         <div className="grid lg:grid-cols-2">
           <aside className="relative hidden overflow-hidden border-r border-border bg-panel lg:flex lg:flex-col lg:p-8 lg:min-h-[600px]">
@@ -436,6 +437,7 @@ export default function LoginPage() {
             </p>
           </main>
         </div>
+      </div>
       </div>
     </div>
   )

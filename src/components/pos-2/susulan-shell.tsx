@@ -105,6 +105,52 @@ const ROUNDING_OPTIONS: { value: RoundMode; label: string }[] = [
   { value: "ceil", label: "Ceil" },
 ]
 
+interface SusulanDraft {
+  savedBales: SavedBale[]
+  selectedFarmer: FarmerOption | null
+  dateValue: string
+  tobaccoTypeId: number | null
+  leafTypeId: number | null
+  packingTypeId: number | null
+  gradeName: string | null
+  customerId: number | null
+  moisturePercent: number
+  grossWeight: string
+  roundingMode: RoundMode
+}
+
+function draftStorageKey(warehouse: string, laneCode: string) {
+  return `tobak:susulan-draft:${warehouse}:${laneCode}`
+}
+
+function loadDraft(key: string): SusulanDraft | null {
+  if (typeof window === "undefined") return null
+  try {
+    const raw = window.localStorage.getItem(key)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<SusulanDraft>
+    return { ...emptyDraft(), ...parsed }
+  } catch {
+    return null
+  }
+}
+
+function emptyDraft(): SusulanDraft {
+  return {
+    savedBales: [],
+    selectedFarmer: null,
+    dateValue: "",
+    tobaccoTypeId: null,
+    leafTypeId: null,
+    packingTypeId: null,
+    gradeName: null,
+    customerId: null,
+    moisturePercent: 0,
+    grossWeight: "",
+    roundingMode: "normal",
+  }
+}
+
 export function SusulanShell(props: SusulanShellProps) {
   const {
     tobaccoTypes,
@@ -120,6 +166,7 @@ export function SusulanShell(props: SusulanShellProps) {
 
   const shortLane = laneToken(laneCode, warehouse)
   const todayKey = toDateKey(new Date())
+  const storageKey = draftStorageKey(warehouse, laneCode)
   const keyRef = useRef(1)
 
   function nextKey() {
@@ -127,6 +174,7 @@ export function SusulanShell(props: SusulanShellProps) {
     return keyRef.current
   }
 
+  const [mounted, setMounted] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedFarmer, setSelectedFarmer] = useState<FarmerOption | null>(null)
   const [dateValue, setDateValue] = useState(todayKey)
@@ -150,6 +198,64 @@ export function SusulanShell(props: SusulanShellProps) {
   const [result, setResult] = useState<SusulanBatchResult | null>(null)
   const [printing, setPrinting] = useState(false)
   const [printedCount, setPrintedCount] = useState(0)
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time mount hydration of persisted draft
+    setMounted(true)
+
+    const draft = loadDraft(storageKey)
+    if (!draft) return
+
+    setSavedBales(draft.savedBales)
+    if (draft.savedBales.length > 0) {
+      keyRef.current = Math.max(...draft.savedBales.map((b) => b.key))
+    }
+    setSelectedFarmer(draft.selectedFarmer)
+    if (draft.dateValue) setDateValue(draft.dateValue)
+    setTobaccoTypeId(draft.tobaccoTypeId)
+    setLeafTypeId(draft.leafTypeId)
+    setPackingTypeId(draft.packingTypeId)
+    setGradeName(draft.gradeName)
+    setCustomerId(draft.customerId)
+    setMoisturePercent(draft.moisturePercent)
+    setGrossWeight(draft.grossWeight)
+    setRoundingMode(draft.roundingMode)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only hydrate once on mount
+  }, [])
+
+  useEffect(() => {
+    if (!mounted) return
+    try {
+      const draft: SusulanDraft = {
+        savedBales,
+        selectedFarmer,
+        dateValue,
+        tobaccoTypeId,
+        leafTypeId,
+        packingTypeId,
+        gradeName,
+        customerId,
+        moisturePercent,
+        grossWeight,
+        roundingMode,
+      }
+      window.localStorage.setItem(storageKey, JSON.stringify(draft))
+    } catch {}
+  }, [
+    mounted,
+    storageKey,
+    savedBales,
+    selectedFarmer,
+    dateValue,
+    tobaccoTypeId,
+    leafTypeId,
+    packingTypeId,
+    gradeName,
+    customerId,
+    moisturePercent,
+    grossWeight,
+    roundingMode,
+  ])
 
   const printer = useThermalPrinter()
   const stickerPrintRef = useRef<HTMLDivElement>(null)
@@ -373,6 +479,9 @@ export function SusulanShell(props: SusulanShellProps) {
       setCustomerId(customers[0]?.id ?? null)
       setGrossWeight("")
       setRoundingMode("normal")
+      try {
+        window.localStorage.removeItem(storageKey)
+      } catch {}
       toast.success(
         saved.sessionEnded
           ? `Transaksi ${saved.transactionCode} tersimpan & sesi ditutup (WEIGHED)`

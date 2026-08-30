@@ -85,27 +85,27 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
           <div>
             <label className="text-[10.5px] text-muted-foreground block mb-1">Grade</label>
-            <input value={item.grade} disabled className="w-full bg-[#0a121f] border border-dashed border-border-soft text-foreground/80 font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
+            <input value={item.grade} disabled className="w-full bg-panel border border-dashed border-border-soft text-foreground/80 font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
           </div>
           <div>
             <label className="text-[10.5px] text-muted-foreground block mb-1">Petani</label>
-            <input value={`${item.farmerName} (${item.farmerNik ?? item.farmerName})`} disabled className="w-full bg-[#0a121f] border border-dashed border-border-soft text-foreground/80 font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
+            <input value={`${item.farmerName} (${item.farmerNik ?? item.farmerName})`} disabled className="w-full bg-panel border border-dashed border-border-soft text-foreground/80 font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
           </div>
           <div>
             <label className="text-[10.5px] text-muted-foreground block mb-1">Jenis Tembakau</label>
-            <input value={item.tobaccoType} disabled className="w-full bg-[#0a121f] border border-dashed border-border-soft text-foreground/80 font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
+            <input value={item.tobaccoType} disabled className="w-full bg-panel border border-dashed border-border-soft text-foreground/80 font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
           </div>
           <div>
             <label className="text-[10.5px] text-muted-foreground block mb-1">Jenis Daun</label>
-            <input value={item.leafType} disabled className="w-full bg-[#0a121f] border border-dashed border-border-soft text-foreground/80 font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
+            <input value={item.leafType} disabled className="w-full bg-panel border border-dashed border-border-soft text-foreground/80 font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
           </div>
           <div>
             <label className="text-[10.5px] text-muted-foreground block mb-1">Jenis Packing</label>
-            <input value={item.packingType} disabled className="w-full bg-[#0a121f] border border-dashed border-border-soft text-foreground/80 font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
+            <input value={item.packingType} disabled className="w-full bg-panel border border-dashed border-border-soft text-foreground/80 font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
           </div>
           <div>
             <label className="text-[10.5px] text-muted-foreground block mb-1">Alokasi Customer</label>
-            <input value={item.customerName ?? "\u2014"} disabled className="w-full bg-[#0a121f] border border-dashed border-border-soft text-foreground/80 font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
+            <input value={item.customerName ?? "\u2014"} disabled className="w-full bg-panel border border-dashed border-border-soft text-foreground/80 font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
           </div>
         </div>
 
@@ -277,27 +277,27 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
             <div>
               <label className="text-[10.5px] text-muted-foreground block mb-1">Grade</label>
-              <input value={item?.grade ?? ""} disabled className="w-full bg-[#0a121f] border border-dashed border-border-soft text-foreground/80 font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
+              <input value={item?.grade ?? ""} disabled className="w-full bg-panel border border-dashed border-border-soft text-foreground/80 font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
             </div>
             <div>
               <label className="text-[10.5px] text-muted-foreground block mb-1">Petani</label>
-              <input value={item ? `${item.farmerName} (${item.farmerNik ?? item.farmerName})` : ""} disabled className="w-full bg-[#0a121f] border border-dashed border-border-soft text-foreground/80 font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
+              <input value={item ? `${item.farmerName} (${item.farmerNik ?? item.farmerName})` : ""} disabled className="w-full bg-panel border border-dashed border-border-soft text-foreground/80 font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
             </div>
             <div>
               <label className="text-[10.5px] text-muted-foreground block mb-1">Jenis Tembakau</label>
-              <input value={item?.tobaccoType ?? ""} disabled className="w-full bg-[#0a121f] border border-dashed border-border-soft text-foreground/80 font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
+              <input value={item?.tobaccoType ?? ""} disabled className="w-full bg-panel border border-dashed border-border-soft text-foreground/80 font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
             </div>
             <div>
               <label className="text-[10.5px] text-muted-foreground block mb-1">Jenis Daun</label>
-              <input value={item?.leafType ?? ""} disabled className="w-full bg-[#0a121f] border border-dashed border-border-soft text-foreground/80 font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
+              <input value={item?.leafType ?? ""} disabled className="w-full bg-panel border border-dashed border-border-soft text-foreground/80 font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
             </div>
             <div>
               <label className="text-[10.5px] text-muted-foreground block mb-1">Jenis Packing</label>
-              <input value={item?.packingType ?? ""} disabled className="w-full bg-[#0a121f] border border-dashed border-border-soft text-foreground/80 font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
+              <input value={item?.packingType ?? ""} disabled className="w-full bg-panel border border-dashed border-border-soft text-foreground/80 font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
             </div>
             <div>
               <label className="text-[10.5px] text-muted-foreground block mb-1">Alokasi Customer</label>
-              <input value={item?.customerName ?? "\u2014"} disabled className="w-full bg-[#0a121f] border border-dashed border-border-soft text-foreground/80 font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
+              <input value={item?.customerName ?? "\u2014"} disabled className="w-full bg-panel border border-dashed border-border-soft text-foreground/80 font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
             </div>
           </div>
 

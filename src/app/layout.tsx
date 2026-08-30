@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next"
 import { Inter, JetBrains_Mono } from "next/font/google"
 import "./globals.css"
 import { Toaster } from "@/components/ui/sonner"
+import { ThemeProvider } from "@/components/theme-provider"
 import { SerwistProvider } from "@serwist/turbopack/react"
 import { PwaUpdater } from "@/components/pwa-updater"
 
@@ -50,17 +51,24 @@ export default function RootLayout({
   return (
     <html
       lang="id"
-      className={`${inter.variable} ${jetbrainsMono.variable} h-full antialiased dark`}
+      className={`${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <head>
         <meta name="interactive-widget" content="resizes-content" />
       </head>
-      <body className="min-h-full">
+      <body className="min-h-full bg-background text-foreground">
         <SerwistProvider swUrl="/serwist/sw.js">
-          {children}
-          <Toaster richColors closeButton />
-          <PwaUpdater />
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="dark"
+            enableSystem={false}
+            disableTransitionOnChange
+          >
+            {children}
+            <Toaster richColors closeButton />
+            <PwaUpdater />
+          </ThemeProvider>
         </SerwistProvider>
       </body>
     </html>
