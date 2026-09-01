@@ -58,7 +58,11 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
   const { enqueue } = useOfflineQueue()
 
   useEffect(() => {
-    if (item && capturedWeight != null && capturedWeight !== prevCapturedRef.current) {
+    if (capturedWeight == null) {
+      prevCapturedRef.current = null
+      return
+    }
+    if (item && capturedWeight !== prevCapturedRef.current) {
       prevCapturedRef.current = capturedWeight
       setGrossWeight(String(capturedWeight))
     }
@@ -317,7 +321,7 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
                   placeholder="0.0"
                   value={grossWeight}
                   onChange={(e) => setGrossWeight(e.target.value)}
-                  disabled={!item}
+                  disabled={!item || capturedWeight != null}
                   className="flex-1 bg-panel-alt border border-border-soft text-foreground font-sans text-[13px] px-2.5 py-1.5 rounded-lg outline-none placeholder:text-muted-2 disabled:opacity-60 disabled:cursor-not-allowed"
                 />
                 {capturedWeight != null && (

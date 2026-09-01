@@ -23,8 +23,8 @@ export function ThemeToggle() {
       size="icon-sm"
       className="text-muted-foreground"
       onClick={() => setTheme(isDark ? "light" : "dark")}
-      aria-label={isDark ? "Beralih ke mode terang" : "Beralih ke mode gelap"}
-      title={isDark ? "Mode terang" : "Mode gelap"}
+      aria-label={mounted ? (isDark ? "Beralih ke mode terang" : "Beralih ke mode gelap") : "Ubah tema"}
+      title={mounted ? (isDark ? "Mode terang" : "Mode gelap") : "Ubah tema"}
     >
       {mounted ? (isDark ? <Sun className="size-4" /> : <Moon className="size-4" />) : <span className="size-4" aria-hidden />}
     </Button>
