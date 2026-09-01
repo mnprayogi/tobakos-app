@@ -100,6 +100,8 @@ export interface PaymentInput {
   method: PaymentMethodValue
   note?: string | null
   loanDeduction?: number
+  bankAccountId?: number
+  recipientAccount?: string | null
 }
 
 export async function recordPayment(purchaseId: number, input: PaymentInput) {
@@ -110,6 +112,32 @@ export async function recordPayment(purchaseId: number, input: PaymentInput) {
 
   const loanDeduction = input.loanDeduction ? roundMoney(input.loanDeduction) : 0
   if (loanDeduction < 0) throw new Error("Potongan hutang tidak boleh negatif")
+
+  let bankAccount: {
+    id: number
+    bankName: string
+    accountNumber: string
+    active: boolean
+    warehouseId: number | null
+  } | null = null
+  if (input.method === "TRANSFER") {
+    if (input.bankAccountId == null) {
+      throw new Error("Pilih akun rekening tujuan untuk pembayaran transfer")
+    }
+    bankAccount = await prisma.bankAccount.findUnique({
+      where: { id: input.bankAccountId },
+      select: { id: true, bankName: true, accountNumber: true, active: true, warehouseId: true },
+    })
+    if (!bankAccount || !bankAccount.active) throw new Error("Rekening tujuan tidak ditemukan atau nonaktif")
+    const currentScope = await resolveWarehouseScope()
+    if (
+      currentScope.mode === "scoped" &&
+      bankAccount.warehouseId != null &&
+      bankAccount.warehouseId !== currentScope.warehouseId
+    ) {
+      throw new Error("Rekening tujuan terdaftar di gudang berbeda")
+    }
+  }
 
   let purchaseLaneId: number | null = null
 
@@ -178,6 +206,9 @@ export async function recordPayment(purchaseId: number, input: PaymentInput) {
         note: input.note?.trim() || null,
         paidBy: actor,
         loanDeduction,
+        bankAccountId: input.method === "TRANSFER" ? bankAccount?.id ?? null : null,
+        recipientAccount:
+          input.method === "TRANSFER" ? input.recipientAccount?.trim() || null : null,
       },
     })
 
@@ -188,6 +219,20 @@ export async function recordPayment(purchaseId: number, input: PaymentInput) {
           category: "KAS_PEMBELIAN",
           type: "KELUAR",
           amount,
+          purchaseId,
+          paymentId: payment.id,
+          createdBy: actor,
+        },
+      })
+    }
+
+    if (input.method === "TRANSFER" && amount > 0.005 && bankAccount != null) {
+      await tx.bankEntry.create({
+        data: {
+          bankAccountId: bankAccount.id,
+          type: "KELUAR",
+          amount,
+          note: input.recipientAccount?.trim() || null,
           purchaseId,
           paymentId: payment.id,
           createdBy: actor,
@@ -252,6 +297,10 @@ export async function recordPayment(purchaseId: number, input: PaymentInput) {
         paidBy: payment.paidBy,
         paidAt: payment.paidAt,
         loanDeduction: Number(payment.loanDeduction ?? 0),
+        recipientAccount: payment.recipientAccount,
+        bankAccount: bankAccount
+          ? { bankName: bankAccount.bankName, accountNumber: bankAccount.accountNumber }
+          : null,
       },
       paidOff: isPaidOff,
       newPaidAmount: storedPaid,
@@ -266,6 +315,7 @@ export async function recordPayment(purchaseId: number, input: PaymentInput) {
   revalidatePath("/admin/debt")
   revalidatePath("/admin/loans")
   revalidatePath("/admin/kas")
+  revalidatePath("/admin/bank")
   publishEvent("payment.recorded", purchaseLaneId)
   publishEvent("cash.updated")
   return result
@@ -311,6 +361,11 @@ export async function voidPayment(purchaseId: number, paymentId: number) {
     })
 
     await tx.cashEntry.updateMany({
+      where: { paymentId },
+      data: { voidedAt: new Date(), voidedBy: actor },
+    })
+
+    await tx.bankEntry.updateMany({
       where: { paymentId },
       data: { voidedAt: new Date(), voidedBy: actor },
     })
@@ -376,6 +431,7 @@ export async function voidPayment(purchaseId: number, paymentId: number) {
   revalidatePath("/admin/transactions")
   revalidatePath("/admin/debt")
   revalidatePath("/admin/kas")
+  revalidatePath("/admin/bank")
   if (result.loanTouched) revalidatePath("/admin/loans")
   publishEvent("payment.voided", purchaseLaneId)
   publishEvent("cash.updated")
@@ -421,6 +477,19 @@ export async function voidTransaction(purchaseId: number, note: string) {
     }
 
     await tx.cashEntry.updateMany({
+      where: {
+        voidedAt: null,
+        OR: [
+          { purchaseId },
+          ...(activePayments.length > 0
+            ? [{ paymentId: { in: activePayments.map((p) => p.id) } }]
+            : []),
+        ],
+      },
+      data: { voidedAt: new Date(), voidedBy: actor },
+    })
+
+    await tx.bankEntry.updateMany({
       where: {
         voidedAt: null,
         OR: [
@@ -484,6 +553,7 @@ export async function voidTransaction(purchaseId: number, note: string) {
   revalidatePath("/admin/transactions")
   revalidatePath("/admin/debt")
   revalidatePath("/admin/kas")
+  revalidatePath("/admin/bank")
   revalidatePath("/dashboard")
   if (result.loanTouched) revalidatePath("/admin/loans")
   publishEvent("purchase.voided", purchaseLaneId)
@@ -567,6 +637,8 @@ export interface DebtPayment {
   paidBy: string | null
   paidAt: Date
   loanDeduction: number
+  recipientAccount?: string | null
+  bankAccount?: { bankName: string; accountNumber: string } | null
 }
 
 export interface DebtPurchase {
@@ -614,6 +686,8 @@ export async function getDebtSummary(): Promise<DebtFarmer[]> {
           paidBy: true,
           paidAt: true,
           loanDeduction: true,
+          recipientAccount: true,
+          bankAccount: { select: { bankName: true, accountNumber: true } },
         },
         where: { voidedAt: null },
         orderBy: { paidAt: "asc" },
@@ -677,6 +751,10 @@ export async function getDebtSummary(): Promise<DebtFarmer[]> {
         paidBy: pay.paidBy,
         paidAt: pay.paidAt,
         loanDeduction: Number(pay.loanDeduction ?? 0),
+        recipientAccount: pay.recipientAccount,
+        bankAccount: pay.bankAccount
+          ? { bankName: pay.bankAccount.bankName, accountNumber: pay.bankAccount.accountNumber }
+          : null,
       })),
     })
 
@@ -699,6 +777,8 @@ export interface BuktiPayment {
   paidBy: string | null
   paidAt: Date
   loanDeduction: number
+  recipientAccount?: string | null
+  bankAccount?: { bankName: string; accountNumber: string } | null
 }
 
 export interface BuktiData {
@@ -732,7 +812,7 @@ export async function getBuktiData(purchaseId: number): Promise<BuktiData> {
       farmer: true,
       warehouse: true,
       lane: true,
-      payments: { where: { voidedAt: null }, orderBy: { paidAt: "asc" } },
+      payments: { where: { voidedAt: null }, orderBy: { paidAt: "asc" }, include: { bankAccount: true } },
     },
   })
   if (!purchase) throw new Error("Transaksi tidak ditemukan")
@@ -771,6 +851,10 @@ export async function getBuktiData(purchaseId: number): Promise<BuktiData> {
       paidBy: pay.paidBy,
       paidAt: pay.paidAt,
       loanDeduction: Number(pay.loanDeduction ?? 0),
+      recipientAccount: pay.recipientAccount,
+      bankAccount: pay.bankAccount
+        ? { bankName: pay.bankAccount.bankName, accountNumber: pay.bankAccount.accountNumber }
+        : null,
     })),
   }
 }

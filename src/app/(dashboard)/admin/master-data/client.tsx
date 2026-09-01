@@ -35,6 +35,12 @@ import {
   toggleLane,
   deleteLane,
 } from "@/lib/actions/lanes"
+import {
+  createBankAccount,
+  updateBankAccount,
+  toggleBankAccount,
+  deleteBankAccount,
+} from "@/lib/actions/bank-accounts"
 import { formatCurrency } from "@/lib/utils"
 import {
   Database,
@@ -46,6 +52,7 @@ import {
   Warehouse,
   Waypoints,
   Store,
+  Landmark,
   Plus,
   Pencil,
   Trash2,
@@ -77,6 +84,15 @@ interface User {
 }
 interface WarehouseData { id: number; code: string; name: string; address: string | null; active: boolean }
 interface LaneData { id: number; code: string; name: string; warehouseId: number; active: boolean; warehouse: { id: number; code: string; name: string } }
+interface BankAccountData {
+  id: number
+  bankName: string
+  accountNumber: string
+  accountName: string
+  warehouseId: number | null
+  active: boolean
+  warehouse: { id: number; code: string; name: string } | null
+}
 
 interface Props {
   farmers: Farmer[]
@@ -88,9 +104,10 @@ interface Props {
   warehouses: WarehouseData[]
   lanes: LaneData[]
   customers: Customer[]
+  bankAccounts: BankAccountData[]
 }
 
-type TabId = "petani" | "tembakau" | "daun" | "packing" | "grade" | "gudang" | "jalur" | "users" | "customer"
+type TabId = "petani" | "tembakau" | "daun" | "packing" | "grade" | "gudang" | "jalur" | "users" | "customer" | "bank"
 
 const tabs: { id: TabId; label: string; icon: React.FC<{ className?: string }> }[] = [
   { id: "petani", label: "Petani", icon: Users },
@@ -101,6 +118,7 @@ const tabs: { id: TabId; label: string; icon: React.FC<{ className?: string }> }
   { id: "grade", label: "Grade Tembakau", icon: Award },
   { id: "gudang", label: "Gudang", icon: Warehouse },
   { id: "jalur", label: "Jalur", icon: Waypoints },
+  { id: "bank", label: "Rekening Perusahaan", icon: Landmark },
   { id: "users", label: "Users", icon: Building2 },
 ]
 
@@ -144,6 +162,9 @@ export function MasterDataClient(props: Props) {
       {activeTab === "grade" && <GradesTab grades={props.grades} tobaccoTypes={props.tobaccoTypes} />}
       {activeTab === "gudang" && <WarehousesTab warehouses={props.warehouses} />}
       {activeTab === "jalur" && <LanesTab lanes={props.lanes} warehouses={props.warehouses} />}
+      {activeTab === "bank" && (
+        <BankAccountsTab bankAccounts={props.bankAccounts} warehouses={props.warehouses} />
+      )}
       {activeTab === "users" && <UsersTab users={props.users} lanes={props.lanes} customers={props.customers} />}
     </div>
   )
@@ -913,6 +934,200 @@ function LanesTab({ lanes: initial, warehouses }: { lanes: LaneData[]; warehouse
             </div>
           ))}
           {list.length === 0 && <p className="text-center text-muted-foreground py-6">Belum ada data jalur.</p>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function BankAccountsTab({
+  bankAccounts: initial,
+  warehouses,
+}: {
+  bankAccounts: BankAccountData[]
+  warehouses: WarehouseData[]
+}) {
+  const [list, setList] = useState(initial)
+  const [bankName, setBankName] = useState("")
+  const [accountNumber, setAccountNumber] = useState("")
+  const [accountName, setAccountName] = useState("")
+  const [warehouseId, setWarehouseId] = useState(warehouses[0]?.id?.toString() ?? "")
+  const [editing, setEditing] = useState<BankAccountData | null>(null)
+
+  function resetForm() {
+    setBankName("")
+    setAccountNumber("")
+    setAccountName("")
+    setWarehouseId(warehouses[0]?.id?.toString() ?? "")
+    setEditing(null)
+  }
+
+  function startEdit(b: BankAccountData) {
+    setEditing(b)
+    setBankName(b.bankName)
+    setAccountNumber(b.accountNumber)
+    setAccountName(b.accountName)
+    setWarehouseId(b.warehouseId != null ? String(b.warehouseId) : "")
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault()
+    if (!bankName.trim() || !accountNumber.trim() || !accountName.trim()) {
+      toast.error("Nama bank, nomor rekening, dan nama pemilik harus diisi")
+      return
+    }
+    const data = {
+      bankName: bankName.trim(),
+      accountNumber: accountNumber.trim(),
+      accountName: accountName.trim(),
+      warehouseId: warehouseId ? Number(warehouseId) : null,
+    }
+    try {
+      if (editing) {
+        const updated = await updateBankAccount(editing.id, data)
+        const wh = warehouses.find((w) => w.id === updated.warehouseId) ?? null
+        setList((prev) =>
+          prev.map((b) =>
+            b.id === updated.id
+              ? { ...updated, active: b.active, warehouse: wh ? { id: wh.id, code: wh.code, name: wh.name } : null }
+              : b
+          )
+        )
+        toast.success("Rekening diperbarui")
+      } else {
+        const created = await createBankAccount(data)
+        const wh = warehouses.find((w) => w.id === created.warehouseId) ?? null
+        setList((prev) => [
+          ...prev,
+          { ...created, active: true, warehouse: wh ? { id: wh.id, code: wh.code, name: wh.name } : null },
+        ])
+        toast.success("Rekening ditambahkan")
+      }
+      resetForm()
+    } catch (err) {
+      toast.error((err as Error).message)
+    }
+  }
+
+  async function handleToggle(id: number, active: boolean) {
+    try {
+      const updated = await toggleBankAccount(id, !active)
+      setList((prev) => prev.map((b) => (b.id === id ? { ...b, active: updated.active } : b)))
+      toast.success(updated.active ? "Diaktifkan" : "Dinonaktifkan")
+    } catch (err) {
+      toast.error((err as Error).message)
+    }
+  }
+
+  async function handleDelete(id: number) {
+    if (!confirm("Hapus rekening ini?")) return
+    try {
+      await deleteBankAccount(id)
+      setList((prev) => prev.filter((b) => b.id !== id))
+      toast.success("Rekening dihapus")
+      if (editing?.id === id) resetForm()
+    } catch (err) {
+      toast.error((err as Error).message)
+    }
+  }
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+      <form onSubmit={handleSave} className="lg:col-span-4 bg-panel border border-border rounded-xl p-4 space-y-3 h-fit">
+        <h3 className="font-bold text-xs text-foreground uppercase tracking-wider flex items-center gap-1">
+          <Plus className="w-4 h-4 text-emerald" /> {editing ? "Edit Rekening" : "Tambah Rekening Perusahaan"}
+        </h3>
+        <div>
+          <label className="block text-[11px] font-bold text-muted-foreground mb-1">Nama Bank *</label>
+          <input
+            type="text"
+            required
+            placeholder="Bank Rakyat Indonesia"
+            value={bankName}
+            onChange={(e) => setBankName(e.target.value)}
+            className="w-full p-2 bg-panel-alt border border-border-soft text-foreground text-xs font-bold rounded-lg outline-none"
+          />
+        </div>
+        <div>
+          <label className="block text-[11px] font-bold text-muted-foreground mb-1">Nomor Rekening *</label>
+          <input
+            type="text"
+            required
+            placeholder="0021 01 000123 45 6"
+            value={accountNumber}
+            onChange={(e) => setAccountNumber(e.target.value)}
+            className="w-full p-2 bg-panel-alt border border-border-soft text-foreground text-xs font-mono font-bold rounded-lg outline-none"
+          />
+        </div>
+        <div>
+          <label className="block text-[11px] font-bold text-muted-foreground mb-1">Nama Pemilik *</label>
+          <input
+            type="text"
+            required
+            placeholder="PT Tobak Sejahtera"
+            value={accountName}
+            onChange={(e) => setAccountName(e.target.value)}
+            className="w-full p-2 bg-panel-alt border border-border-soft text-foreground text-xs font-bold rounded-lg outline-none"
+          />
+        </div>
+        <div>
+          <label className="block text-[11px] font-bold text-muted-foreground mb-1">Gudang</label>
+          <select
+            value={warehouseId}
+            onChange={(e) => setWarehouseId(e.target.value)}
+            className="w-full p-2 bg-panel-alt border border-border-soft text-foreground text-xs font-semibold rounded-lg outline-none"
+          >
+            <option value="">Semua Gudang</option>
+            {warehouses.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.code} — {w.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex gap-2">
+          <button type="submit" className="flex-1 py-2 bg-emerald hover:bg-emerald/80 text-primary-foreground font-bold text-xs rounded-lg shadow cursor-pointer">
+            {editing ? "Simpan Perubahan" : "Simpan Rekening"}
+          </button>
+          {editing && (
+            <button type="button" onClick={resetForm} className="px-3 py-2 bg-panel-alt text-foreground border border-border-soft font-bold text-xs rounded-lg cursor-pointer">
+              Batal
+            </button>
+          )}
+        </div>
+      </form>
+
+      <div className="lg:col-span-8 bg-panel border border-border rounded-xl p-4 space-y-3">
+        <h3 className="font-bold text-xs text-foreground uppercase tracking-wider">Daftar Rekening Perusahaan ({list.length})</h3>
+        <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+          {list.map((b) => (
+            <div key={b.id} className="p-3 bg-panel-alt border border-border-soft rounded-lg flex justify-between items-start text-xs gap-2">
+              <div className="min-w-0">
+                <span className="font-bold text-foreground text-sm">{b.bankName}</span>
+                <span className="ml-1.5 font-mono text-muted-foreground text-sm">{b.accountNumber}</span>
+                <div className="text-muted-2 text-[11px] mt-0.5">{b.accountName}</div>
+                <div className="text-muted-2 text-[11px] mt-0.5">
+                  {b.warehouse ? `Gudang: ${b.warehouse.code} — ${b.warehouse.name}` : "Semua Gudang"}
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${b.active ? "bg-emerald/12 text-emerald" : "bg-muted text-muted-foreground"}`}>
+                  {b.active ? "Aktif" : "Nonaktif"}
+                </span>
+                <button type="button" onClick={() => startEdit(b)} className="p-1.5 text-emerald hover:bg-emerald/10 rounded-lg cursor-pointer" title="Edit">
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+                <button type="button" onClick={() => handleToggle(b.id, b.active)} className={`p-1.5 rounded-lg cursor-pointer ${b.active ? "text-amber hover:bg-amber/10" : "text-emerald hover:bg-emerald/10"}`} title={b.active ? "Nonaktifkan" : "Aktifkan"}>
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                </button>
+                <button type="button" onClick={() => handleDelete(b.id)} className="p-1.5 text-red-deduction hover:bg-red-deduction/10 rounded-lg cursor-pointer" title="Hapus">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          ))}
+          {list.length === 0 && <p className="text-center text-muted-foreground py-6">Belum ada data rekening perusahaan.</p>}
         </div>
       </div>
     </div>

@@ -26,6 +26,12 @@ export function PaymentTable({ items, empty }: { items: RecentPayment[]; empty: 
                 <span className="rounded-full border border-border-soft px-2 py-0.5 text-[10.5px] font-bold text-muted-2">
                   {p.method}
                 </span>
+                {p.method === "TRANSFER" && p.bankAccount && (
+                  <p className="mt-0.5 font-mono text-[10px] text-muted-2">{p.bankAccount.bankName} · {p.bankAccount.accountNumber}</p>
+                )}
+                {p.method === "TRANSFER" && p.recipientAccount && (
+                  <p className="mt-0.5 text-[10px] italic text-muted-2">Ke: {p.recipientAccount}</p>
+                )}
               </td>
               <td className="border-b border-border-soft px-2 py-2 text-right font-mono font-bold text-emerald">
                 {formatCurrency(p.amount)}

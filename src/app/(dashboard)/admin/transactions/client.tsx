@@ -40,6 +40,8 @@ interface Payment {
   loanDeduction: number
   voidedAt?: Date | null
   voidedBy?: string | null
+  recipientAccount?: string | null
+  bankAccount?: { bankName: string; accountNumber: string } | null
 }
 
 interface Purchase {
@@ -78,6 +80,7 @@ interface TransactionsClientProps {
   role: string
   scope: WarehouseScope
   stats: { totalTransactions: number; totalValue: number; totalOutstanding: number }
+  bankAccounts?: { id: number; bankName: string; accountNumber: string; accountName: string }[]
 }
 
 const STATUS_FILTERS: { key: string; label: string }[] = [
@@ -119,6 +122,7 @@ export function TransactionsClient({
   role,
   scope,
   stats,
+  bankAccounts = [],
 }: TransactionsClientProps) {
   const router = useRouter()
   const [purchases, setPurchases] = useState(initial)
@@ -449,6 +453,7 @@ export function TransactionsClient({
         onPaid={handlePaid}
         canVoid={role === "SUPER_ADMIN" || role === "OWNER"}
         canDeduct={payTarget ? (payTarget.loanBalance ?? 0) > 0.005 : true}
+        bankAccounts={bankAccounts}
       />
 
       <VoidDialog
@@ -473,9 +478,11 @@ function VoidDialog({
   const [busy, setBusy] = useState(false)
   const open = purchase != null
 
-  useEffect(() => {
-    if (open) setNote("")
-  }, [open])
+  const [prevVoidId, setPrevVoidId] = useState(purchase?.id ?? null)
+  if ((purchase?.id ?? null) !== prevVoidId) {
+    setPrevVoidId(purchase?.id ?? null)
+    setNote("")
+  }
 
   if (!open || !purchase) return null
 

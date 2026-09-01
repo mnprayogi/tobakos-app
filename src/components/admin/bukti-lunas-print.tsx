@@ -201,7 +201,19 @@ export const BuktiLunasPrint = forwardRef<HTMLDivElement, BuktiData>(
                 <tr key={pay.id} style={{ background: i % 2 === 1 ? "#f7f7f7" : "#fff" }}>
                   <td style={{ ...td, textAlign: "center" }}>{i + 1}</td>
                   <td style={{ ...td, textAlign: "center", fontFamily: SANS }}>{fmtDateTime(pay.paidAt)}</td>
-                  <td style={{ ...td, textAlign: "center", fontFamily: SANS }}>{pay.method}</td>
+                  <td style={{ ...td, textAlign: "center", fontFamily: SANS }}>
+                    {pay.method}
+                    {pay.method === "TRANSFER" && pay.bankAccount && (
+                      <span style={{ display: "block", fontSize: "7.5pt", fontWeight: 600 }}>
+                        {pay.bankAccount.bankName} · {pay.bankAccount.accountNumber}
+                      </span>
+                    )}
+                    {pay.method === "TRANSFER" && pay.recipientAccount && (
+                      <span style={{ display: "block", fontSize: "7.5pt", fontStyle: "italic" }}>
+                        Ke: {pay.recipientAccount}
+                      </span>
+                    )}
+                  </td>
                   <td style={{ ...td, textAlign: "right" }}>{fmtCurrency(pay.amount)}</td>
                   <td style={{ ...td, textAlign: "right" }}>
                     {pay.loanDeduction > 0 ? fmtCurrency(pay.loanDeduction) : "\u2014"}

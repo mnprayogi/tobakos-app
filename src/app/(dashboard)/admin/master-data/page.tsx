@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db"
 import { MasterDataClient } from "./client"
 
 export default async function MasterDataPage() {
-  const [farmers, tobaccoTypes, leafTypes, packingTypes, grades, users, warehouses, lanes, customers] = await Promise.all([
+  const [farmers, tobaccoTypes, leafTypes, packingTypes, grades, users, warehouses, lanes, customers, bankAccounts] = await Promise.all([
     prisma.farmer.findMany({ orderBy: { name: "asc" } }),
     prisma.tobaccoType.findMany({ orderBy: { name: "asc" }, include: { grades: true } }),
     prisma.leafType.findMany({ orderBy: { name: "asc" } }),
@@ -24,6 +24,10 @@ export default async function MasterDataPage() {
       include: { warehouse: true },
     }),
     prisma.customer.findMany({ orderBy: { name: "asc" } }),
+    prisma.bankAccount.findMany({
+      orderBy: [{ bankName: "asc" }, { accountNumber: "asc" }],
+      include: { warehouse: { select: { id: true, code: true, name: true } } },
+    }),
   ])
 
   const gradesWithPrice = grades.map((g) => ({ ...g, defaultPrice: Number(g.defaultPrice) }))
@@ -43,6 +47,7 @@ export default async function MasterDataPage() {
       warehouses={warehouses}
       lanes={lanes}
       customers={customers}
+      bankAccounts={bankAccounts}
     />
   )
 }

@@ -60,3 +60,12 @@ export const cashEntrySchema = z.object({
 })
 
 export type CashEntryInput = z.infer<typeof cashEntrySchema>
+
+export const bankAccountSchema = z.object({
+  bankName: z.string().min(1, "Nama bank harus diisi"),
+  accountNumber: z.string().min(1, "Nomor rekening harus diisi"),
+  accountName: z.string().min(1, "Nama pemilik rekening harus diisi"),
+  warehouseId: z.number().int().positive("Gudang harus dipilih").optional().nullable(),
+})
+
+export type BankAccountInput = z.infer<typeof bankAccountSchema>

@@ -90,6 +90,7 @@ model Warehouse {
   purchases   Purchase[]
   loans       FarmerLoan[]
   cashEntries CashEntry[]
+  bankAccounts BankAccount[]
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
@@ -144,6 +145,7 @@ model Purchase {
   payments          Payment[]
   loanEntries       LoanEntry[]
   cashEntries       CashEntry[]
+  bankEntries       BankEntry[]
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
 
@@ -159,13 +161,33 @@ model Payment {
   note           String?       @db.Text
   paidBy         String?
   paidAt         DateTime      @default(now())
-  loanDeduction  Decimal       @default(0.00) @db.Decimal(15, 2)
-  voidedAt       DateTime?
-  voidedBy       String?
-  loanEntry      LoanEntry?
-  cashEntry      CashEntry?
+  loanDeduction    Decimal       @default(0.00) @db.Decimal(15, 2)
+  bankAccount      BankAccount?  @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
+  bankAccountId    Int?
+  recipientAccount String?       @db.Text
+  voidedAt         DateTime?
+  voidedBy         String?
+  loanEntry        LoanEntry?
+  cashEntry        CashEntry?
+  bankEntry        BankEntry?
 
   @@map("payments")
+}
+
+model BankAccount {
+  id            Int         @id @default(autoincrement())
+  bankName      String
+  accountNumber String
+  accountName   String
+  warehouse     Warehouse?  @relation(fields: [warehouseId], references: [id])
+  warehouseId   Int?
+  active        Boolean     @default(true)
+  payments      Payment[]
+  bankEntries   BankEntry[]
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@map("bank_accounts")
 }
 
 model PurchaseItem {
@@ -275,6 +297,26 @@ model CashEntry {
 
   @@index([warehouseId, createdAt])
   @@map("cash_entries")
+}
+
+model BankEntry {
+  id           Int          @id @default(autoincrement())
+  bankAccount  BankAccount  @relation(fields: [bankAccountId], references: [id], onDelete: Restrict)
+  bankAccountId Int
+  type         CashFlowType
+  amount       Decimal      @db.Decimal(15, 2)
+  note         String?      @db.Text
+  purchase     Purchase?    @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+  purchaseId   Int?
+  payment      Payment?     @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  paymentId    Int?         @unique
+  createdBy    String?
+  createdAt    DateTime     @default(now())
+  voidedAt     DateTime?
+  voidedBy     String?
+
+  @@index([bankAccountId, createdAt])
+  @@map("bank_entries")
 }
 
 model Account {

@@ -45,10 +45,12 @@ export function DebtClient({
   farmers,
   role,
   scope,
+  bankAccounts = [],
 }: {
   farmers: DebtFarmer[]
   role: string
   scope: WarehouseScope
+  bankAccounts?: { id: number; bankName: string; accountNumber: string; accountName: string }[]
 }) {
   const router = useRouter()
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
@@ -271,6 +273,16 @@ export function DebtClient({
                                               <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${pay.method === "TUNAI" ? "bg-emerald/12 text-emerald" : "bg-amber/12 text-amber"}`}>
                                                 {pay.method}
                                               </span>
+                                              {pay.method === "TRANSFER" && pay.bankAccount && (
+                                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue/12 text-blue border border-blue/40">
+                                                  {pay.bankAccount.bankName} · {pay.bankAccount.accountNumber}
+                                                </span>
+                                              )}
+                                              {pay.method === "TRANSFER" && pay.recipientAccount && (
+                                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-muted/12 text-muted-foreground border border-border-soft">
+                                                  Ke: {pay.recipientAccount}
+                                                </span>
+                                              )}
                                               {pay.loanDeduction > 0 && (
                                                 <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-deduction/12 text-red-deduction">
                                                   Hutang −{formatCurrency(pay.loanDeduction)}
@@ -307,6 +319,7 @@ export function DebtClient({
         onClose={() => setPayTarget(null)}
         onPaid={handlePaid}
         canVoid={role === "SUPER_ADMIN" || role === "OWNER"}
+        bankAccounts={bankAccounts}
       />
     </div>
   )

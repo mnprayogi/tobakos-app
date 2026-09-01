@@ -44,6 +44,8 @@ export interface RecentPayment {
   paidAt: Date
   transactionCode: string
   farmerName: string
+  recipientAccount?: string | null
+  bankAccount?: { bankName: string; accountNumber: string } | null
 }
 
 export interface StatusCount {
@@ -304,7 +306,7 @@ export async function getFinanceDashboard(): Promise<FinanceDashboard> {
         where: { voidedAt: null, purchase: { status: { not: "VOIDED" } } },
         orderBy: { paidAt: "desc" },
         take: 10,
-        include: { purchase: { include: { farmer: true } } },
+        include: { purchase: { include: { farmer: true } }, bankAccount: true },
       }),
       prisma.payment.aggregate({
         where: { paidAt: { gte: start }, voidedAt: null, purchase: { status: { not: "VOIDED" } } },
@@ -348,6 +350,10 @@ export async function getFinanceDashboard(): Promise<FinanceDashboard> {
       paidAt: p.paidAt,
       transactionCode: p.purchase.transactionCode,
       farmerName: p.purchase.farmer.name,
+      recipientAccount: p.recipientAccount,
+      bankAccount: p.bankAccount
+        ? { bankName: p.bankAccount.bankName, accountNumber: p.bankAccount.accountNumber }
+        : null,
     })),
   }
 }
@@ -582,7 +588,7 @@ export async function getAdminDashboard(range: DashboardRange = "all"): Promise<
       where: { voidedAt: null, purchase: { transactionDate: txDateFilter, status: { not: "VOIDED" } } },
       orderBy: { paidAt: "desc" },
       take: 8,
-      include: { purchase: { include: { farmer: true } } },
+      include: { purchase: { include: { farmer: true } }, bankAccount: true },
     }),
   ])
 
@@ -644,6 +650,10 @@ export async function getAdminDashboard(range: DashboardRange = "all"): Promise<
       paidAt: p.paidAt,
       transactionCode: p.purchase.transactionCode,
       farmerName: p.purchase.farmer.name,
+      recipientAccount: p.recipientAccount,
+      bankAccount: p.bankAccount
+        ? { bankName: p.bankAccount.bankName, accountNumber: p.bankAccount.accountNumber }
+        : null,
     })),
   }
 }

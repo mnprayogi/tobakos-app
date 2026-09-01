@@ -65,7 +65,7 @@ export default async function TransactionsPage({
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const page = Math.min(requestedPage, totalPages)
 
-  const [raw, statusRows, allStats, closedStats] = await Promise.all([
+  const [raw, statusRows, allStats, closedStats, bankAccounts] = await Promise.all([
     prisma.purchase.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -96,6 +96,8 @@ export default async function TransactionsPage({
             loanDeduction: true,
             voidedAt: true,
             voidedBy: true,
+            recipientAccount: true,
+            bankAccount: { select: { bankName: true, accountNumber: true } },
           },
           orderBy: { paidAt: "asc" },
         },
@@ -113,6 +115,15 @@ export default async function TransactionsPage({
     prisma.purchase.aggregate({
       where: { ...warehouseWhere, status: { in: ["APPROVED", "PAID"] } },
       _sum: { totalPrice: true, paidAmount: true },
+    }),
+    prisma.bankAccount.findMany({
+      where: {
+        active: true,
+        ...(scope.mode === "scoped"
+          ? { OR: [{ warehouseId: scope.warehouseId }, { warehouseId: null }] }
+          : {}),
+      },
+      orderBy: [{ bankName: "asc" }, { accountNumber: "asc" }],
     }),
   ])
 
@@ -187,6 +198,10 @@ export default async function TransactionsPage({
       loanDeduction: Number(pay.loanDeduction ?? 0),
       voidedAt: pay.voidedAt,
       voidedBy: pay.voidedBy,
+      recipientAccount: pay.recipientAccount,
+      bankAccount: pay.bankAccount
+        ? { bankName: pay.bankAccount.bankName, accountNumber: pay.bankAccount.accountNumber }
+        : null,
     })),
     loanBalance: loanBalanceByFarmer.get(p.farmerId) ?? 0,
     crossLoanBalance: crossLoanBalanceByFarmer.get(p.farmerId) ?? 0,
@@ -204,6 +219,12 @@ export default async function TransactionsPage({
       role={role}
       scope={scope}
       stats={{ totalTransactions: allStats._count._all, totalValue, totalOutstanding }}
+      bankAccounts={bankAccounts.map((b) => ({
+        id: b.id,
+        bankName: b.bankName,
+        accountNumber: b.accountNumber,
+        accountName: b.accountName,
+      }))}
     />
   )
 }

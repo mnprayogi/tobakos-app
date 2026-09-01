@@ -18,6 +18,15 @@ export interface PaymentInfo {
   loanDeduction: number
   voidedAt?: Date | null
   voidedBy?: string | null
+  recipientAccount?: string | null
+  bankAccount?: { bankName: string; accountNumber: string } | null
+}
+
+export interface BankAccountOption {
+  id: number
+  bankName: string
+  accountNumber: string
+  accountName: string
 }
 
 export interface PayPurchase {
@@ -47,14 +56,17 @@ interface Props {
   onPaid: (updated: PaymentUpdate) => void
   canVoid?: boolean
   canDeduct?: boolean
+  bankAccounts?: BankAccountOption[]
 }
 
-export function PaymentDialog({ purchase, onClose, onPaid, canVoid = false, canDeduct = true }: Props) {
+export function PaymentDialog({ purchase, onClose, onPaid, canVoid = false, canDeduct = true, bankAccounts = [] }: Props) {
   const router = useRouter()
   const [total, setTotal] = useState("")
   const [method, setMethod] = useState<"TUNAI" | "TRANSFER">("TUNAI")
   const [note, setNote] = useState("")
   const [loanDeduction, setLoanDeduction] = useState("")
+  const [bankAccountId, setBankAccountId] = useState("")
+  const [recipientAccount, setRecipientAccount] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
   const loanBalance = purchase?.loanBalance ?? 0
@@ -69,6 +81,8 @@ export function PaymentDialog({ purchase, onClose, onPaid, canVoid = false, canD
     setLoanDeduction("")
     setNote("")
     setMethod("TUNAI")
+    setBankAccountId("")
+    setRecipientAccount("")
   }
 
   async function handleSubmit() {
@@ -76,6 +90,10 @@ export function PaymentDialog({ purchase, onClose, onPaid, canVoid = false, canD
     const parsedTotal = total === "" ? NaN : Number(total)
     if (Number.isNaN(parsedTotal) || parsedTotal <= 0) {
       toast.error("Total pembayaran tidak valid")
+      return
+    }
+    if (method === "TRANSFER" && !bankAccountId) {
+      toast.error("Pilih rekening pengirim (perusahaan) untuk transfer")
       return
     }
     const deduction = loanDeduction === "" ? 0 : Number(loanDeduction)
@@ -115,6 +133,8 @@ export function PaymentDialog({ purchase, onClose, onPaid, canVoid = false, canD
         method,
         note: note || null,
         loanDeduction: deduction > 0 ? roundMoney(deduction) : undefined,
+        bankAccountId: method === "TRANSFER" ? Number(bankAccountId) : undefined,
+        recipientAccount: method === "TRANSFER" ? recipientAccount || null : null,
       })
       toast.success("Pembayaran dicatat")
       onPaid({
@@ -303,7 +323,7 @@ export function PaymentDialog({ purchase, onClose, onPaid, canVoid = false, canD
                   <button
                     key={m}
                     type="button"
-                    onClick={() => setMethod(m)}
+                    onClick={() => { setMethod(m); if (m === "TUNAI") setBankAccountId("") }}
                     className={`py-2 rounded-lg text-xs font-bold border cursor-pointer ${
                       method === m
                         ? "bg-emerald text-primary-foreground border-emerald"
@@ -315,6 +335,47 @@ export function PaymentDialog({ purchase, onClose, onPaid, canVoid = false, canD
                 ))}
               </div>
               <p className="text-[10.5px] text-muted-2 mt-1">Metode untuk bagian tunai yang dibayar petani</p>
+              {method === "TRANSFER" && (
+                <div className="mt-3 space-y-3">
+                  <div>
+                    <label className="block text-[10.5px] font-bold text-muted-foreground mb-1">
+                      Rekening Pengirim (Perusahaan) *
+                    </label>
+                    <select
+                      value={bankAccountId}
+                      onChange={(e) => setBankAccountId(e.target.value)}
+                      className="w-full p-2 bg-panel border border-border-soft text-foreground text-xs font-semibold rounded-lg outline-none"
+                    >
+                      <option value="">Pilih rekening…</option>
+                      {bankAccounts.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.bankName} · {b.accountNumber} ({b.accountName})
+                        </option>
+                      ))}
+                    </select>
+                    {bankAccounts.length === 0 && (
+                      <p className="text-[10.5px] text-red-deduction mt-1">
+                        Belum ada rekening pengirim. Tambahkan di Master Data → Rekening Perusahaan.
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-[10.5px] font-bold text-muted-foreground mb-1">
+                      Ke Rekening Petani <span className="font-normal text-muted-2">(opsional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Contoh: BCA 1234567890 a.n. Supardi"
+                      value={recipientAccount}
+                      onChange={(e) => setRecipientAccount(e.target.value)}
+                      className="w-full p-2 bg-panel border border-border-soft text-foreground text-xs font-semibold rounded-lg outline-none"
+                    />
+                    <p className="text-[10.5px] text-muted-2 mt-1">
+                      Rekening tujuan milik petani yang menerima transfer — dicatat sebagai bukti.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div>
@@ -341,6 +402,16 @@ export function PaymentDialog({ purchase, onClose, onPaid, canVoid = false, canD
                           <span className={`ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold ${pay.method === "TUNAI" ? "bg-emerald/12 text-emerald" : "bg-amber/12 text-amber"}`}>
                             {pay.method}
                           </span>
+                          {pay.method === "TRANSFER" && pay.bankAccount && (
+                            <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue/12 text-blue border border-blue/40">
+                              {pay.bankAccount.bankName} · {pay.bankAccount.accountNumber}
+                            </span>
+                          )}
+                          {pay.method === "TRANSFER" && pay.recipientAccount && (
+                            <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-muted/12 text-muted-foreground border border-border-soft">
+                              Ke: {pay.recipientAccount}
+                            </span>
+                          )}
                           {pay.loanDeduction != null && pay.loanDeduction > 0 && (
                             <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-deduction/12 text-red-deduction">
                               Hutang −{formatCurrency(pay.loanDeduction)}

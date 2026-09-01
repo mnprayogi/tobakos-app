@@ -640,3 +640,54 @@ export async function exportCashExcel(data: CashExportData, from: string, to: st
     `Laporan-Kas_${range}.xlsx`
   )
 }
+
+function buildBankSheet(
+  label: string,
+  rows: { createdAt: Date; type: string; bankAccountName: string; uraian: string; transactionCode: string | null; note: string | null; amount: number; createdBy: string | null; balance: number }[],
+  from: string,
+  to: string
+): XlsxSheet {
+  const widths = [18, 24, 34, 22, 34, 16, 18]
+  const columns = widths.map((width) => ({ width }))
+  const dateRange = `${from || "awal"} s/d ${to || "sekarang"}`
+
+  const totalKeluar = rows.filter((r) => r.type === "KELUAR").reduce((s, r) => s + r.amount, 0)
+
+  const data: SheetData = [
+    titleRow(`BUKU BANK ${label.toUpperCase()} — Periode ${dateRange}`, columns.length),
+    headerRow(["Tanggal", "Rekening", "Uraian", "Ref Transaksi", "Catatan (Ke Rekening)", "Keluar", "Saldo"]),
+    ...rows.map((r) => [
+      txt(fmtDate(r.createdAt)),
+      txt(r.bankAccountName),
+      txt(r.uraian, { fontWeight: r.transactionCode ? "bold" : undefined }),
+      txt(r.transactionCode ?? "—"),
+      txt(r.note ?? "—"),
+      n(r.amount, MONEY_FMT),
+      n(r.balance, MONEY_FMT),
+    ] as Row),
+    totalRow([
+      txt("TOTAL", { backgroundColor: "#f2f2f2" }),
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
+      n(totalKeluar, MONEY_FMT, "right", true),
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
+    ]),
+  ]
+  return { sheet: label, columns, data, stickyRowsCount: 2, showGridLines: false }
+}
+
+export interface BankExportData {
+  rows: { createdAt: Date; type: string; bankAccountName: string; uraian: string; transactionCode: string | null; note: string | null; amount: number; createdBy: string | null; balance: number }[]
+}
+
+export async function exportBankExcel(data: BankExportData, from: string, to: string): Promise<void> {
+  if (data.rows.length === 0) throw new Error("Tidak ada data bank untuk diekspor")
+
+  const sheet = buildBankSheet("Mutasi Rekening", data.rows, from, to)
+  const range = `${from || "semua"}_${to || "semua"}`
+  await writeExcelFile([sheet], { fontFamily: "Calibri", fontSize: 11 }).toFile(
+    `Laporan-Buku-Bank_${range}.xlsx`
+  )
+}
