@@ -68,4 +68,26 @@ export const bankAccountSchema = z.object({
   warehouseId: z.number().int().positive("Gudang harus dipilih").optional().nullable(),
 })
 
+export const USER_ROLES = [
+  "GRADER",
+  "OPERATOR",
+  "FINANCE",
+  "ADMIN",
+  "OWNER",
+  "CUSTOMER",
+  "SUPER_ADMIN",
+] as const
+
+export const userSchema = z.object({
+  name: z.string().min(1, "Nama harus diisi").max(100),
+  username: z.string().min(3, "Username minimal 3 karakter").max(50),
+  email: z.string().email("Email tidak valid").max(100).optional().nullable(),
+  password: z.string().min(8, "Password minimal 8 karakter").max(128).optional().nullable(),
+  role: z.enum(USER_ROLES, { message: "Role tidak valid" }),
+  laneId: z.number().int().nullable().optional(),
+  customerId: z.number().int().nullable().optional(),
+})
+
+export type UserInput = z.infer<typeof userSchema>
+
 export type BankAccountInput = z.infer<typeof bankAccountSchema>

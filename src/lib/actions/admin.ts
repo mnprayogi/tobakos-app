@@ -1,9 +1,11 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
+import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/db"
 import { invalidateSetting } from "@/lib/settings"
-import { requireRoles } from "@/lib/roles"
+import { getSessionRole, requireRoles } from "@/lib/roles"
+import type { Prisma } from "@/generated/prisma/client"
 import {
   farmerSchema,
   customerSchema,
@@ -11,7 +13,20 @@ import {
   leafTypeSchema,
   packingTypeSchema,
   gradeSchema,
+  userSchema,
 } from "@/lib/validations"
+
+const PASSWORD_ROUNDS = 12
+
+// Hanya SUPER_ADMIN yang boleh membuat/mengubah user dengan role SUPER_ADMIN atau ADMIN.
+// Mencegah ADMIN biasa meng-escalate privilege dirinya sendiri atau orang lain.
+async function assertNoPrivilegeEscalation(role: string): Promise<void> {
+  if (role !== "SUPER_ADMIN" && role !== "ADMIN") return
+  const sessionRole = await getSessionRole()
+  if (sessionRole !== "SUPER_ADMIN") {
+    throw new Error("Hanya SUPER_ADMIN yang dapat mengelola role ADMIN/SUPER_ADMIN")
+  }
+}
 
 type ActionError = { error: string }
 
@@ -260,24 +275,39 @@ function resolveCustomerLink(role: string, customerId?: number | null): number |
 export async function createUser(data: {
   name: string
   username: string
-  email?: string
-  password?: string
+  email?: string | null
+  password?: string | null
   role: string
   laneId?: number | null
   customerId?: number | null
 }) {
   await requireRoles("ADMIN")
-  const customerId = resolveCustomerLink(data.role, data.customerId)
+  const parsed = userSchema.parse(data)
+  if (!parsed.password) {
+    throw new Error("Password wajib diisi")
+  }
+  assertNoPrivilegeEscalation(parsed.role)
+  const customerId = resolveCustomerLink(parsed.role, parsed.customerId)
   try {
+    const hashed = await bcrypt.hash(parsed.password, PASSWORD_ROUNDS)
     const user = await prisma.user.create({
       data: {
-        name: data.name,
-        username: data.username,
-        email: data.email,
-        password: data.password,
-        role: data.role,
-        laneId: data.role === "CUSTOMER" ? null : data.laneId ?? null,
+        name: parsed.name,
+        username: parsed.username,
+        email: parsed.email,
+        password: hashed,
+        role: parsed.role,
+        laneId: parsed.role === "CUSTOMER" ? null : parsed.laneId ?? null,
         customerId,
+      },
+      select: {
+        id: true,
+        name: true,
+        username: true,
+        email: true,
+        role: true,
+        laneId: true,
+        customerId: true,
       },
     })
     revalidatePath("/admin/master-data")
@@ -289,19 +319,29 @@ export async function createUser(data: {
 
 export async function updateUser(
   id: string,
-  data: { name: string; username: string; email?: string; role: string; laneId?: number | null; customerId?: number | null }
+  data: {
+    name: string
+    username: string
+    email?: string | null
+    password?: string | null
+    role: string
+    laneId?: number | null
+    customerId?: number | null
+  }
 ) {
   await requireRoles("ADMIN")
+  const parsed = userSchema.parse(data)
+  assertNoPrivilegeEscalation(parsed.role)
   let customerId: number | null
   try {
-    customerId = resolveCustomerLink(data.role, data.customerId)
+    customerId = resolveCustomerLink(parsed.role, parsed.customerId)
   } catch (err) {
     // saat edit boleh mempertahankan link lama bila tidak dikirim
-    if (data.customerId == null) {
+    if (parsed.customerId == null) {
       const existing = await prisma.user.findUnique({ where: { id }, select: { role: true, customerId: true } })
       if (!existing) throw new Error("User tidak ditemukan")
-      customerId = data.role === "CUSTOMER" ? existing.customerId : null
-      if (data.role === "CUSTOMER" && customerId == null) {
+      customerId = parsed.role === "CUSTOMER" ? existing.customerId : null
+      if (parsed.role === "CUSTOMER" && customerId == null) {
         throw new Error("Akun CUSTOMER wajib ditautkan ke mitra bisnis")
       }
     } else {
@@ -309,15 +349,28 @@ export async function updateUser(
     }
   }
   try {
+    const dataUpdate: Prisma.UserUncheckedUpdateInput = {
+      name: parsed.name,
+      username: parsed.username,
+      email: parsed.email,
+      role: parsed.role,
+      laneId: parsed.role === "CUSTOMER" ? null : parsed.laneId ?? null,
+      customerId,
+    }
+    if (parsed.password) {
+      dataUpdate.password = await bcrypt.hash(parsed.password, PASSWORD_ROUNDS)
+    }
     const user = await prisma.user.update({
       where: { id },
-      data: {
-        name: data.name,
-        username: data.username,
-        email: data.email,
-        role: data.role,
-        laneId: data.role === "CUSTOMER" ? null : data.laneId ?? null,
-        customerId,
+      data: dataUpdate,
+      select: {
+        id: true,
+        name: true,
+        username: true,
+        email: true,
+        role: true,
+        laneId: true,
+        customerId: true,
       },
     })
     revalidatePath("/admin/master-data")

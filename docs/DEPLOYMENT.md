@@ -159,6 +159,8 @@ npm run seed
 
 Output terakhir: `Seed completed!` — berhasil.
 
+> **Password login**: seed membuat password **acak per user** dan mencetaknya ke console (format `User admin dibuat — PASSWORD: <acak>`). Simpan nilai ini. Menjalankan seed ulang **tidak** me-reset password user yang sudah ada.
+
 #### Jalur B — Bawa data produksi (termasuk transaksi lama)
 
 Jalankan seed dulu (seperti Jalur A), LALU dump data dari DB lokal dan restore ke cloud:
@@ -248,7 +250,7 @@ Buka URL aplikasi (mis. `https://tobakos-app-xxxx.vercel.app`) di browser. Cek s
 
 | # | Cek | Cara | Hasil benar |
 |---|---|---|---|
-| 1 | Login | Login dengan `admin` / `admin123` (hasil seed) | Masuk ke dashboard |
+| 1 | Login | Pakai username `admin` dan **password acak yang dicetak console saat seed** (lihat output `npm run seed` — format `PASSWORD: ...`) | Masuk ke dashboard |
 | 2 | Pos 1 | Buka **Pos 1 → Grading**, tambah petani + bale | Bale tersimpan, label code tampil |
 | 3 | Real-time | Buka **Pos 2 → Penimbangan** di tab/device lain, scan label code | Data grading muncul dari Pos 1 |
 | 4 | Refresh real-time | Di Pos 1 buat 1 bale baru | Pos 2 otomatis update **≤ 1,5 detik** |
@@ -287,6 +289,35 @@ Setiap kali fitur baru selesai & sudah di-push ke GitHub (`git push origin main`
 ### 5.4 Maintenance Aiven
 
 Kadang Aiven me-restart service (maintenance). Efeknya: aplikasi sempat gagal konek 1–2 menit, lalu normal kembali (SSE auto-reconnect). Tidak perlu tindakan.
+
+---
+
+## Keamanan (Security Notes)
+
+Ringkasan langkah keamanan yang sudah diterapkan, plus hal yang sengaja ditunda.
+
+### Sudah diterapkan
+- **Password ter-hash** (bcrypt, 12 rounds) saat user dibuat/diubah via admin; kolom `password` **tidak pernah dikirim ke browser** (dikecualikan dari semua query).
+- **Role allowlist**: hanya role valid yang bisa ditetapkan. Hanya akun **SUPER_ADMIN** yang bisa membuat/mengatur user ber-role `ADMIN`/`SUPER_ADMIN`.
+- **`/api/printer` & `/api/scale`** kini menolak akses tanpa login (401) dan validasi input.
+- **Login anti-timing-attack**: durasi respons disamakan walau user tidak ditemukan.
+- **Cookie sesi**: `sameSite=lax`, `secure` di produksi, umur sesi 8 jam.
+- **SSE real-time di-scope**: GRADER/OPERATOR hanya menerima event bale jalurnya sendiri; FINANCE hanya event keuangan + bale gudangnya; CUSTOMER ditolak (403).
+- **Security headers**: CSP, X-Frame-Options, nosniff, Referrer-Policy, HSTS (produksi), Permissions-Policy (kamera & serial).
+- **`AUTH_SECRET`** harus nilai acak 32 byte (lihat 3.3). Jangan gunakan nilai contoh apa pun.
+
+### Ditunda (risiko diterima untuk saat ini)
+| Area | Risiko | Kompensasi / rencana |
+|---|---|---|
+| **Rate limiting login** | Brute-force online | Password minimal 8 karakter di-enforce. Rencana: tambah `@upstash/ratelimit` bila perlu |
+| **Pemilihan jalur dinamis** (`?lane=`) | User tanpa lane dapat mengakses data jalur lain sesuai picker | Ini desain *shared tablet*. Jika ingin ketat: wajibkan lane di akun (ubah form user + seed) |
+| **`prisma` downgrade** (`deepmerge-ts`/`mysql2` advisory) | DoS stack-exhaustion (server-only) | Tunggu patch Prisma ≥8; `npm audit fix --force` akan men-downgrade ke 6.x (jangan) |
+| **Driver `mariadb`** (cleartext password via MitM) | **Tidak ada fix resmi** | PENTING: aktifkan **TLS wajib** di koneksi produksi (`?ssl-mode=REQUIRED` di `DATABASE_URL`) dan batasi IP yang bisa konek ke Aiven (allowlist IP Vercel) |
+
+### Perintah audit
+```bash
+npm audit            # cek keamanan dependensi
+```
 
 ---
 

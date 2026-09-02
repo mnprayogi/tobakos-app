@@ -13,7 +13,14 @@ export default async function MasterDataPage() {
     }),
     prisma.user.findMany({
       orderBy: { name: "asc" },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        username: true,
+        email: true,
+        role: true,
+        laneId: true,
+        customerId: true,
         lane: { include: { warehouse: true } },
         customer: { select: { id: true, name: true } },
       },

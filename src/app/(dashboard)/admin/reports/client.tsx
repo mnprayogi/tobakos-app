@@ -20,9 +20,15 @@ import {
   getFarmerSummary,
   getPeriodSummary,
   getTransactionDetail,
+  getCustomerSummary,
+  getCapitalFlow,
+  getTaxSummary,
   type FarmerSummaryRow,
   type PeriodSummaryRow,
   type TransactionDetailRow,
+  type CustomerSummaryRow,
+  type CapitalFlowRow,
+  type TaxSummaryRow,
 } from "@/lib/actions/reports"
 import type { WarehouseScope } from "@/lib/actions/scope"
 import { formatCurrency, formatDate } from "@/lib/utils"
@@ -46,7 +52,7 @@ const ReportPrint = lazyPrint(() =>
 interface WarehouseMeta { id: number; code: string; name: string }
 interface FarmerMeta { id: number; name: string; nik: string | null }
 
-type Tab = "farmer" | "period" | "transaction"
+type Tab = "farmer" | "period" | "transaction" | "customer" | "capital" | "tax"
 
 const PRESETS: { key: string; label: string; type: "days" | "month"; days?: number }[] = [
   { key: "today", label: "Hari Ini", type: "days", days: 0 },
@@ -55,8 +61,8 @@ const PRESETS: { key: string; label: string; type: "days" | "month"; days?: numb
   { key: "30d", label: "30 Hari", type: "days", days: 29 },
 ]
 
-type FilterOverrides = Partial<{ from: string; to: string; warehouseId: string; farmerId: string; status: string }>
-type ChipKey = "date" | "warehouse" | "farmer" | "status"
+type FilterOverrides = Partial<{ from: string; to: string; warehouseId: string; farmerId: string; customerId: string; status: string }>
+type ChipKey = "date" | "warehouse" | "farmer" | "customer" | "status"
 
 function dateStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
@@ -75,12 +81,14 @@ const controlCls =
 export function ReportsClient({
   warehouses,
   farmers,
+  customers,
   companyName,
   scope,
   userName = "",
 }: {
   warehouses: WarehouseMeta[]
   farmers: FarmerMeta[]
+  customers: { id: number; name: string }[]
   companyName: string
   scope: WarehouseScope
   userName?: string
@@ -90,12 +98,16 @@ export function ReportsClient({
   const [to, setTo] = useState("")
   const [warehouseId, setWarehouseId] = useState<string>("")
   const [farmerId, setFarmerId] = useState<string>("")
+  const [customerId, setCustomerId] = useState<string>("")
   const [status, setStatus] = useState<string>("")
   const [loading, setLoading] = useState(false)
 
   const [farmerRows, setFarmerRows] = useState<FarmerSummaryRow[] | null>(null)
   const [periodRows, setPeriodRows] = useState<PeriodSummaryRow[] | null>(null)
   const [txRows, setTxRows] = useState<TransactionDetailRow[] | null>(null)
+  const [customerRows, setCustomerRows] = useState<CustomerSummaryRow[] | null>(null)
+  const [capitalRows, setCapitalRows] = useState<CapitalFlowRow[] | null>(null)
+  const [taxRows, setTaxRows] = useState<TaxSummaryRow[] | null>(null)
   const [openTx, setOpenTx] = useState<number[]>([])
 
   const printRef = useRef<HTMLDivElement>(null)
@@ -125,6 +137,7 @@ export function ReportsClient({
       warehouseId:
         scopedWarehouseId != null ? String(scopedWarehouseId) : overrides.warehouseId ?? warehouseId,
       farmerId: overrides.farmerId ?? farmerId,
+      customerId: overrides.customerId ?? customerId,
       status: overrides.status ?? status,
     }
     if (f.from && f.to && f.from > f.to) {
@@ -135,6 +148,7 @@ export function ReportsClient({
     setTo(f.to)
     setWarehouseId(f.warehouseId)
     setFarmerId(f.farmerId)
+    setCustomerId(f.customerId)
     setStatus(f.status)
     setLoading(true)
     try {
@@ -152,6 +166,11 @@ export function ReportsClient({
         setTxRows(rows)
         setOpenTx(rows.length > 0 ? [rows[0].id] : [])
       }
+      if (tab === "customer") {
+        setCustomerRows(await getCustomerSummary({ ...filters, customerId: f.customerId ? Number(f.customerId) : null }))
+      }
+      if (tab === "capital") setCapitalRows(await getCapitalFlow(filters))
+      if (tab === "tax") setTaxRows(await getTaxSummary(filters))
     } catch (err) {
       toast.error((err as Error).message)
     } finally {
@@ -165,7 +184,7 @@ export function ReportsClient({
       const { exportReportExcel } = await import("@/lib/export-excel")
       await exportReportExcel(
         tab,
-        { farmerRows, periodRows, txRows },
+        { farmerRows, periodRows, txRows, customerRows, capitalRows, taxRows },
         from,
         to
       )
@@ -194,10 +213,14 @@ export function ReportsClient({
     setTo("")
     setWarehouseId("")
     setFarmerId("")
+    setCustomerId("")
     setStatus("")
     setFarmerRows(null)
     setPeriodRows(null)
     setTxRows(null)
+    setCustomerRows(null)
+    setCapitalRows(null)
+    setTaxRows(null)
     setOpenTx([])
   }
 
@@ -206,6 +229,7 @@ export function ReportsClient({
       key === "date" ? { from: "", to: "" }
       : key === "warehouse" ? { warehouseId: "" }
       : key === "farmer" ? { farmerId: "" }
+      : key === "customer" ? { customerId: "" }
       : { status: "" }
     runLoad(override)
   }
@@ -216,6 +240,9 @@ export function ReportsClient({
     setFarmerRows(null)
     setPeriodRows(null)
     setTxRows(null)
+    setCustomerRows(null)
+    setCapitalRows(null)
+    setTaxRows(null)
     setOpenTx([])
   }
 
@@ -255,15 +282,55 @@ export function ReportsClient({
       }
     : null
 
+  const customerTotals = customerRows
+    ? {
+        totalBales: customerRows.reduce((s, r) => s + r.totalBales, 0),
+        totalNetWeight: customerRows.reduce((s, r) => s + r.totalNetWeight, 0),
+        totalPrice: customerRows.reduce((s, r) => s + r.totalPrice, 0),
+      }
+    : null
+
+  const capitalTotals = capitalRows
+    ? {
+        loanRepayCash: capitalRows.reduce((s, r) => s + r.loanRepayCash, 0),
+        cashInManual: capitalRows.reduce((s, r) => s + r.cashInManual, 0),
+        bankIn: capitalRows.reduce((s, r) => s + r.bankIn, 0),
+        totalIn: capitalRows.reduce((s, r) => s + r.totalIn, 0),
+        purchaseCash: capitalRows.reduce((s, r) => s + r.purchaseCash, 0),
+        purchaseBank: capitalRows.reduce((s, r) => s + r.purchaseBank, 0),
+        loanDisburse: capitalRows.reduce((s, r) => s + r.loanDisburse, 0),
+        operational: capitalRows.reduce((s, r) => s + r.operational, 0),
+        cashOutManual: capitalRows.reduce((s, r) => s + r.cashOutManual, 0),
+        totalOut: capitalRows.reduce((s, r) => s + r.totalOut, 0),
+        netFlow: capitalRows.reduce((s, r) => s + r.netFlow, 0),
+        taxAmount: capitalRows.reduce((s, r) => s + r.taxAmount, 0),
+      }
+    : null
+
+  const taxTotals = taxRows
+    ? {
+        transactionCount: taxRows.reduce((s, r) => s + r.transactionCount, 0),
+        taxAmount: taxRows.reduce((s, r) => s + r.taxAmount, 0),
+      }
+    : null
+
   const tabs: { key: Tab; label: string }[] = [
     { key: "farmer", label: "Rekap Per Petani" },
     { key: "period", label: "Rekap Per Periode" },
     { key: "transaction", label: "Rincian Transaksi" },
+    { key: "customer", label: "Rekap Per Customer" },
+    { key: "capital", label: "Arus Modal" },
+    { key: "tax", label: "Rekap Pajak" },
   ]
 
-  const loaded = farmerRows !== null || periodRows !== null || txRows !== null
+  const loaded = farmerRows !== null || periodRows !== null || txRows !== null || customerRows !== null || capitalRows !== null || taxRows !== null
   const currentCount =
-    tab === "farmer" ? farmerRows?.length : tab === "period" ? periodRows?.length : txRows?.length
+    tab === "farmer" ? farmerRows?.length
+    : tab === "period" ? periodRows?.length
+    : tab === "transaction" ? txRows?.length
+    : tab === "customer" ? customerRows?.length
+    : tab === "capital" ? capitalRows?.length
+    : taxRows?.length
 
   const chips: { key: ChipKey; label: string; locked?: boolean }[] = []
   if (from || to) chips.push({ key: "date", label: `${displayDate(from)} → ${displayDate(to)}` })
@@ -277,6 +344,10 @@ export function ReportsClient({
   if (farmerId && tab === "farmer") {
     const f = farmers.find((x) => x.id === Number(farmerId))
     if (f) chips.push({ key: "farmer", label: `Petani: ${f.name}` })
+  }
+  if (customerId && tab === "customer") {
+    const c = customers.find((x) => x.id === Number(customerId))
+    if (c) chips.push({ key: "customer", label: `Customer: ${c.name}` })
   }
   if (status) chips.push({ key: "status", label: `Status: ${status}` })
 
@@ -336,6 +407,16 @@ export function ReportsClient({
                 <option value="">Semua</option>
                 {farmers.map((f) => (
                   <option key={f.id} value={f.id}>{f.name}</option>
+                ))}
+              </select>
+            </Field>
+          )}
+          {tab === "customer" && (
+            <Field label="Customer">
+              <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} className={controlCls}>
+                <option value="">Semua</option>
+                {customers.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
             </Field>
@@ -566,6 +647,197 @@ export function ReportsClient({
               </div>
             </>
           )
+        ) : tab === "customer" ? (
+          customerRows === null ? (
+            <InitialEmpty />
+          ) : customerRows.length === 0 ? (
+            <NoDataEmpty onReset={resetFilters} />
+          ) : (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                <Stat label="Customer" value={String(customerRows.length)} />
+                <Stat label="Bale" value={String(customerTotals!.totalBales)} />
+                <Stat label="Total Netto" value={`${customerTotals!.totalNetWeight.toFixed(1)} kg`} />
+                <Stat label="Total Harga" value={formatCurrency(customerTotals!.totalPrice)} tone="amber" />
+                <Stat label="Rata-rata Harga/kg" value={formatCurrency(customerTotals!.totalNetWeight > 0 ? customerTotals!.totalPrice / customerTotals!.totalNetWeight : 0)} />
+              </div>
+              <div className="max-h-[560px] overflow-auto rounded-lg border border-border-soft">
+                <table className="w-full min-w-[720px] border-collapse text-[12.5px]">
+                  <thead>
+                    <tr>
+                      <th className={`${thBase} text-left pr-2`}>Customer</th>
+                      <th className={`${thBase} text-right px-2`}>Tx</th>
+                      <th className={`${thBase} text-right px-2`}>Bale</th>
+                      <th className={`${thBase} text-right px-2`}>Netto (kg)</th>
+                      <th className={`${thBase} text-right px-2`}>Total</th>
+                      <th className={`${thBase} text-right pl-2`}>Harga/kg</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {customerRows.map((r) => (
+                      <tr key={r.customerId} className="transition-colors hover:bg-panel-alt/50">
+                        <td className="py-2 pr-2 border-b border-border-soft text-foreground">
+                          <b>{r.customerName}</b>
+                        </td>
+                        <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-foreground">{r.transactionCount}</td>
+                        <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-foreground">{r.totalBales}</td>
+                        <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-foreground">{r.totalNetWeight.toFixed(1)}</td>
+                        <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-amber font-bold">{formatCurrency(r.totalPrice)}</td>
+                        <td className="py-2 pl-2 border-b border-border-soft font-mono text-right text-foreground">{formatCurrency(r.avgPricePerKg)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-border bg-panel-alt/60">
+                      <td className="py-2.5 pr-2 text-[11px] font-extrabold uppercase tracking-wide text-foreground">Total</td>
+                      <td className="py-2.5 px-2" />
+                      <td className="py-2.5 px-2 font-mono text-right font-bold text-foreground">{customerTotals!.totalBales}</td>
+                      <td className="py-2.5 px-2 font-mono text-right font-bold text-foreground">{customerTotals!.totalNetWeight.toFixed(1)}</td>
+                      <td className="py-2.5 px-2 font-mono text-right font-bold text-amber">{formatCurrency(customerTotals!.totalPrice)}</td>
+                      <td className="py-2.5 pl-2" />
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </>
+          )
+        ) : tab === "capital" ? (
+          capitalRows === null ? (
+            <InitialEmpty />
+          ) : capitalRows.length === 0 ? (
+            <NoDataEmpty onReset={resetFilters} />
+          ) : (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                <Stat label="Gudang" value={String(capitalRows.length)} />
+                <Stat label="Total Masuk" value={formatCurrency(capitalTotals!.totalIn)} tone="emerald" />
+                <Stat label="Total Keluar" value={formatCurrency(capitalTotals!.totalOut)} tone="amber" />
+                <Stat
+                  label="Selisih (Masuk−Keluar)"
+                  value={formatCurrency(capitalTotals!.netFlow)}
+                  tone={capitalTotals!.netFlow >= 0 ? "emerald" : "red"}
+                />
+                <Stat label="Pembelian Tunai" value={formatCurrency(capitalTotals!.purchaseCash + capitalTotals!.purchaseBank)} tone="amber" />
+                <Stat label="Pajak" value={formatCurrency(capitalTotals!.taxAmount)} tone="red" />
+              </div>
+              <div className="max-h-[560px] overflow-auto rounded-lg border border-border-soft">
+                <table className="w-full min-w-[1080px] border-collapse text-[12.5px]">
+                  <thead>
+                    <tr>
+                      <th rowSpan={2} className={`${thBase} text-left pr-2 align-bottom`}>Gudang</th>
+                      <th colSpan={4} className={`${thBase} text-center px-2 border-b border-border-soft text-emerald`}>MASUK</th>
+                      <th colSpan={5} className={`${thBase} text-center px-2 border-b border-border-soft text-amber`}>KELUAR</th>
+                      <th rowSpan={2} className={`${thBase} text-right px-2 align-bottom`}>Selisih</th>
+                      <th rowSpan={2} className={`${thBase} text-right pl-2 align-bottom`}>Pajak</th>
+                    </tr>
+                    <tr>
+                      <th className={`${thBase} text-right px-2`}>Bayar Hutang</th>
+                      <th className={`${thBase} text-right px-2`}>Kas Manual</th>
+                      <th className={`${thBase} text-right px-2`}>Bank</th>
+                      <th className={`${thBase} text-right px-2`}>Total</th>
+                      <th className={`${thBase} text-right px-2`}>Beli Tunai</th>
+                      <th className={`${thBase} text-right px-2`}>Beli Transfer</th>
+                      <th className={`${thBase} text-right px-2`}>Pinjam Modal</th>
+                      <th className={`${thBase} text-right px-2`}>Operasional</th>
+                      <th className={`${thBase} text-right px-2`}>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {capitalRows.map((r) => (
+                      <tr key={r.warehouseId} className="transition-colors hover:bg-panel-alt/50">
+                        <td className="py-2 pr-2 border-b border-border-soft text-foreground">
+                          <b>{r.warehouseName}</b>
+                          <span className="block font-mono text-[10.5px] text-muted-2">{r.warehouseCode}</span>
+                        </td>
+                        <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-emerald">{formatCurrency(r.loanRepayCash)}</td>
+                        <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-emerald">{formatCurrency(r.cashInManual)}</td>
+                        <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-emerald">{formatCurrency(r.bankIn)}</td>
+                        <td className="py-2 px-2 border-b border-border-soft font-mono text-right font-bold text-emerald">{formatCurrency(r.totalIn)}</td>
+                        <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-amber">{formatCurrency(r.purchaseCash)}</td>
+                        <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-amber">{formatCurrency(r.purchaseBank)}</td>
+                        <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-foreground">{formatCurrency(r.loanDisburse)}</td>
+                        <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-foreground">{formatCurrency(r.operational)}</td>
+                        <td className="py-2 px-2 border-b border-border-soft font-mono text-right font-bold text-amber">{formatCurrency(r.totalOut)}</td>
+                        <td className="py-2 px-2 border-b border-border-soft font-mono text-right font-bold">
+                          <span className={r.netFlow >= 0 ? "text-emerald" : "text-red-deduction"}>{formatCurrency(r.netFlow)}</span>
+                        </td>
+                        <td className="py-2 pl-2 border-b border-border-soft font-mono text-right text-red-deduction">{formatCurrency(r.taxAmount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-border bg-panel-alt/60">
+                      <td className="py-2.5 pr-2 text-[11px] font-extrabold uppercase tracking-wide text-foreground">Total</td>
+                      <td className="py-2.5 px-2 font-mono text-right font-bold text-emerald">{formatCurrency(capitalTotals!.loanRepayCash)}</td>
+                      <td className="py-2.5 px-2 font-mono text-right font-bold text-emerald">{formatCurrency(capitalTotals!.cashInManual)}</td>
+                      <td className="py-2.5 px-2 font-mono text-right font-bold text-emerald">{formatCurrency(capitalTotals!.bankIn)}</td>
+                      <td className="py-2.5 px-2 font-mono text-right font-bold text-emerald">{formatCurrency(capitalTotals!.totalIn)}</td>
+                      <td className="py-2.5 px-2 font-mono text-right font-bold text-amber">{formatCurrency(capitalTotals!.purchaseCash)}</td>
+                      <td className="py-2.5 px-2 font-mono text-right font-bold text-amber">{formatCurrency(capitalTotals!.purchaseBank)}</td>
+                      <td className="py-2.5 px-2 font-mono text-right font-bold text-foreground">{formatCurrency(capitalTotals!.loanDisburse)}</td>
+                      <td className="py-2.5 px-2 font-mono text-right font-bold text-foreground">{formatCurrency(capitalTotals!.operational)}</td>
+                      <td className="py-2.5 px-2 font-mono text-right font-bold text-amber">{formatCurrency(capitalTotals!.totalOut)}</td>
+                      <td className="py-2.5 px-2 font-mono text-right font-bold">
+                        <span className={capitalTotals!.netFlow >= 0 ? "text-emerald" : "text-red-deduction"}>{formatCurrency(capitalTotals!.netFlow)}</span>
+                      </td>
+                      <td className="py-2.5 pl-2 font-mono text-right font-bold text-red-deduction">{formatCurrency(capitalTotals!.taxAmount)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              <p className="text-[11px] text-muted-2">
+                Menampilkan <b className="text-foreground">seluruh mutasi kas &amp; bank</b> pada periode ini per gudang.{" "}
+                <b className="text-emerald">Masuk</b> = kas/bank yang masuk (bayar hutang tunai, kas manual, bank masuk);{" "}
+                <b className="text-amber">Keluar</b> = kas/bank yang keluar (beli tembakau tunai/transfer, pinjamkan modal, operasional, kas manual).{" "}
+                <b className="text-foreground">Selisih</b> = Masuk − Keluar (negatif berarti net pengeluaran modal). Pengeluaran modal untuk
+                potongan hutang tercatat sebagai <b className="text-foreground">Pinjam Modal</b> saat dana diberikan, bukan saat dipotong dari transaksi.
+              </p>
+            </>
+          )
+        ) : tab === "tax" ? (
+          taxRows === null ? (
+            <InitialEmpty />
+          ) : taxRows.length === 0 ? (
+            <NoDataEmpty onReset={resetFilters} />
+          ) : (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                <Stat label="Gudang" value={String(taxRows.length)} />
+                <Stat label="Transaksi" value={String(taxTotals!.transactionCount)} />
+                <Stat label="Total Pajak" value={formatCurrency(taxTotals!.taxAmount)} tone="red" />
+              </div>
+              <div className="max-h-[560px] overflow-auto rounded-lg border border-border-soft">
+                <table className="w-full min-w-[560px] border-collapse text-[12.5px]">
+                  <thead>
+                    <tr>
+                      <th className={`${thBase} text-left pr-2`}>Gudang</th>
+                      <th className={`${thBase} text-right px-2`}>Transaksi</th>
+                      <th className={`${thBase} text-right pl-2`}>Pajak</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {taxRows.map((r) => (
+                      <tr key={r.warehouseId ?? -1} className="transition-colors hover:bg-panel-alt/50">
+                        <td className="py-2 pr-2 border-b border-border-soft text-foreground">
+                          <b>{r.warehouseName ?? "Tanpa gudang"}</b>
+                          {r.warehouseCode && <span className="block font-mono text-[10.5px] text-muted-2">{r.warehouseCode}</span>}
+                        </td>
+                        <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-foreground">{r.transactionCount}</td>
+                        <td className="py-2 pl-2 border-b border-border-soft font-mono text-right text-red-deduction font-bold">{formatCurrency(r.taxAmount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-border bg-panel-alt/60">
+                      <td className="py-2.5 pr-2 text-[11px] font-extrabold uppercase tracking-wide text-foreground">Total</td>
+                      <td className="py-2.5 px-2 font-mono text-right font-bold text-foreground">{taxTotals!.transactionCount}</td>
+                      <td className="py-2.5 pl-2 font-mono text-right font-bold text-red-deduction">{formatCurrency(taxTotals!.taxAmount)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </>
+          )
         ) : (
           txRows === null ? (
             <InitialEmpty />
@@ -690,6 +962,9 @@ export function ReportsClient({
           farmerRows={farmerRows}
           periodRows={periodRows}
           txRows={txRows}
+          customerRows={customerRows}
+          capitalRows={capitalRows}
+          taxRows={taxRows}
           companyName={companyName}
           warehouseLabel={warehouseLabel}
           printedBy={userName}

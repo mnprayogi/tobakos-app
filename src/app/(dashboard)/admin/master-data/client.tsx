@@ -1169,7 +1169,7 @@ function UsersTab({ users: initial, lanes, customers }: { users: User[]; lanes: 
     if (role === "CUSTOMER" && assignedCustomerId == null) { toast.error("Akun CUSTOMER wajib ditautkan ke mitra bisnis"); return }
     try {
       if (editing) {
-        const updated = await updateUser(editing.id, { name: nama, username, email: email || undefined, role, laneId: assignedLaneId, customerId: assignedCustomerId })
+        const updated = await updateUser(editing.id, { name: nama, username, email: email || undefined, password: password || undefined, role, laneId: assignedLaneId, customerId: assignedCustomerId })
         setList((prev) => prev.map((u) => (u.id === updated.id ? normalizeUser(updated) : u)))
         toast.success("User diperbarui")
       } else {
@@ -1254,13 +1254,11 @@ function UsersTab({ users: initial, lanes, customers }: { users: User[]; lanes: 
             </select>
           </div>
         )}
-        {!editing && (
-          <div>
-            <label className="block text-[11px] font-bold text-muted-foreground mb-1">Password</label>
-            <input type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)}
-              className="w-full p-2 bg-panel-alt border border-border-soft text-foreground text-xs rounded-lg outline-none" />
-          </div>
-        )}
+        <div>
+          <label className="block text-[11px] font-bold text-muted-foreground mb-1">Password {editing ? "(opsional)" : "*"}</label>
+          <input type="password" placeholder={editing ? "Kosongkan jika tidak diganti" : "Minimal 8 karakter"} value={password} onChange={(e) => setPassword(e.target.value)}
+            className="w-full p-2 bg-panel-alt border border-border-soft text-foreground text-xs rounded-lg outline-none" />
+        </div>
         <div className="flex gap-2">
           <button type="submit" className="flex-1 py-2 bg-emerald hover:bg-emerald/80 text-primary-foreground font-bold text-xs rounded-lg shadow cursor-pointer">
             {editing ? "Simpan Perubahan" : "Tambah User"}

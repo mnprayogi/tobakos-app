@@ -1,5 +1,8 @@
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
+import { getCurrentUserLane } from "@/lib/lane-resolution"
+import { resolveWarehouseScope } from "@/lib/actions/scope"
+import type { Prisma } from "@/generated/prisma/client"
 
 export const dynamic = "force-dynamic"
 
@@ -9,17 +12,88 @@ const CLEANUP_INTERVAL = 1_000
 const MAX_EVENTS_PER_POLL = 100
 const EVENT_RETENTION_MS = 24 * 60 * 60 * 1_000
 
+const BALE_TYPES = ["bale.created", "bale.deleted", "bale.weighed", "session.ended"]
+const FINANCIAL_TYPES = [
+  "payment.recorded",
+  "payment.voided",
+  "purchase.approved",
+  "purchase.reopened",
+  "purchase.voided",
+  "loan.updated",
+  "cash.updated",
+]
+
+type EventScope = Prisma.AppEventWhereInput
+
+async function buildEventFilter(role: string): Promise<EventScope> {
+  if (role === "SUPER_ADMIN" || role === "OWNER" || role === "ADMIN") {
+    // Admin/owner/super admin melihat semua event
+    return {}
+  }
+
+  if (role === "GRADER" || role === "OPERATOR") {
+    const lane = await getCurrentUserLane()
+    // Tanpa lane valid (mis. dashboard shared-tablet) → koneksi kosong,
+    // tidak ada event yang dikirim (polling fallback di client tetap bekerja).
+    if (!lane) return { type: { in: [] } }
+    return {
+      type: { in: BALE_TYPES },
+      laneId: lane.id,
+    }
+  }
+
+  if (role === "FINANCE") {
+    let scope
+    try {
+      scope = await resolveWarehouseScope()
+    } catch {
+      // FINANCE tanpa gudang → koneksi kosong, hindari kebocoran
+      return { type: { in: [] } }
+    }
+    if (scope.mode === "all") {
+      return {}
+    }
+    const lanes = await prisma.lane.findMany({
+      where: { warehouseId: scope.warehouseId },
+      select: { id: true },
+    })
+    const laneIds = lanes.map((l) => l.id)
+    return {
+      OR: [
+        // Financial events tidak punya laneId — terima semuanya
+        { type: { in: FINANCIAL_TYPES } },
+        // Bale events hanya dari gudang sendiri
+        { type: { in: BALE_TYPES }, laneId: { in: laneIds } },
+      ],
+    }
+  }
+
+  // Role lain (mis. CUSTOMER sudah ditolak di atas) — fallback aman: tanpa event
+  return { type: { in: [] } }
+}
+
 export async function GET(request: Request) {
   const session = await auth()
   if (!session?.user) {
     return new Response("Unauthorized", { status: 401 })
   }
 
-  // Catatan: query param `laneId` tetap diterima (kompatibilitas URL client),
-  // namun diabaikan — semua event dikirim ke semua client yang terautentikasi.
+  const role = session.user.role as string
+  if (role === "CUSTOMER") {
+    return new Response("Forbidden", { status: 403 })
+  }
+
+  const eventFilter = await buildEventFilter(role)
+
+  // Dukungan replay setelah reconnect: EventSource mengirim Last-Event-ID
+  const lastEventIdHeader = request.headers.get("last-event-id")
+  let initialId = BigInt(0)
+  if (lastEventIdHeader && /^\d+$/.test(lastEventIdHeader)) {
+    initialId = BigInt(lastEventIdHeader)
+  }
 
   const encoder = new TextEncoder()
-  let lastId = BigInt(0)
+  let lastId = initialId
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -27,8 +101,10 @@ export async function GET(request: Request) {
       let polls = 0
 
       try {
-        const max = await prisma.appEvent.aggregate({ _max: { id: true } })
-        lastId = max._max.id ?? BigInt(0)
+        if (lastId === BigInt(0)) {
+          const max = await prisma.appEvent.aggregate({ _max: { id: true } })
+          lastId = max._max.id ?? BigInt(0)
+        }
       } catch {
         // DB belum siap — mulai dari 0, event lama akan di-replay sekali
       }
@@ -42,11 +118,12 @@ export async function GET(request: Request) {
         }
       }
 
-      const sendEvent = (type: string, laneIdValue: number | null, at: number) => {
-        send(`data: ${JSON.stringify({ type, laneId: laneIdValue, at })}\n\n`)
+      const sendEvent = (id: bigint, type: string, laneIdValue: number | null, at: number) => {
+        send(`data: ${JSON.stringify({ type, laneId: laneIdValue, at })}\nid: ${id}\n\n`)
       }
 
-      sendEvent("connected", null, Date.now())
+      // Event "connected" tanpa id: field — tidak boleh jadi Last-Event-ID (0)
+      send(`data: ${JSON.stringify({ type: "connected", laneId: null, at: Date.now() })}\n\n`)
 
       const heartbeat = setInterval(() => {
         if (closed) return
@@ -61,14 +138,15 @@ export async function GET(request: Request) {
         if (closed) return
         try {
           const events = await prisma.appEvent.findMany({
-            where: { id: { gt: lastId } },
+            // Bangun filter setiap poll supaya `lastId` selalu fresh
+            where: { ...eventFilter, id: { gt: lastId } },
             orderBy: { id: "asc" },
             take: MAX_EVENTS_PER_POLL,
             select: { id: true, type: true, laneId: true, at: true },
           })
           for (const event of events) {
             if (closed) return
-            sendEvent(event.type, event.laneId, Number(event.at.getTime()))
+            sendEvent(event.id, event.type, event.laneId, Number(event.at.getTime()))
             lastId = event.id
           }
 

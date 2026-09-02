@@ -26,6 +26,7 @@ export default async function ReportsPage() {
     <ReportsClient
       warehouses={meta.warehouses}
       farmers={meta.farmers}
+      customers={meta.customers}
       scope={meta.scope}
       companyName={companyName}
       userName={session?.user.name ?? ""}

@@ -55,7 +55,19 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
   const [grossWeight, setGrossWeight] = useState("")
   const [weighing, setWeighing] = useState(false)
   const prevCapturedRef = useRef<number | null>(null)
+  const saveRef = useRef<(() => void) | null>(null)
   const { enqueue } = useOfflineQueue()
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (!(e.ctrlKey || e.metaKey) || e.key !== "Enter") return
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return
+      e.preventDefault()
+      saveRef.current?.()
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [])
 
   useEffect(() => {
     if (capturedWeight == null) {
@@ -89,27 +101,27 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
           <div>
             <label className="text-[10.5px] text-muted-foreground block mb-1">Grade</label>
-            <input value={item.grade} disabled className="w-full bg-panel border border-dashed border-border-soft text-foreground/80 font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
+            <input value={item.grade} disabled className="w-full bg-panel border border-dashed border-border-soft text-foreground font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
           </div>
           <div>
             <label className="text-[10.5px] text-muted-foreground block mb-1">Petani</label>
-            <input value={`${item.farmerName} (${item.farmerNik ?? item.farmerName})`} disabled className="w-full bg-panel border border-dashed border-border-soft text-foreground/80 font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
+            <input value={`${item.farmerName} (${item.farmerNik ?? item.farmerName})`} disabled className="w-full bg-panel border border-dashed border-border-soft text-foreground font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
           </div>
           <div>
             <label className="text-[10.5px] text-muted-foreground block mb-1">Jenis Tembakau</label>
-            <input value={item.tobaccoType} disabled className="w-full bg-panel border border-dashed border-border-soft text-foreground/80 font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
+            <input value={item.tobaccoType} disabled className="w-full bg-panel border border-dashed border-border-soft text-foreground font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
           </div>
           <div>
             <label className="text-[10.5px] text-muted-foreground block mb-1">Jenis Daun</label>
-            <input value={item.leafType} disabled className="w-full bg-panel border border-dashed border-border-soft text-foreground/80 font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
+            <input value={item.leafType} disabled className="w-full bg-panel border border-dashed border-border-soft text-foreground font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
           </div>
           <div>
             <label className="text-[10.5px] text-muted-foreground block mb-1">Jenis Packing</label>
-            <input value={item.packingType} disabled className="w-full bg-panel border border-dashed border-border-soft text-foreground/80 font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
+            <input value={item.packingType} disabled className="w-full bg-panel border border-dashed border-border-soft text-foreground font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
           </div>
           <div>
             <label className="text-[10.5px] text-muted-foreground block mb-1">Alokasi Customer</label>
-            <input value={item.customerName ?? "\u2014"} disabled className="w-full bg-panel border border-dashed border-border-soft text-foreground/80 font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
+            <input value={item.customerName ?? "\u2014"} disabled className="w-full bg-panel border border-dashed border-border-soft text-foreground font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
           </div>
         </div>
 
@@ -160,14 +172,18 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
           </div>
         </div>
 
-        <div className="rounded-xl border border-emerald/40 bg-gradient-to-br from-emerald/14 to-emerald/[0.03] p-3 text-center">
+        <div className="rounded-xl border-2 border-emerald/50 bg-gradient-to-br from-emerald/20 to-emerald/[0.04] p-4 text-center shadow-[0_0_24px_rgba(34,201,141,0.12)]">
           <p className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
             Berat Netto
           </p>
-          <p className="font-mono font-extrabold text-[26px] text-emerald my-0.5">
+          <p className="font-mono font-extrabold text-[32px] leading-tight text-emerald my-1">
             {item.netWeight?.toFixed(1)} KG
           </p>
-          <p className="font-mono font-bold text-[13.5px] text-amber mb-2.5">
+          <div className="my-2.5 border-t border-dashed border-emerald/30" />
+          <p className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+            Total Harga
+          </p>
+          <p className="font-mono font-extrabold text-[17px] text-amber mb-2.5">
             {formatCurrency(item.subtotal)}
           </p>
           <button
@@ -263,6 +279,8 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
     onReset()
   }
 
+  saveRef.current = handleSave
+
   return (
     <div className="rounded-xl border border-border bg-card p-3.5 space-y-3">
       <div className="flex items-center justify-between border-b border-border-soft pb-2">
@@ -281,27 +299,27 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
             <div>
               <label className="text-[10.5px] text-muted-foreground block mb-1">Grade</label>
-              <input value={item?.grade ?? ""} disabled className="w-full bg-panel border border-dashed border-border-soft text-foreground/80 font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
+              <input value={item?.grade ?? ""} disabled className="w-full bg-panel border border-dashed border-border-soft text-foreground font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
             </div>
             <div>
               <label className="text-[10.5px] text-muted-foreground block mb-1">Petani</label>
-              <input value={item ? `${item.farmerName} (${item.farmerNik ?? item.farmerName})` : ""} disabled className="w-full bg-panel border border-dashed border-border-soft text-foreground/80 font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
+              <input value={item ? `${item.farmerName} (${item.farmerNik ?? item.farmerName})` : ""} disabled className="w-full bg-panel border border-dashed border-border-soft text-foreground font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
             </div>
             <div>
               <label className="text-[10.5px] text-muted-foreground block mb-1">Jenis Tembakau</label>
-              <input value={item?.tobaccoType ?? ""} disabled className="w-full bg-panel border border-dashed border-border-soft text-foreground/80 font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
+              <input value={item?.tobaccoType ?? ""} disabled className="w-full bg-panel border border-dashed border-border-soft text-foreground font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
             </div>
             <div>
               <label className="text-[10.5px] text-muted-foreground block mb-1">Jenis Daun</label>
-              <input value={item?.leafType ?? ""} disabled className="w-full bg-panel border border-dashed border-border-soft text-foreground/80 font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
+              <input value={item?.leafType ?? ""} disabled className="w-full bg-panel border border-dashed border-border-soft text-foreground font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
             </div>
             <div>
               <label className="text-[10.5px] text-muted-foreground block mb-1">Jenis Packing</label>
-              <input value={item?.packingType ?? ""} disabled className="w-full bg-panel border border-dashed border-border-soft text-foreground/80 font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
+              <input value={item?.packingType ?? ""} disabled className="w-full bg-panel border border-dashed border-border-soft text-foreground font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
             </div>
             <div>
               <label className="text-[10.5px] text-muted-foreground block mb-1">Alokasi Customer</label>
-              <input value={item?.customerName ?? "\u2014"} disabled className="w-full bg-panel border border-dashed border-border-soft text-foreground/80 font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
+              <input value={item?.customerName ?? "\u2014"} disabled className="w-full bg-panel border border-dashed border-border-soft text-foreground font-sans text-[13px] px-2.5 py-1.5 rounded-lg" />
             </div>
           </div>
 
@@ -311,99 +329,104 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
             </p>
           )}
 
-          <div className="flex items-end gap-3 flex-wrap">
-            <div className="flex-1 min-w-[170px]">
-              <label className="text-[10.5px] text-muted-foreground block mb-1">Berat Timbangan (kg)</label>
-              <div className="flex gap-2">
-                <input
-                  type="number"
-                  step="any"
-                  placeholder="0.0"
-                  value={grossWeight}
-                  onChange={(e) => setGrossWeight(e.target.value)}
-                  disabled={!item || capturedWeight != null}
-                  className="flex-1 bg-panel-alt border border-border-soft text-foreground font-sans text-[13px] px-2.5 py-1.5 rounded-lg outline-none placeholder:text-muted-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                />
-                {capturedWeight != null && (
-                  <span className="inline-flex items-center px-2 text-[10px] font-bold text-emerald bg-emerald/10 border border-emerald/30 rounded-lg">
-                    dari timbangan
-                  </span>
-                )}
-              </div>
-              {!item && (
-                <p className="text-[10px] text-muted-2 italic mt-1">
-                  Scan barcode untuk memulai penimbangan
-                </p>
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-2 gap-y-1.5 items-end">
+            <label className="text-[10px] font-bold uppercase tracking-[0.06em] text-muted-foreground whitespace-nowrap">
+              Berat Timbangan (kg)
+            </label>
+            <span className="text-[10px] font-bold uppercase tracking-[0.06em] text-muted-foreground whitespace-nowrap">
+              Pembulatan
+            </span>
+
+            <div className="flex items-center gap-2 min-w-0">
+              <input
+                type="number"
+                step="any"
+                placeholder="0.0"
+                value={grossWeight}
+                onChange={(e) => setGrossWeight(e.target.value)}
+                disabled={!item || capturedWeight != null}
+                className="flex-1 min-w-0 h-[36px] bg-panel-alt border border-border-soft text-foreground font-sans text-[13px] px-3 rounded-lg outline-none placeholder:text-muted-2 disabled:opacity-60 disabled:cursor-not-allowed"
+              />
+              {capturedWeight != null && (
+                <span className="inline-flex items-center shrink-0 px-2 h-[36px] text-[10px] font-bold text-emerald bg-emerald/10 border border-emerald/30 rounded-lg">
+                  dari timbangan
+                </span>
               )}
             </div>
-
-            <div className="shrink-0">
-              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.06em] block mb-1">
-                Pembulatan
-              </span>
-              <div className="flex bg-panel-alt rounded-xl border border-border-soft p-0.5">
-                {roundingOptions.map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => onRoundingModeChange(opt.value)}
-                    className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                      roundingMode === opt.value
-                        ? "bg-emerald text-primary-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
+            <div className="flex h-[36px] items-center bg-panel-alt rounded-lg border border-border-soft p-0.5">
+              {roundingOptions.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => onRoundingModeChange(opt.value)}
+                  className={`h-full px-2.5 rounded-md text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center ${
+                    roundingMode === opt.value
+                      ? "bg-emerald text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
             </div>
+
+            {!item && (
+              <p className="col-span-2 text-[10px] text-muted-2 italic">
+                Scan barcode untuk memulai penimbangan
+              </p>
+            )}
           </div>
 
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-muted-2 mb-1.5">
               Perhitungan
             </p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <div className="rounded-lg bg-panel-alt/50 border border-border-soft/60 px-2.5 py-2">
-                <p className="text-[9.5px] uppercase tracking-[0.06em] text-muted-2 mb-0.5">Tara Packing</p>
-                <p className="font-mono font-semibold text-[12.5px] text-red-deduction">
-                  {item && item.packingWeight > 0 ? `(-${item.packingWeight.toFixed(1)} KG)` : "\u2014"}
-                </p>
-              </div>
-              <div className="rounded-lg bg-panel-alt/50 border border-border-soft/60 px-2.5 py-2">
-                <p className="text-[9.5px] uppercase tracking-[0.06em] text-muted-2 mb-0.5">Setelah Packing</p>
-                <p className="font-mono font-semibold text-[12.5px] text-foreground">
-                  {weightAfterPacking > 0 ? `${weightAfterPacking.toFixed(weightDecimals)} KG` : "\u2014"}
-                </p>
-              </div>
-              <div className="rounded-lg bg-panel-alt/50 border border-border-soft/60 px-2.5 py-2">
-                <p className="text-[9.5px] uppercase tracking-[0.06em] text-muted-2 mb-0.5">
-                  Pot. Kadar Air ({item ? item.moisturePercent.toFixed(2) : "0.00"}%)
-                </p>
-                <p className="font-mono font-semibold text-[12.5px] text-red-deduction">
-                  {moistureDeduction > 0 ? `(-${moistureDeduction.toFixed(weightDecimals)} KG)` : "\u2014"}
-                </p>
-              </div>
-              <div className="rounded-lg bg-panel-alt/50 border border-border-soft/60 px-2.5 py-2">
-                <p className="text-[9.5px] uppercase tracking-[0.06em] text-muted-2 mb-0.5">Harga/kg</p>
-                <p className="font-mono font-semibold text-[12.5px] text-amber">
-                  {item ? formatCurrency(item.pricePerKg) : "\u2014"}
-                </p>
+            <div className="rounded-xl border border-border bg-panel-alt/40 p-2.5">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="rounded-lg bg-panel-alt/80 border border-border-soft/70 px-2.5 py-2">
+                  <p className="text-[10px] uppercase tracking-[0.06em] text-muted-foreground mb-1">Tara Packing</p>
+                  <p className="font-mono font-semibold text-[15px] text-red-deduction">
+                    {item && item.packingWeight > 0 ? `(-${item.packingWeight.toFixed(1)} KG)` : "\u2014"}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-panel-alt/80 border border-border-soft/70 px-2.5 py-2">
+                  <p className="text-[10px] uppercase tracking-[0.06em] text-muted-foreground mb-1">Setelah Packing</p>
+                  <p className="font-mono font-semibold text-[15px] text-foreground">
+                    {weightAfterPacking > 0 ? `${weightAfterPacking.toFixed(weightDecimals)} KG` : "\u2014"}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-panel-alt/80 border border-border-soft/70 px-2.5 py-2">
+                  <p className="text-[10px] uppercase tracking-[0.06em] text-muted-foreground mb-1">
+                    Pot. Kadar Air ({item ? item.moisturePercent.toFixed(2) : "0.00"}%)
+                  </p>
+                  <p className="font-mono font-semibold text-[15px] text-red-deduction">
+                    {moistureDeduction > 0 ? `(-${moistureDeduction.toFixed(weightDecimals)} KG)` : "\u2014"}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-panel-alt/80 border border-border-soft/70 px-2.5 py-2">
+                  <p className="text-[10px] uppercase tracking-[0.06em] text-muted-foreground mb-1">Harga/kg</p>
+                  <p className="font-mono font-semibold text-[15px] text-amber">
+                    {item ? formatCurrency(item.pricePerKg) : "\u2014"}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="lg:w-[230px] shrink-0 mt-3 lg:mt-0 flex flex-col gap-2">
-          <div className="rounded-xl border border-emerald/40 bg-gradient-to-br from-emerald/14 to-emerald/[0.03] p-3 text-center">
+        <div className="lg:w-[300px] shrink-0 mt-3 lg:mt-0 flex flex-col gap-2">
+          <div className="rounded-xl border-2 border-emerald/50 bg-gradient-to-br from-emerald/20 to-emerald/[0.04] p-4 text-center shadow-[0_0_24px_rgba(34,201,141,0.12)]">
             <p className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
               Berat Netto
             </p>
-            <p className="font-mono font-extrabold text-[26px] text-emerald my-0.5">
+            <p className="font-mono font-extrabold text-[32px] leading-tight text-emerald my-1">
               {netWeight > 0 ? `${netWeight.toFixed(weightDecimals)} KG` : "\u2014"}
             </p>
-            <p className="font-mono font-bold text-[13.5px] text-amber">
+            <div className="my-2.5 border-t border-dashed border-emerald/30" />
+            <p className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+              Total Harga
+            </p>
+            <p className="font-mono font-extrabold text-[17px] text-amber">
               {subtotal > 0 ? formatCurrency(subtotal) : "\u2014"}
             </p>
           </div>
@@ -421,10 +444,14 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
               type="button"
               onClick={handleSave}
               disabled={!item || weighing || grossWeightNum <= 0}
-              className="rounded-lg bg-emerald py-2.5 font-bold text-[13.5px] text-primary-foreground cursor-pointer transition-colors hover:bg-emerald/90 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="rounded-xl bg-emerald py-3.5 font-bold text-[14px] uppercase tracking-[0.05em] text-primary-foreground cursor-pointer transition-all ring-1 ring-emerald/50 shadow-[0_4px_20px_rgba(34,201,141,0.35)] hover:brightness-110 hover:shadow-[0_6px_28px_rgba(34,201,141,0.45)] active:brightness-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
             >
               {weighing ? "Menyimpan\u2026" : "Simpan & Kunci Data Timbang"}
             </button>
+            <p className="text-center text-[10px] text-muted-foreground">
+              atau tekan <span className="font-mono font-bold text-foreground">Ctrl+Enter</span>
+              untuk simpan
+            </p>
           </div>
         </div>
       </div>

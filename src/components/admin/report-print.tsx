@@ -1,6 +1,13 @@
 import { forwardRef } from "react"
 import type { CSSProperties } from "react"
-import type { FarmerSummaryRow, PeriodSummaryRow, TransactionDetailRow } from "@/lib/actions/reports"
+import type {
+  FarmerSummaryRow,
+  PeriodSummaryRow,
+  TransactionDetailRow,
+  CustomerSummaryRow,
+  CapitalFlowRow,
+  TaxSummaryRow,
+} from "@/lib/actions/reports"
 
 function fmtCurrency(v: number): string {
   return v.toLocaleString("id-ID", {
@@ -19,12 +26,15 @@ function dateLabel(s: string): string {
 }
 
 interface ReportPrintProps {
-  tab: "farmer" | "period" | "transaction"
+  tab: "farmer" | "period" | "transaction" | "customer" | "capital" | "tax"
   from: string
   to: string
   farmerRows: FarmerSummaryRow[] | null
   periodRows: PeriodSummaryRow[] | null
   txRows: TransactionDetailRow[] | null
+  customerRows?: CustomerSummaryRow[] | null
+  capitalRows?: CapitalFlowRow[] | null
+  taxRows?: TaxSummaryRow[] | null
   companyName?: string
   warehouseLabel?: string
   printedBy?: string
@@ -49,11 +59,16 @@ const td: CSSProperties = {
 }
 
 export const ReportPrint = forwardRef<HTMLDivElement, ReportPrintProps>(function ReportPrint(
-  { tab, from, to, farmerRows, periodRows, txRows, companyName = "TobakOS", warehouseLabel, printedBy = "", printedAt = "" },
+  { tab, from, to, farmerRows, periodRows, txRows, customerRows, capitalRows, taxRows, companyName = "TobakOS", warehouseLabel, printedBy = "", printedAt = "" },
   ref
 ) {
   const title =
-    tab === "farmer" ? "REKAP PER PETANI" : tab === "period" ? "REKAP PER PERIODE" : "RINCIAN TRANSAKSI"
+    tab === "farmer" ? "REKAP PER PETANI"
+    : tab === "period" ? "REKAP PER PERIODE"
+    : tab === "transaction" ? "RINCIAN TRANSAKSI"
+    : tab === "customer" ? "REKAP PER CUSTOMER"
+    : tab === "capital" ? "ARUS MODAL"
+    : "REKAP PAJAK"
 
   const farmerTotals = farmerRows
     ? {
@@ -85,7 +100,7 @@ export const ReportPrint = forwardRef<HTMLDivElement, ReportPrintProps>(function
       }
     : null
 
-  const rows = farmerRows ?? periodRows ?? txRows ?? []
+  const rows = farmerRows ?? periodRows ?? txRows ?? customerRows ?? capitalRows ?? taxRows ?? []
 
   return (
     <div ref={ref} style={{ width: "100%", maxWidth: "180mm", margin: "0 auto", fontFamily: "'Courier New', Courier, monospace" }}>
@@ -241,6 +256,102 @@ export const ReportPrint = forwardRef<HTMLDivElement, ReportPrintProps>(function
             </tbody>
           </table>
         </>
+      )}
+
+      {tab === "customer" && customerRows && (
+        <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "6mm" }}>
+          <thead>
+            <tr>
+              <th style={th}>#</th>
+              <th style={{ ...th, textAlign: "left" }}>Customer</th>
+              <th style={th}>Tx</th>
+              <th style={th}>Bale</th>
+              <th style={th}>Netto (kg)</th>
+              <th style={th}>Total</th>
+              <th style={th}>Harga/kg</th>
+            </tr>
+          </thead>
+          <tbody>
+            {customerRows.map((r, i) => (
+              <tr key={r.customerId}>
+                <td style={{ ...td, textAlign: "center" }}>{i + 1}</td>
+                <td style={{ ...td, fontWeight: 700 }}>{r.customerName}</td>
+                <td style={{ ...td, textAlign: "right" }}>{r.transactionCount}</td>
+                <td style={{ ...td, textAlign: "right" }}>{r.totalBales}</td>
+                <td style={{ ...td, textAlign: "right" }}>{r.totalNetWeight.toFixed(1)}</td>
+                <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>{fmtCurrency(r.totalPrice)}</td>
+                <td style={{ ...td, textAlign: "right" }}>{fmtCurrency(r.avgPricePerKg)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {tab === "capital" && capitalRows && (
+        <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "3mm" }}>
+          <thead>
+            <tr>
+              <th style={th}>Gudang</th>
+              <th style={th} colSpan={4}>MASUK</th>
+              <th style={th} colSpan={5}>KELUAR</th>
+              <th style={th}>Selisih</th>
+              <th style={th}>Pajak</th>
+            </tr>
+            <tr>
+              <th style={th} />
+              <th style={th}>Bayar Hutang</th>
+              <th style={th}>Kas Manual</th>
+              <th style={th}>Bank</th>
+              <th style={th}>Total Masuk</th>
+              <th style={th}>Beli Tunai</th>
+              <th style={th}>Beli Transfer</th>
+              <th style={th}>Pinjam Modal</th>
+              <th style={th}>Operasional</th>
+              <th style={th}>Total Keluar</th>
+              <th style={th} />
+              <th style={th} />
+            </tr>
+          </thead>
+          <tbody>
+            {capitalRows.map((r) => (
+              <tr key={r.warehouseId}>
+                <td style={{ ...td, fontWeight: 700 }}>{r.warehouseName}</td>
+                <td style={{ ...td, textAlign: "right" }}>{fmtCurrency(r.loanRepayCash)}</td>
+                <td style={{ ...td, textAlign: "right" }}>{fmtCurrency(r.cashInManual)}</td>
+                <td style={{ ...td, textAlign: "right" }}>{fmtCurrency(r.bankIn)}</td>
+                <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>{fmtCurrency(r.totalIn)}</td>
+                <td style={{ ...td, textAlign: "right" }}>{fmtCurrency(r.purchaseCash)}</td>
+                <td style={{ ...td, textAlign: "right" }}>{fmtCurrency(r.purchaseBank)}</td>
+                <td style={{ ...td, textAlign: "right" }}>{fmtCurrency(r.loanDisburse)}</td>
+                <td style={{ ...td, textAlign: "right" }}>{fmtCurrency(r.operational)}</td>
+                <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>{fmtCurrency(r.totalOut)}</td>
+                <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>{fmtCurrency(r.netFlow)}</td>
+                <td style={{ ...td, textAlign: "right" }}>{fmtCurrency(r.taxAmount)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {tab === "tax" && taxRows && (
+        <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "6mm" }}>
+          <thead>
+            <tr>
+              <th style={th}>Gudang</th>
+              <th style={th}>Transaksi</th>
+              <th style={th}>Pajak</th>
+            </tr>
+          </thead>
+          <tbody>
+            {taxRows.map((r) => (
+              <tr key={r.warehouseId ?? -1}>
+                <td style={{ ...td, fontWeight: 700 }}>{r.warehouseName ?? "Tanpa gudang"}</td>
+                <td style={{ ...td, textAlign: "right" }}>{r.transactionCount}</td>
+                <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>{fmtCurrency(r.taxAmount)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       )}
 
       {rows.length === 0 && (

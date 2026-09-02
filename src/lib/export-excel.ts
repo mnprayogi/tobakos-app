@@ -1,5 +1,5 @@
 import writeExcelFile, { type CellObject, type Row, type SheetData } from "write-excel-file/browser"
-import type { FarmerSummaryRow, PeriodSummaryRow, TransactionDetailRow } from "@/lib/actions/reports"
+import type { FarmerSummaryRow, PeriodSummaryRow, TransactionDetailRow, CustomerSummaryRow, CapitalFlowRow, TaxSummaryRow } from "@/lib/actions/reports"
 import type { TxnExportRow } from "@/lib/actions/transactions"
 import type { PortalBale } from "@/lib/actions/portal"
 
@@ -211,14 +211,99 @@ function buildTransactionSheets(rows: TransactionDetailRow[], from: string, to: 
   ]
 }
 
+function buildCustomerSheet(rows: CustomerSummaryRow[], from: string, to: string): XlsxSheet {
+  const widths = [26, 11, 10, 14, 16, 16]
+  const columns = widths.map((width) => ({ width }))
+  const data: SheetData = [
+    titleRow(`REKAP PER CUSTOMER — ${from || "awal"} s/d ${to || "sekarang"}`, columns.length),
+    headerRow(["Customer", "Transaksi", "Bale", "Netto (kg)", "Total Harga", "Harga/kg"]),
+    ...rows.map((r) => [
+      txt(r.customerName, { fontWeight: "bold" }),
+      n(r.transactionCount, COUNT_FMT, "center"),
+      n(r.totalBales, COUNT_FMT, "center"),
+      n(r.totalNetWeight, KG_FMT),
+      n(r.totalPrice, MONEY_FMT),
+      n(r.avgPricePerKg, MONEY_FMT),
+    ] as Row),
+    totalRow([
+      txt("TOTAL", { backgroundColor: "#f2f2f2" }),
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
+      n(sum((r) => r.totalBales, rows), COUNT_FMT, "center", true),
+      n(sum((r) => r.totalNetWeight, rows), KG_FMT, "right", true),
+      n(sum((r) => r.totalPrice, rows), MONEY_FMT, "right", true),
+      { value: "", ...border, backgroundColor: "#f2f2f2" },
+    ]),
+  ]
+  return { sheet: "Rekap Customer", columns, data, stickyRowsCount: 2, showGridLines: false }
+}
+
+function buildCapitalSheet(rows: CapitalFlowRow[], from: string, to: string): XlsxSheet {
+  const widths = [24, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14]
+  const columns = widths.map((width) => ({ width }))
+  const data: SheetData = [
+    titleRow(`ARUS MODAL — ${from || "awal"} s/d ${to || "sekarang"}`, columns.length),
+    headerRow(["Gudang", "Bayar Hutang", "Kas Manual", "Bank", "Total Masuk", "Beli Tunai", "Beli Transfer", "Pinjam Modal", "Operasional", "Total Keluar", "Selisih"]),
+    ...rows.map((r) => [
+      txt(r.warehouseName, { fontWeight: "bold" }),
+      n(r.loanRepayCash, MONEY_FMT),
+      n(r.cashInManual, MONEY_FMT),
+      n(r.bankIn, MONEY_FMT),
+      n(r.totalIn, MONEY_FMT, "right", true),
+      n(r.purchaseCash, MONEY_FMT),
+      n(r.purchaseBank, MONEY_FMT),
+      n(r.loanDisburse, MONEY_FMT),
+      n(r.operational, MONEY_FMT),
+      n(r.totalOut, MONEY_FMT, "right", true),
+      n(r.netFlow, MONEY_FMT),
+    ] as Row),
+    totalRow([
+      txt("TOTAL", { backgroundColor: "#f2f2f2" }),
+      n(sum((r) => r.loanRepayCash, rows), MONEY_FMT, "right", true),
+      n(sum((r) => r.cashInManual, rows), MONEY_FMT, "right", true),
+      n(sum((r) => r.bankIn, rows), MONEY_FMT, "right", true),
+      n(sum((r) => r.totalIn, rows), MONEY_FMT, "right", true),
+      n(sum((r) => r.purchaseCash, rows), MONEY_FMT, "right", true),
+      n(sum((r) => r.purchaseBank, rows), MONEY_FMT, "right", true),
+      n(sum((r) => r.loanDisburse, rows), MONEY_FMT, "right", true),
+      n(sum((r) => r.operational, rows), MONEY_FMT, "right", true),
+      n(sum((r) => r.totalOut, rows), MONEY_FMT, "right", true),
+      n(sum((r) => r.netFlow, rows), MONEY_FMT, "right", true),
+    ]),
+  ]
+  return { sheet: "Arus Modal", columns, data, stickyRowsCount: 2, showGridLines: false }
+}
+
+function buildTaxSheet(rows: TaxSummaryRow[], from: string, to: string): XlsxSheet {
+  const widths = [24, 12, 16]
+  const columns = widths.map((width) => ({ width }))
+  const data: SheetData = [
+    titleRow(`REKAP PAJAK — ${from || "awal"} s/d ${to || "sekarang"}`, columns.length),
+    headerRow(["Gudang", "Transaksi", "Pajak"]),
+    ...rows.map((r) => [
+      txt(r.warehouseName ?? "Tanpa gudang", { fontWeight: "bold" }),
+      n(r.transactionCount, COUNT_FMT, "center"),
+      n(r.taxAmount, MONEY_FMT),
+    ] as Row),
+    totalRow([
+      txt("TOTAL", { backgroundColor: "#f2f2f2" }),
+      n(sum((r) => r.transactionCount, rows), COUNT_FMT, "center", true),
+      n(sum((r) => r.taxAmount, rows), MONEY_FMT, "right", true),
+    ]),
+  ]
+  return { sheet: "Rekap Pajak", columns, data, stickyRowsCount: 2, showGridLines: false }
+}
+
 export interface ReportExportData {
   farmerRows: FarmerSummaryRow[] | null
   periodRows: PeriodSummaryRow[] | null
   txRows: TransactionDetailRow[] | null
+  customerRows?: CustomerSummaryRow[] | null
+  capitalRows?: CapitalFlowRow[] | null
+  taxRows?: TaxSummaryRow[] | null
 }
 
 export async function exportReportExcel(
-  tab: "farmer" | "period" | "transaction",
+  tab: "farmer" | "period" | "transaction" | "customer" | "capital" | "tax",
   data: ReportExportData,
   from: string,
   to: string
@@ -235,6 +320,15 @@ export async function exportReportExcel(
   } else if (tab === "transaction" && data.txRows) {
     sheets = buildTransactionSheets(data.txRows, from, to)
     fileLabel = "Rincian-Transaksi"
+  } else if (tab === "customer" && data.customerRows) {
+    sheets = [buildCustomerSheet(data.customerRows, from, to)]
+    fileLabel = "Rekap-Customer"
+  } else if (tab === "capital" && data.capitalRows) {
+    sheets = [buildCapitalSheet(data.capitalRows, from, to)]
+    fileLabel = "Arus-Modal"
+  } else if (tab === "tax" && data.taxRows) {
+    sheets = [buildTaxSheet(data.taxRows, from, to)]
+    fileLabel = "Rekap-Pajak"
   }
 
   if (sheets.length === 0) throw new Error("Tidak ada data untuk diekspor")

@@ -28,7 +28,7 @@ export function ScanInput({
   const [cameraOpen, setCameraOpen] = useState(false)
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Enter" && onSubmit) {
+    if (e.key === "Enter" && !e.ctrlKey && !e.metaKey && onSubmit) {
       e.preventDefault()
       onSubmit(value)
     }
