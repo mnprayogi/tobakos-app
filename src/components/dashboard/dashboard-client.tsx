@@ -51,8 +51,8 @@ function loadRange(view: DashboardView, range: DashboardRange): Promise<Dashboar
   }
 }
 
-function supportsRange(role: string): boolean {
-  return role === "ADMIN" || role === "OWNER" || role === "SUPER_ADMIN"
+function showsGlobalRangeFilter(role: string): boolean {
+  return role === "ADMIN"
 }
 
 export function DashboardClient({
@@ -88,7 +88,7 @@ export function DashboardClient({
   return (
     <div className="space-y-5">
       <DashboardHeader userName={userName} role={view.role} />
-      {supportsRange(view.role) && (
+      {showsGlobalRangeFilter(view.role) && (
         <div className="flex justify-end">
           <DashboardRangeFilter value={range} onChange={handleRangeChange} />
         </div>
@@ -96,9 +96,9 @@ export function DashboardClient({
       {view.role === "GRADER" && <GraderView data={view.data} />}
       {view.role === "OPERATOR" && <OperatorView data={view.data} />}
       {view.role === "FINANCE" && <FinanceView data={view.data} />}
-      {view.role === "OWNER" && <OwnerView data={view.data} range={range} />}
+      {view.role === "OWNER" && <OwnerView data={view.data} range={range} onRangeChange={handleRangeChange} />}
       {view.role === "ADMIN" && <AdminView data={view.data} range={range} />}
-      {view.role === "SUPER_ADMIN" && <OwnerView data={view.data} range={range} />}
+      {view.role === "SUPER_ADMIN" && <OwnerView data={view.data} range={range} onRangeChange={handleRangeChange} />}
     </div>
   )
 }

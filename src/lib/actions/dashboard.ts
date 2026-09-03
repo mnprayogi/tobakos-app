@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/db"
 import { roundMoney } from "@/lib/calculations"
 import { requireRoles } from "@/lib/roles"
+import { resolveWarehouseScope } from "@/lib/actions/scope"
 import { getDebtSummary } from "@/lib/actions/finance"
 import { getLoansData } from "@/lib/actions/loans"
 import { toDateKey } from "@/lib/utils"
@@ -20,6 +21,29 @@ function yesterdayStart(): Date {
   d.setHours(0, 0, 0, 0)
   d.setDate(d.getDate() - 1)
   return d
+}
+
+// Window tanggal untuk periode sebelumnya (sama panjang dgn range aktif),
+// untuk perbandingan delta pada section Keuangan.
+function prevRange(range: DashboardRange): { from: Date | null; to: Date } | null {
+  if (range === "all") return null
+  const now = new Date()
+  const to = new Date(now)
+  to.setHours(23, 59, 59, 999)
+  if (range === "today") {
+    const from = new Date(now)
+    from.setHours(0, 0, 0, 0)
+    from.setDate(from.getDate() - 1)
+    return { from, to }
+  }
+  const days = range === "7d" ? 7 : 30
+  const from = new Date(now)
+  from.setHours(0, 0, 0, 0)
+  from.setDate(from.getDate() - days)
+  const end = new Date(from)
+  end.setDate(end.getDate() + days - 1)
+  end.setHours(23, 59, 59, 999)
+  return { from, to: end }
 }
 
 // ─── Shared types ────────────────────────────────────
@@ -51,6 +75,70 @@ export interface RecentPayment {
 export interface StatusCount {
   status: string
   count: number
+}
+
+export interface WarehouseOption {
+  id: number
+  code: string
+  name: string
+}
+
+export interface GradeBreakdown {
+  grade: string
+  baleCount: number
+  netWeight: number
+  subtotal: number
+  netWeightPercent: number
+}
+
+// Breakdown per grade dari bale lunas (PurchaseItem status CLOSED),
+// mengikuti filter rentang tanggal yang sama dengan panel, serta scope gudang.
+async function getClosedGradeBreakdown(
+  txDateFilter: { gte: Date } | undefined,
+  warehouseId?: number
+): Promise<GradeBreakdown[]> {
+  const rows = await prisma.purchaseItem.groupBy({
+    by: ["grade"],
+    where: {
+      status: "CLOSED",
+      purchase: {
+        transactionDate: txDateFilter ?? undefined,
+        status: { not: "VOIDED" },
+        ...(warehouseId != null ? { warehouseId } : {}),
+      },
+    },
+    _count: { _all: true },
+    _sum: { netWeight: true, subtotal: true },
+  })
+
+  const totalNetWeight = rows.reduce((s, r) => s + Number(r._sum.netWeight ?? 0), 0)
+
+  return rows
+    .map((r) => {
+      const netWeight = Number(r._sum.netWeight ?? 0)
+      return {
+        grade: r.grade,
+        baleCount: r._count._all,
+        netWeight: roundMoney(netWeight),
+        subtotal: roundMoney(Number(r._sum.subtotal ?? 0)),
+        netWeightPercent: totalNetWeight > 0 ? (netWeight / totalNetWeight) * 100 : 0,
+      }
+    })
+    .sort((a, b) => b.netWeight - a.netWeight)
+}
+
+// Komposisi per grade; ADMIN di-scope otomatis ke gudang miliknya,
+// OWNER/SUPER_ADMIN bebas memilih gudang (warehouseId) atau semua.
+export async function getGradeComposition(
+  range: DashboardRange = "all",
+  warehouseId?: number
+): Promise<GradeBreakdown[]> {
+  await requireRoles("ADMIN", "OWNER", "SUPER_ADMIN")
+  const scope = await resolveWarehouseScope()
+  const effectiveWh = scope.mode === "scoped" ? scope.warehouseId : warehouseId
+  const from = dashboardRangeFrom(range)
+  const txDateFilter = from ? { gte: from } : undefined
+  return getClosedGradeBreakdown(txDateFilter, effectiveWh)
 }
 
 export interface TrendRow {
@@ -280,8 +368,6 @@ export interface FinanceDashboard {
   awaitingReview: number
   omzet: number
   totalReceived: number
-  debtTotal: number
-  debtPaid: number
   debtRemaining: number
   loanOutstanding: number
   loanActiveCount: number
@@ -289,6 +375,7 @@ export interface FinanceDashboard {
   yesterdayPayments: number
   todayPaymentAmount: number
   yesterdayPaymentAmount: number
+  trend: TrendRow[]
   recentPayments: RecentPayment[]
 }
 
@@ -297,7 +384,7 @@ export async function getFinanceDashboard(): Promise<FinanceDashboard> {
   const start = todayStart()
   const yStart = yesterdayStart()
 
-  const [debt, loans, awaitingReview, payments, todayPayAgg, yesterdayPayAgg, txAgg] =
+  const [debt, loans, awaitingReview, payments, todayPayAgg, yesterdayPayAgg, txAgg, trend] =
     await Promise.all([
       getDebtSummary(),
       getLoansData(),
@@ -322,10 +409,9 @@ export async function getFinanceDashboard(): Promise<FinanceDashboard> {
         where: { status: { not: "VOIDED" } },
         _sum: { totalPrice: true, paidAmount: true },
       }),
+      getTrend(7),
     ])
 
-  const debtTotal = debt.reduce((s, f) => s + f.totalTagihan, 0)
-  const debtPaid = debt.reduce((s, f) => s + f.totalDibayar, 0)
   const debtRemaining = debt.reduce((s, f) => s + f.sisa, 0)
   const loanOutstanding = loans.reduce((s, l) => s + l.balance, 0)
   const loanActiveCount = loans.filter((l) => l.status === "ACTIVE").length
@@ -334,8 +420,6 @@ export async function getFinanceDashboard(): Promise<FinanceDashboard> {
     awaitingReview,
     omzet: roundMoney(Number(txAgg._sum.totalPrice ?? 0)),
     totalReceived: roundMoney(Number(txAgg._sum.paidAmount ?? 0)),
-    debtTotal: roundMoney(debtTotal),
-    debtPaid: roundMoney(debtPaid),
     debtRemaining: roundMoney(debtRemaining),
     loanOutstanding: roundMoney(loanOutstanding),
     loanActiveCount,
@@ -343,6 +427,7 @@ export async function getFinanceDashboard(): Promise<FinanceDashboard> {
     yesterdayPayments: yesterdayPayAgg._count._all,
     todayPaymentAmount: roundMoney(Number(todayPayAgg._sum.amount ?? 0)),
     yesterdayPaymentAmount: roundMoney(Number(yesterdayPayAgg._sum.amount ?? 0)),
+    trend,
     recentPayments: payments.map((p) => ({
       id: p.id,
       amount: Number(p.amount),
@@ -389,11 +474,13 @@ export interface OwnerDashboard {
   totalPrice: number
   totalPaid: number
   totalRemaining: number
-  byStatus: StatusCount[]
   debtRemaining: number
   loanOutstanding: number
   trend: TrendRow[]
   byWarehouse: WarehouseSummary[]
+  warehouses: WarehouseOption[]
+  byStatus: StatusCount[]
+  closedByGrade: GradeBreakdown[]
   recentTransactions: OwnerRecentTransaction[]
 }
 
@@ -403,7 +490,7 @@ export async function getOwnerDashboard(range: DashboardRange = "all"): Promise<
   const from = dashboardRangeFrom(range)
   const txDateFilter = from ? { gte: from } : undefined
 
-  const [txAgg, byStatusAgg, baleCount, trend, debt, loans, whAgg, warehouses, recentTx] =
+  const [txAgg, byStatusAgg, baleCount, trend, debt, loans, whAgg, warehouses, recentTx, closedByGrade] =
     await Promise.all([
       prisma.purchase.aggregate({
         where: { transactionDate: txDateFilter, status: { not: "VOIDED" } },
@@ -434,6 +521,7 @@ export async function getOwnerDashboard(range: DashboardRange = "all"): Promise<
         take: 8,
         include: { farmer: true, lane: true, _count: { select: { items: true } } },
       }),
+      getClosedGradeBreakdown(txDateFilter),
     ])
 
   const totalPrice = Number(txAgg._sum.totalPrice ?? 0)
@@ -476,6 +564,8 @@ export async function getOwnerDashboard(range: DashboardRange = "all"): Promise<
     loanOutstanding: roundMoney(loanOutstanding),
     trend,
     byWarehouse,
+    warehouses: warehouses.map((w) => ({ id: w.id, code: w.code, name: w.name })),
+    closedByGrade,
     recentTransactions: recentTx.map((p) => ({
       id: p.id,
       transactionCode: p.transactionCode,
@@ -507,25 +597,39 @@ export interface AdminDashboard {
   }
   finance: {
     totalTransactions: number
+    totalPrice: number
     totalPaid: number
     totalRemaining: number
     awaitingReview: number
     debtRemaining: number
     loanOutstanding: number
+    totalPricePrev: number | null
+    totalPaidPrev: number | null
   }
+  pendingReview: {
+    id: number
+    transactionCode: string
+    farmerName: string
+    totalPrice: number
+  }[]
   byStatus: StatusCount[]
   trend: TrendRow[]
   recentBales: RecentBale[]
   recentPayments: RecentPayment[]
+  closedByGrade: GradeBreakdown[]
 }
 
 export async function getAdminDashboard(range: DashboardRange = "all"): Promise<AdminDashboard> {
   await requireRoles("ADMIN")
+  const scope = await resolveWarehouseScope()
+  const scopeWarehouseId = scope.mode === "scoped" ? scope.warehouseId : undefined
   const start = todayStart()
   const yStart = yesterdayStart()
 
   const from = dashboardRangeFrom(range)
   const txDateFilter = from ? { gte: from } : undefined
+
+  const prevWindow = prevRange(range)
 
   const [
     gradedToday,
@@ -538,6 +642,8 @@ export async function getAdminDashboard(range: DashboardRange = "all"): Promise<
     subtotalToday,
     subtotalYesterday,
     txAgg,
+    prevAgg,
+    pendingReview,
     awaitingReview,
     debt,
     loans,
@@ -545,6 +651,7 @@ export async function getAdminDashboard(range: DashboardRange = "all"): Promise<
     trend,
     recentItems,
     payments,
+    closedByGrade,
   ] = await Promise.all([
     prisma.purchaseItem.count({ where: { createdAt: { gte: start }, purchase: { status: { not: "VOIDED" } } } }),
     prisma.purchaseItem.count({ where: { createdAt: { gte: yStart, lt: start }, purchase: { status: { not: "VOIDED" } } } }),
@@ -565,6 +672,26 @@ export async function getAdminDashboard(range: DashboardRange = "all"): Promise<
       where: { transactionDate: txDateFilter, status: { not: "VOIDED" } },
       _count: { _all: true },
       _sum: { totalPrice: true, paidAmount: true },
+    }),
+    prevWindow
+      ? prisma.purchase.aggregate({
+          where: {
+            transactionDate: { gte: prevWindow.from!, lte: prevWindow.to },
+            status: { not: "VOIDED" },
+          },
+          _sum: { totalPrice: true, paidAmount: true },
+        })
+      : null,
+    prisma.purchase.findMany({
+      where: { status: "WEIGHED" },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+      select: {
+        id: true,
+        transactionCode: true,
+        totalPrice: true,
+        farmer: { select: { name: true } },
+      },
     }),
     prisma.purchase.count({ where: { status: "WEIGHED" } }),
     getDebtSummary(),
@@ -590,6 +717,7 @@ export async function getAdminDashboard(range: DashboardRange = "all"): Promise<
       take: 8,
       include: { purchase: { include: { farmer: true } }, bankAccount: true },
     }),
+    getClosedGradeBreakdown(txDateFilter, scopeWarehouseId),
   ])
 
   const totalPrice = Number(txAgg._sum.totalPrice ?? 0)
@@ -623,14 +751,24 @@ export async function getAdminDashboard(range: DashboardRange = "all"): Promise<
     },
     finance: {
       totalTransactions: txAgg._count._all,
+      totalPrice: roundMoney(totalPrice),
       totalPaid: roundMoney(totalPaid),
       totalRemaining: roundMoney(totalPrice - totalPaid),
       awaitingReview,
       debtRemaining: roundMoney(debtRemaining),
       loanOutstanding: roundMoney(loanOutstanding),
+      totalPricePrev: prevAgg ? roundMoney(Number(prevAgg._sum.totalPrice ?? 0)) : null,
+      totalPaidPrev: prevAgg ? roundMoney(Number(prevAgg._sum.paidAmount ?? 0)) : null,
     },
+    pendingReview: pendingReview.map((p) => ({
+      id: p.id,
+      transactionCode: p.transactionCode,
+      farmerName: p.farmer.name,
+      totalPrice: roundMoney(Number(p.totalPrice)),
+    })),
     byStatus,
     trend,
+    closedByGrade,
     recentBales: recentItems.map((i) => ({
       id: i.id,
       labelCode: i.labelCode,

@@ -45,7 +45,7 @@ export function LoansClient({
     <div className="space-y-5">
       <PageHeader
         icon={Wallet}
-        title="Hutang Modal"
+        title="Utang Piutang"
         subtitle="Buku hutang modal, pinjaman & pembayaran petani"
       >
         {scoped && (

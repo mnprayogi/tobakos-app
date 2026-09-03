@@ -35,8 +35,7 @@ export const proxy = auth((req) => {
   if (
     isPos2Transactions &&
     role !== "OPERATOR" &&
-    role !== "ADMIN" &&
-    role !== "FINANCE"
+    role !== "ADMIN"
   ) {
     return deny()
   }

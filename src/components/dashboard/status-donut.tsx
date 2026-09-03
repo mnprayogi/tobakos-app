@@ -1,3 +1,5 @@
+import Link from "next/link"
+import { cn } from "@/lib/utils"
 import type { StatusCount } from "@/lib/actions/dashboard"
 
 const DONUT_COLORS: Record<string, string> = {
@@ -10,11 +12,17 @@ const DONUT_COLORS: Record<string, string> = {
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: "Draft",
   WEIGHED: "Siap dibayar",
-  APPROVED: "Hutang",
+  APPROVED: "Utang",
   PAID: "Lunas",
 }
 
-export function StatusDonut({ data }: { data: StatusCount[] }) {
+export function StatusDonut({
+  data,
+  linkToTransactions = true,
+}: {
+  data: StatusCount[]
+  linkToTransactions?: boolean
+}) {
   const total = data.reduce((s, d) => s + d.count, 0)
   const R = 40
   const C = 2 * Math.PI * R
@@ -57,19 +65,34 @@ export function StatusDonut({ data }: { data: StatusCount[] }) {
         </div>
       </div>
       <ul className="min-w-0 flex-1 space-y-2">
-        {data.map((d) => (
-          <li key={d.status} className="flex items-center text-[12px]">
-            <span className="flex items-center gap-2 shrink-0 whitespace-nowrap text-muted-foreground">
-              <span
-                className="h-2 w-2 rounded-full"
-                style={{ background: DONUT_COLORS[d.status] ?? "var(--muted-2)" }}
-              />
-              {STATUS_LABEL[d.status] ?? d.status}
-            </span>
-            <span className="mx-2 min-w-0 flex-1 border-b border-dotted border-border-soft" aria-hidden />
-            <span className="shrink-0 font-mono font-bold tabular-nums text-foreground">{d.count}</span>
-          </li>
-        ))}
+        {data.map((d) => {
+          const label = STATUS_LABEL[d.status] ?? d.status
+          const inner = (
+            <>
+              <span className="flex items-center gap-2 shrink-0 whitespace-nowrap text-muted-foreground">
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{ background: DONUT_COLORS[d.status] ?? "var(--muted-2)" }}
+                />
+                {label}
+              </span>
+              <span className="mx-2 min-w-0 flex-1 border-b border-dotted border-border-soft" aria-hidden />
+              <span className="shrink-0 font-mono font-bold tabular-nums text-foreground">{d.count}</span>
+            </>
+          )
+          const cls = "flex items-center text-[12px]"
+          return linkToTransactions ? (
+            <li key={d.status}>
+              <Link href={`/admin/transactions?status=${encodeURIComponent(d.status)}`} className={cn(cls, "rounded px-1 -mx-1 transition-colors hover:bg-panel-alt")}>
+                {inner}
+              </Link>
+            </li>
+          ) : (
+            <li key={d.status} className={cls}>
+              {inner}
+            </li>
+          )
+        })}
       </ul>
     </div>
   )
