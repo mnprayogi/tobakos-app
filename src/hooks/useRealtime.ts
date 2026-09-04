@@ -27,8 +27,20 @@ export function useRealtime(
     reloadsRef.current = reloads
   }, [reloads])
 
-  const runAll = useCallback(async () => {
-    await Promise.allSettled(reloadsRef.current.map((fn) => fn()))
+  const inflightRef = useRef(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const runAll = useCallback(() => {
+    if (inflightRef.current) return
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(async () => {
+      inflightRef.current = true
+      try {
+        await Promise.allSettled(reloadsRef.current.map((fn) => fn()))
+      } finally {
+        inflightRef.current = false
+      }
+    }, 500)
   }, [])
 
   useSse(laneId, (event) => {

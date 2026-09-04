@@ -6,7 +6,7 @@ import type { Prisma } from "@/generated/prisma/client"
 
 export const dynamic = "force-dynamic"
 
-const POLL_MS = 1_500
+const POLL_MS = 3_000
 const HEARTBEAT_MS = 15_000
 const CLEANUP_INTERVAL = 1_000
 const MAX_EVENTS_PER_POLL = 100

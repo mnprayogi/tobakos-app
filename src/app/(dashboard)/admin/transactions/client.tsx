@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -137,6 +137,14 @@ export function TransactionsClient({
   const [voidTarget, setVoidTarget] = useState<Purchase | null>(null)
   const [exporting, setExporting] = useState(false)
 
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const debouncedRefresh = useCallback(() => {
+    if (refreshTimer.current) clearTimeout(refreshTimer.current)
+    refreshTimer.current = setTimeout(() => {
+      router.refresh()
+    }, 500)
+  }, [router])
+
   useSse(null, (event) => {
     if (
       event.type === "purchase.approved" ||
@@ -144,10 +152,9 @@ export function TransactionsClient({
       event.type === "payment.voided" ||
       event.type === "purchase.reopened" ||
       event.type === "purchase.voided" ||
-      event.type === "session.ended" ||
-      event.type === "bale.weighed"
+      event.type === "session.ended"
     ) {
-      router.refresh()
+      debouncedRefresh()
     }
   })
 

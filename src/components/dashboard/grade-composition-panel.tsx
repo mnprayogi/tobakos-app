@@ -1,9 +1,8 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { Loader2, Warehouse } from "lucide-react"
 
-import { getGradeComposition } from "@/lib/actions/dashboard"
 import type { GradeBreakdown, WarehouseOption } from "@/lib/actions/dashboard"
 import type { DashboardRange } from "@/lib/dashboard-range"
 import { GradeComposition } from "./grade-composition"
@@ -22,25 +21,11 @@ export function GradeCompositionPanel({
   fixedWarehouseName?: string
 }) {
   const [warehouseId, setWarehouseId] = useState<number | null>(null)
-  const [items, setItems] = useState<GradeBreakdown[]>(initialItems)
+  const [items, setItems] = useState<GradeBreakdown[]>(() => initialItems)
   const [displaySig, setDisplaySig] = useState(`${range}|all`)
 
   const sig = `${range}|${warehouseId ?? "all"}`
   const loading = selectable && sig !== displaySig
-
-  useEffect(() => {
-    if (!selectable) return
-    const key = `${range}|${warehouseId ?? "all"}`
-    let cancelled = false
-    getGradeComposition(range, warehouseId ?? undefined).then((next) => {
-      if (cancelled) return
-      setItems(next)
-      setDisplaySig(key)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [selectable, range, warehouseId])
 
   return (
     <div>
