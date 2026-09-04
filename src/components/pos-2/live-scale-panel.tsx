@@ -1,6 +1,6 @@
 "use client"
 
-import { memo } from "react"
+import { memo, useState, useCallback } from "react"
 import { toast } from "sonner"
 import { useScale } from "@/hooks/useScale"
 
@@ -9,8 +9,39 @@ interface Props {
   onCapture: (weight: number) => void
 }
 
+type CaptureRoundMode = "1desimal" | "integer" | "floor" | "ceil"
+
+const ROUND_OPTIONS: { value: CaptureRoundMode; label: string }[] = [
+  { value: "1desimal", label: "1 Desimal" },
+  { value: "integer", label: "Integer" },
+  { value: "floor", label: "Floor" },
+  { value: "ceil", label: "Ceil" },
+]
+
+function roundCapture(value: number, mode: CaptureRoundMode): number {
+  switch (mode) {
+    case "1desimal": return Math.round(value * 10) / 10
+    case "integer": return Math.round(value)
+    case "floor": return Math.floor(value)
+    case "ceil": return Math.ceil(value)
+  }
+}
+
 function LiveScalePanelBase({ disabled = false, onCapture }: Props) {
   const scale = useScale()
+  const [roundMode, setRoundMode] = useState<CaptureRoundMode>("1desimal")
+
+  const handleCapture = useCallback(() => {
+    const raw = scale.capture()
+    if (raw == null) {
+      toast.error("Berat belum stabil — tunggu indikator Stabil")
+      return
+    }
+    const weight = roundCapture(raw, roundMode)
+    const decimals = roundMode === "1desimal" ? 1 : 0
+    onCapture(weight)
+    toast.success(`Berat diambil: ${weight.toFixed(decimals)} kg`)
+  }, [scale, roundMode, onCapture])
 
   return (
     <div className="rounded-xl border border-border bg-card p-4 pb-[18px]">
@@ -43,6 +74,29 @@ function LiveScalePanelBase({ disabled = false, onCapture }: Props) {
           <span className="text-muted-2">Belum terhubung</span>
         )}
       </div>
+      {scale.connected && (
+        <div className="mb-3">
+          <p className="text-[10px] font-bold uppercase tracking-[0.06em] text-muted-foreground mb-1.5">
+            Pembulatan
+          </p>
+          <div className="flex h-[32px] items-center bg-panel-alt rounded-lg border border-border-soft p-0.5">
+            {ROUND_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setRoundMode(opt.value)}
+                className={`h-full flex-1 rounded-md text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center ${
+                  roundMode === opt.value
+                    ? "bg-emerald text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       {!scale.connected ? (
         <button
           onClick={scale.connect}
@@ -53,15 +107,7 @@ function LiveScalePanelBase({ disabled = false, onCapture }: Props) {
       ) : (
         <div className="flex gap-2">
           <button
-            onClick={() => {
-              const w = scale.capture()
-              if (w != null) {
-                onCapture(w)
-                toast.success(`Berat diambil: ${w.toFixed(2)} kg`)
-              } else {
-                toast.error("Berat belum stabil — tunggu indikator Stabil")
-              }
-            }}
+            onClick={handleCapture}
             disabled={disabled}
             className="flex-1 rounded-lg bg-amber text-primary-foreground py-3 font-bold text-[13.5px] cursor-pointer hover:bg-amber/90 disabled:opacity-40 disabled:cursor-not-allowed"
           >
