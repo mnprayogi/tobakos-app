@@ -13,11 +13,15 @@ export function AppShell({
   role,
   userName,
   companyName,
+  warehouseName,
+  laneName,
   children,
 }: {
   role: string
   userName: string
   companyName: string
+  warehouseName?: string | null
+  laneName?: string | null
   children: React.ReactNode
 }) {
   const [collapsed, setCollapsed] = useState(true)
@@ -59,6 +63,8 @@ export function AppShell({
         role={role}
         userName={userName}
         companyName={companyName}
+        warehouseName={warehouseName}
+        laneName={laneName}
         collapsed={collapsed}
         mobileOpen={mobileOpen}
         onNavigate={closeMobile}

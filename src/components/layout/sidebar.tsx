@@ -183,6 +183,8 @@ export function Sidebar({
   role,
   userName,
   companyName,
+  warehouseName,
+  laneName,
   collapsed = false,
   mobileOpen = false,
   onNavigate,
@@ -190,6 +192,8 @@ export function Sidebar({
   role: string
   userName: string
   companyName: string
+  warehouseName?: string | null
+  laneName?: string | null
   collapsed?: boolean
   mobileOpen?: boolean
   onNavigate?: () => void
@@ -266,7 +270,12 @@ export function Sidebar({
 
       <div className="shrink-0 mt-auto pt-3.5 border-t border-border-soft text-[10.5px] text-muted-2 leading-relaxed">
         <div className={cn("px-1.5", collapsed && "lg:hidden")}>
-          {userName}<br />{companyName} · Gudang 01
+          {userName}
+          {warehouseName && (
+            <>
+              <br />{companyName} · {warehouseName}{laneName ? ` - ${laneName}` : ""}
+            </>
+          )}
         </div>
         <button
           type="button"
