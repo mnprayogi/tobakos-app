@@ -2,11 +2,8 @@ import "dotenv/config"
 import { PrismaClient } from "../src/generated/prisma/client"
 import { PrismaMariaDb } from "@prisma/adapter-mariadb"
 import bcrypt from "bcryptjs"
-import crypto from "crypto"
 
-function generatePassword(): string {
-  return crypto.randomBytes(9).toString("base64").replace(/[^a-zA-Z0-9]/g, "").slice(0, 12)
-}
+const SEED_PASSWORD = "tobakos123"
 
 async function main() {
   const adapter = new PrismaMariaDb(process.env.DATABASE_URL!)
@@ -28,10 +25,9 @@ async function main() {
       console.log(`User ${u.username} sudah ada — password tidak diubah`)
       continue
     }
-    const plain = generatePassword()
-    const hashed = await bcrypt.hash(plain, 12)
+    const hashed = await bcrypt.hash(SEED_PASSWORD, 12)
     await prisma.user.create({ data: { username: u.username, password: hashed, name: u.name, role: u.role } })
-    console.log(`User ${u.username} dibuat — PASSWORD: ${plain}`)
+    console.log(`User ${u.username} dibuat — PASSWORD: ${SEED_PASSWORD}`)
   }
 
   const tobaccoType = await prisma.tobaccoType.upsert({

@@ -162,7 +162,7 @@ CREATE TABLE `verification_tokens` (
     `expires` DATETIME(3) NOT NULL,
 
     UNIQUE INDEX `verification_tokens_token_key`(`token`),
-    UNIQUE INDEX `verification_tokens_identifier_token_key`(`identifier`, `token`)
+    PRIMARY KEY (`identifier`, `token`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
