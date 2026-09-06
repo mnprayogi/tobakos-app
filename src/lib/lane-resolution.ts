@@ -1,6 +1,6 @@
+import { cache } from "react"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
-import type { Session } from "next-auth"
 import type { Prisma } from "@/generated/prisma/client"
 
 const laneInclude = {
@@ -9,20 +9,15 @@ const laneInclude = {
 
 export type LaneWithWarehouse = Prisma.LaneGetPayload<{ include: typeof laneInclude }>
 
-export async function getCurrentUserLane(session?: Session | null): Promise<LaneWithWarehouse | null> {
-  const s = session ?? (await auth())
-  if (!s?.user?.id) return null
+export const getCurrentUserLane = cache(async (key?: string | null): Promise<LaneWithWarehouse | null> => {
+  const userId = key || (await auth())?.user?.id || null
+  if (!userId) return null
   const user = await prisma.user.findUnique({
-    where: { id: s.user.id },
-    select: { laneId: true },
+    where: { id: userId },
+    include: { lane: { include: laneInclude } },
   })
-  if (user?.laneId == null) return null
-  const lane = await prisma.lane.findUnique({
-    where: { id: user.laneId },
-    include: laneInclude,
-  })
-  return lane
-}
+  return user?.lane ?? null
+})
 
 export async function resolveActorLane(opts?: {
   laneId?: number | null
@@ -32,15 +27,9 @@ export async function resolveActorLane(opts?: {
   if (session?.user?.id) {
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { laneId: true },
+      include: { lane: { include: laneInclude } },
     })
-    if (user?.laneId != null) {
-      const lane = await prisma.lane.findUnique({
-        where: { id: user.laneId },
-        include: laneInclude,
-      })
-      if (lane) return lane
-    }
+    if (user?.lane) return user.lane
   }
 
   const fallbackId = opts?.laneId ?? null

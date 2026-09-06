@@ -5,10 +5,17 @@ import { getCurrentUserLane } from "@/lib/lane-resolution"
 import { LanePicker } from "@/components/shared/lane-picker"
 import { GradingShell } from "@/components/pos-1/grading-shell"
 import { getSettingNumber } from "@/lib/settings"
+import {
+  getCachedActiveTobaccoTypes,
+  getCachedActiveLeafTypes,
+  getCachedPackingTypes,
+  getCachedFarmers,
+  getCachedCustomers,
+} from "@/lib/master-data"
 
 export default async function GradingPage({ searchParams }: { searchParams: Promise<{ lane?: string }> }) {
   const [session, { lane: laneCode }] = await Promise.all([auth(), searchParams])
-  const assignedLane = await getCurrentUserLane(session)
+  const assignedLane = await getCurrentUserLane(session?.user?.id)
 
   const lane = assignedLane ?? (laneCode ? await getLaneByCode(laneCode) : null)
 
@@ -35,11 +42,11 @@ export default async function GradingPage({ searchParams }: { searchParams: Prom
     defaultMoisturePercent,
     defaultWarehouseId,
   ] = await Promise.all([
-    prisma.tobaccoType.findMany({ where: { active: true }, include: { grades: true } }),
-    prisma.leafType.findMany({ where: { active: true } }),
-    prisma.packingType.findMany(),
-    prisma.farmer.findMany({ orderBy: { name: "asc" } }),
-    prisma.customer.findMany({ orderBy: { name: "asc" } }),
+    getCachedActiveTobaccoTypes(),
+    getCachedActiveLeafTypes(),
+    getCachedPackingTypes(),
+    getCachedFarmers(),
+    getCachedCustomers(),
     prisma.purchase.findMany({
       where: { status: "DRAFT", laneId: lane.id, transactionDate: { gte: new Date(new Date().setHours(0, 0, 0, 0)) } },
       select: { farmerId: true },

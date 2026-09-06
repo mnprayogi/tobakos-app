@@ -1,6 +1,6 @@
 "use server"
 
-import { revalidatePath } from "next/cache"
+import { revalidatePath, revalidateTag } from "next/cache"
 import { prisma } from "@/lib/db"
 import { generateLabelCode, generateTransactionCode } from "@/lib/barcode"
 import { nextSequence } from "@/lib/sequences"
@@ -10,6 +10,7 @@ import { getSettingNumber } from "@/lib/settings"
 import { requireRoles } from "@/lib/roles"
 import { publishEvent } from "@/lib/events"
 import { farmerSchema } from "@/lib/validations"
+import { MASTER_TAG } from "@/lib/master-data"
 
 export async function getTodayDraftFarmerIds(laneId: number): Promise<number[]> {
   await requireRoles("GRADER", "ADMIN")
@@ -181,6 +182,7 @@ export async function registerFarmer(data: {
   try {
     const farmer = await prisma.farmer.create({ data: parsed })
     revalidatePath("/pos-1/grading")
+    revalidateTag(MASTER_TAG, "max")
     return { farmer: { id: farmer.id, name: farmer.name, nik: farmer.nik, phone: farmer.phone, address: farmer.address }, existed: false }
   } catch (err) {
     if (err instanceof Error && err.message.includes("Unique constraint")) {

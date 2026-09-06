@@ -10,7 +10,7 @@ import { PageHeader } from "@/components/shared/page-header"
 
 export default async function WeighingPage({ searchParams }: { searchParams: Promise<{ lane?: string }> }) {
   const [session, { lane: laneCode }] = await Promise.all([auth(), searchParams])
-  const assignedLane = await getCurrentUserLane(session)
+  const assignedLane = await getCurrentUserLane(session?.user?.id)
 
   const lane = assignedLane ?? (laneCode ? await getLaneByCode(laneCode) : null)
 

@@ -17,7 +17,7 @@ export default async function DashboardLayout({
 
   const [companyName, lane] = await Promise.all([
     getSetting("COMPANY_NAME", "TobakOS"),
-    getCurrentUserLane(session),
+    getCurrentUserLane(session?.user?.id),
   ])
 
   return (

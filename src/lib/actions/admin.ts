@@ -1,9 +1,10 @@
 "use server"
 
-import { revalidatePath } from "next/cache"
+import { revalidatePath, revalidateTag } from "next/cache"
 import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/db"
 import { invalidateSetting } from "@/lib/settings"
+import { MASTER_TAG } from "@/lib/master-data"
 import { getSessionRole, requireRoles } from "@/lib/roles"
 import type { Prisma } from "@/generated/prisma/client"
 import {
@@ -43,6 +44,7 @@ export async function createFarmer(data: { name: string; nik?: string; phone?: s
     const parsed = farmerSchema.parse(data)
     const farmer = await prisma.farmer.create({ data: parsed })
     revalidatePath("/admin/farmers")
+    revalidateTag(MASTER_TAG, "max")
     return farmer
   } catch (err) {
     throw new Error(handleError(err).error)
@@ -55,6 +57,7 @@ export async function updateFarmer(id: number, data: { name: string; nik?: strin
     const parsed = farmerSchema.parse(data)
     const farmer = await prisma.farmer.update({ where: { id }, data: parsed })
     revalidatePath("/admin/farmers")
+    revalidateTag(MASTER_TAG, "max")
     return farmer
   } catch (err) {
     throw new Error(handleError(err).error)
@@ -66,6 +69,7 @@ export async function deleteFarmer(id: number) {
   try {
     await prisma.farmer.delete({ where: { id } })
     revalidatePath("/admin/farmers")
+    revalidateTag(MASTER_TAG, "max")
   } catch (err) {
     throw new Error(handleError(err).error)
   }
@@ -79,6 +83,7 @@ export async function createCustomer(data: { name: string; phone?: string; addre
     const parsed = customerSchema.parse(data)
     const customer = await prisma.customer.create({ data: parsed })
     revalidatePath("/admin/master-data")
+    revalidateTag(MASTER_TAG, "max")
     return customer
   } catch (err) {
     throw new Error(handleError(err).error)
@@ -91,6 +96,7 @@ export async function updateCustomer(id: number, data: { name: string; phone?: s
     const parsed = customerSchema.parse(data)
     const customer = await prisma.customer.update({ where: { id }, data: parsed })
     revalidatePath("/admin/master-data")
+    revalidateTag(MASTER_TAG, "max")
     return customer
   } catch (err) {
     throw new Error(handleError(err).error)
@@ -102,6 +108,7 @@ export async function deleteCustomer(id: number) {
   try {
     await prisma.customer.delete({ where: { id } })
     revalidatePath("/admin/master-data")
+    revalidateTag(MASTER_TAG, "max")
   } catch (err) {
     if (err instanceof Error && err.message.includes("Foreign key constraint"))
       throw new Error("Customer masih dipakai oleh bale. Alihkan bale terlebih dahulu.")
@@ -117,6 +124,7 @@ export async function createTobaccoType(data: { name: string }) {
     const parsed = tobaccoTypeSchema.parse(data)
     const type = await prisma.tobaccoType.create({ data: parsed })
     revalidatePath("/admin/tobacco-types")
+    revalidateTag(MASTER_TAG, "max")
     return type
   } catch (err) {
     throw new Error(handleError(err).error)
@@ -129,6 +137,7 @@ export async function updateTobaccoType(id: number, data: { name: string }) {
     const parsed = tobaccoTypeSchema.parse(data)
     const type = await prisma.tobaccoType.update({ where: { id }, data: parsed })
     revalidatePath("/admin/tobacco-types")
+    revalidateTag(MASTER_TAG, "max")
     return type
   } catch (err) {
     throw new Error(handleError(err).error)
@@ -140,6 +149,7 @@ export async function toggleTobaccoType(id: number, active: boolean) {
   try {
     const type = await prisma.tobaccoType.update({ where: { id }, data: { active } })
     revalidatePath("/admin/tobacco-types")
+    revalidateTag(MASTER_TAG, "max")
     return type
   } catch (err) {
     throw new Error(handleError(err).error)
@@ -154,6 +164,7 @@ export async function createLeafType(data: { name: string }) {
     const parsed = leafTypeSchema.parse(data)
     const type = await prisma.leafType.create({ data: parsed })
     revalidatePath("/admin/leaf-types")
+    revalidateTag(MASTER_TAG, "max")
     return type
   } catch (err) {
     throw new Error(handleError(err).error)
@@ -166,6 +177,7 @@ export async function updateLeafType(id: number, data: { name: string }) {
     const parsed = leafTypeSchema.parse(data)
     const type = await prisma.leafType.update({ where: { id }, data: parsed })
     revalidatePath("/admin/leaf-types")
+    revalidateTag(MASTER_TAG, "max")
     return type
   } catch (err) {
     throw new Error(handleError(err).error)
@@ -177,6 +189,7 @@ export async function toggleLeafType(id: number, active: boolean) {
   try {
     const type = await prisma.leafType.update({ where: { id }, data: { active } })
     revalidatePath("/admin/leaf-types")
+    revalidateTag(MASTER_TAG, "max")
     return type
   } catch (err) {
     throw new Error(handleError(err).error)
@@ -191,6 +204,7 @@ export async function createPackingType(data: { name: string; deductionWeight: n
     const parsed = packingTypeSchema.parse(data)
     const type = await prisma.packingType.create({ data: parsed })
     revalidatePath("/admin/packing-types")
+    revalidateTag(MASTER_TAG, "max")
     return type
   } catch (err) {
     throw new Error(handleError(err).error)
@@ -203,6 +217,7 @@ export async function updatePackingType(id: number, data: { name: string; deduct
     const parsed = packingTypeSchema.parse(data)
     const type = await prisma.packingType.update({ where: { id }, data: parsed })
     revalidatePath("/admin/packing-types")
+    revalidateTag(MASTER_TAG, "max")
     return type
   } catch (err) {
     throw new Error(handleError(err).error)
@@ -214,6 +229,7 @@ export async function deletePackingType(id: number) {
   try {
     await prisma.packingType.delete({ where: { id } })
     revalidatePath("/admin/packing-types")
+    revalidateTag(MASTER_TAG, "max")
   } catch (err) {
     throw new Error(handleError(err).error)
   }
@@ -229,6 +245,7 @@ export async function createGrade(data: { name: string; defaultPrice: number; to
       data: { name: parsed.name, defaultPrice: parsed.defaultPrice, tobaccoTypeId: parsed.tobaccoTypeId },
     })
     revalidatePath("/admin/grades")
+    revalidateTag(MASTER_TAG, "max")
     return { ...grade, defaultPrice: Number(grade.defaultPrice) }
   } catch (err) {
     throw new Error(handleError(err).error)
@@ -244,6 +261,7 @@ export async function updateGrade(id: number, data: { name: string; defaultPrice
       data: { name: parsed.name, defaultPrice: parsed.defaultPrice, tobaccoTypeId: parsed.tobaccoTypeId },
     })
     revalidatePath("/admin/grades")
+    revalidateTag(MASTER_TAG, "max")
     return { ...grade, defaultPrice: Number(grade.defaultPrice) }
   } catch (err) {
     throw new Error(handleError(err).error)
@@ -255,6 +273,7 @@ export async function deleteGrade(id: number) {
   try {
     await prisma.tobaccoGrade.delete({ where: { id } })
     revalidatePath("/admin/grades")
+    revalidateTag(MASTER_TAG, "max")
   } catch (err) {
     throw new Error(handleError(err).error)
   }
