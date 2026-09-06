@@ -8,7 +8,10 @@ const globalForPrisma = globalThis as unknown as {
 
 function createPrismaClient() {
   const adapter = new PrismaMariaDb(process.env.DATABASE_URL!)
-  return new PrismaClient({ adapter })
+  return new PrismaClient({
+    adapter,
+    transactionOptions: { maxWait: 5000, timeout: 10000 },
+  })
 }
 
 export const prisma = globalForPrisma.prisma ?? createPrismaClient()

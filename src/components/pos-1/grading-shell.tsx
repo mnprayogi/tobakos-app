@@ -455,14 +455,10 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
     try {
       const result = await saveGrade(payload)
       const newItem: BaleItem = {
+        ...optimisticItem,
         id: result.id,
         labelCode: result.labelCode,
-        grade: result.grade,
         status: result.status,
-        tobaccoType: result.tobaccoType,
-        farmerName: result.farmerName,
-        farmerId: farmerId!,
-        customerName: result.customerName,
         createdBy: result.createdBy,
       }
       setOptimisticBales((prev) => prev.filter((b) => b.id !== tempId))
@@ -481,7 +477,7 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
           try {
             await printer.printLabel({
               labelCode: result.labelCode,
-              farmerName: result.farmerName,
+              farmerName: optimisticItem.farmerName,
               grade: result.grade,
               warehouse,
               lane: shortLane,

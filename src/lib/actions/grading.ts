@@ -220,96 +220,87 @@ export async function saveGrade(data: GradeInput) {
 
   const actor = await getActorName()
 
-  const item = await prisma.$transaction(async (tx) => {
-    const locked = await tx.$queryRaw<{ id: number }[]>`
-      SELECT id FROM lanes WHERE id = ${lane.id} FOR UPDATE
-    `
-    if (locked.length === 0) throw new Error("Jalur tidak ditemukan")
-
-    const customer = await tx.customer.findUnique({ where: { id: data.customerId }, select: { id: true } })
-    if (!customer) throw new Error("Alokasi customer tidak ditemukan")
-
-    const tobaccoGrade = await tx.tobaccoGrade.findFirst({
+  const [customer, tobaccoGrade] = await Promise.all([
+    prisma.customer.findUnique({ where: { id: data.customerId }, select: { id: true } }),
+    prisma.tobaccoGrade.findFirst({
       where: { name: data.grade, tobaccoTypeId: data.tobaccoTypeId },
-    })
+    }),
+  ])
+  if (!customer) throw new Error("Alokasi customer tidak ditemukan")
+  if (!tobaccoGrade) throw new Error("Grade tidak ditemukan")
 
-    if (!tobaccoGrade) throw new Error("Grade tidak ditemukan")
+  const item = await prisma.$transaction(
+    async (tx) => {
+      const sequence = await nextSequence(`bale:${lane.code}`, tx)
+      const labelCode = generateLabelCode(lane.warehouse.code, lane.code, sequence)
 
-    const sequence = await nextSequence(`bale:${lane.code}`, tx)
-    const labelCode = generateLabelCode(lane.warehouse.code, lane.code, sequence)
+      const todayStart = new Date()
+      todayStart.setHours(0, 0, 0, 0)
 
-    const todayStart = new Date()
-    todayStart.setHours(0, 0, 0, 0)
+      let purchaseId: number
+      let inputOrder: number
 
-    let purchaseId: number
-
-    if (data.purchaseId) {
-      const existing = await tx.purchase.findUnique({ where: { id: data.purchaseId } })
-      if (!existing) throw new Error("Transaksi tidak ditemukan")
-      if (existing.farmerId !== data.farmerId)
-        throw new Error("Transaksi bukan milik petani ini — pilih transaksi yang benar")
-      if (existing.status === "WEIGHED")
-        throw new Error("Transaksi sudah ditimbang — tidak bisa menambah bale. Buat transaksi baru.")
-      if (existing.status !== "DRAFT") throw new Error("Transaksi sudah ditutup")
-      if (existing.laneId !== lane.id) throw new Error("Bale tidak bisa masuk ke transaksi dari jalur lain")
-      purchaseId = existing.id
-    } else {
-      let purchase = await tx.purchase.findFirst({
-        where: {
-          farmerId: data.farmerId,
-          laneId: lane.id,
-          status: "DRAFT",
-          transactionDate: { gte: todayStart },
-        },
-      })
-      if (!purchase) {
-        const txSeq = await nextSequence(lane.code, tx)
-        purchase = await tx.purchase.create({
-          data: {
-            transactionCode: generateTransactionCode(lane.code, txSeq),
+      if (data.purchaseId) {
+        const existing = await tx.purchase.findUnique({ where: { id: data.purchaseId } })
+        if (!existing) throw new Error("Transaksi tidak ditemukan")
+        if (existing.farmerId !== data.farmerId)
+          throw new Error("Transaksi bukan milik petani ini — pilih transaksi yang benar")
+        if (existing.status === "WEIGHED")
+          throw new Error("Transaksi sudah ditimbang — tidak bisa menambah bale. Buat transaksi baru.")
+        if (existing.status !== "DRAFT") throw new Error("Transaksi sudah ditutup")
+        if (existing.laneId !== lane.id) throw new Error("Bale tidak bisa masuk ke transaksi dari jalur lain")
+        purchaseId = existing.id
+        inputOrder = existing.totalItems + 1
+      } else {
+        let purchase = await tx.purchase.findFirst({
+          where: {
             farmerId: data.farmerId,
-            warehouseId: lane.warehouseId,
             laneId: lane.id,
-            totalPrice: 0,
-            createdBy: actor,
+            status: "DRAFT",
+            transactionDate: { gte: todayStart },
           },
         })
+        if (!purchase) {
+          const txSeq = await nextSequence(lane.code, tx)
+          purchase = await tx.purchase.create({
+            data: {
+              transactionCode: generateTransactionCode(lane.code, txSeq),
+              farmerId: data.farmerId,
+              warehouseId: lane.warehouseId,
+              laneId: lane.id,
+              totalPrice: 0,
+              createdBy: actor,
+            },
+          })
+        }
+        purchaseId = purchase.id
+        inputOrder = purchase.totalItems + 1
       }
-      purchaseId = purchase.id
-    }
 
-    const orderAgg = await tx.purchaseItem.aggregate({
-      where: { purchaseId },
-      _max: { inputOrder: true },
-    })
+      await tx.purchase.update({
+        where: { id: purchaseId },
+        data: { totalItems: { increment: 1 } },
+      })
 
-    await tx.purchase.update({
-      where: { id: purchaseId },
-      data: { totalItems: { increment: 1 } },
-    })
-
-    return tx.purchaseItem.create({
-      data: {
-        purchaseId,
-        inputOrder: (orderAgg._max.inputOrder ?? 0) + 1,
-        labelCode,
-        packingTypeId: data.packingTypeId,
-        tobaccoTypeId: data.tobaccoTypeId,
-        leafTypeId: data.leafTypeId,
-        grade: data.grade,
-        moisturePercent: data.moisturePercent,
-        packingWeight: data.packingWeight,
-        pricePerKg: tobaccoGrade.defaultPrice,
-        customerId: data.customerId,
-        createdBy: actor,
-      },
-      include: {
-        tobaccoType: true,
-        customer: true,
-        purchase: { include: { farmer: true } },
-      },
-    })
-  })
+      return tx.purchaseItem.create({
+        data: {
+          purchaseId,
+          inputOrder,
+          labelCode,
+          packingTypeId: data.packingTypeId,
+          tobaccoTypeId: data.tobaccoTypeId,
+          leafTypeId: data.leafTypeId,
+          grade: data.grade,
+          moisturePercent: data.moisturePercent,
+          packingWeight: data.packingWeight,
+          pricePerKg: tobaccoGrade.defaultPrice,
+          customerId: data.customerId,
+          createdBy: actor,
+        },
+      })
+    },
+    { timeout: 10000 }
+  )
 
   revalidatePath("/pos-1/grading")
   publishEvent("bale.created", lane.id)
@@ -317,12 +308,10 @@ export async function saveGrade(data: GradeInput) {
     id: item.id,
     labelCode: item.labelCode,
     grade: item.grade,
-    tobaccoType: item.tobaccoType.name,
     status: item.status,
     pricePerKg: Number(item.pricePerKg),
     purchaseId: item.purchaseId,
-    farmerName: item.purchase.farmer.name,
-    customerName: item.customer?.name ?? null,
+    farmerId: data.farmerId,
     createdBy: item.createdBy,
   }
 }
@@ -331,20 +320,23 @@ export async function deleteBale(id: number) {
   await requireRoles("GRADER", "ADMIN")
   try {
     let laneId: number | null = null
-    await prisma.$transaction(async (tx) => {
-      const item = await tx.purchaseItem.findUnique({ where: { id }, include: { purchase: true } })
-      if (!item) throw new Error("Bale tidak ditemukan (mungkin sudah dihapus)")
-      if (item.status !== "GRADED") throw new Error("Hanya bale dengan status GRADED yang bisa dihapus")
+    await prisma.$transaction(
+      async (tx) => {
+        const item = await tx.purchaseItem.findUnique({ where: { id }, include: { purchase: true } })
+        if (!item) throw new Error("Bale tidak ditemukan (mungkin sudah dihapus)")
+        if (item.status !== "GRADED") throw new Error("Hanya bale dengan status GRADED yang bisa dihapus")
 
-      laneId = item.purchase.laneId
+        laneId = item.purchase.laneId
 
-      await tx.purchaseItem.delete({ where: { id } })
+        await tx.purchaseItem.delete({ where: { id } })
 
-      await tx.purchase.update({
-        where: { id: item.purchaseId },
-        data: { totalItems: { decrement: 1 } },
-      })
-    })
+        await tx.purchase.update({
+          where: { id: item.purchaseId },
+          data: { totalItems: { decrement: 1 } },
+        })
+      },
+      { timeout: 10000 }
+    )
 
     revalidatePath("/pos-1/grading")
     if (laneId != null) publishEvent("bale.deleted", laneId)
