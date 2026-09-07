@@ -1,10 +1,29 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { toast } from "sonner"
 import { updateSystemSetting } from "@/lib/actions/admin"
-import { Settings2, Search, Pencil, Loader2, ChevronDown } from "lucide-react"
+import {
+  Settings2,
+  Search,
+  Pencil,
+  Loader2,
+  ChevronDown,
+  Download,
+  Trash2,
+  Upload,
+} from "lucide-react"
 import { PageHeader } from "@/components/shared/page-header"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface SystemSetting {
   key: string
@@ -108,6 +127,7 @@ const sectionDefs: { id: string; title: string; keys: string[] }[] = [
   { id: "grading", title: "Grading · Pos 1", keys: ["MAX_MOISTURE_PERCENT", "DEFAULT_MOISTURE_PERCENT"] },
   { id: "penimbangan", title: "Penimbangan · Pos 2", keys: ["WEIGHT_ROUND_MODE"] },
   { id: "kompatibilitas", title: "Kompatibilitas", keys: ["DEFAULT_WAREHOUSE_ID", "GUDANG", "PRINTER_THERMAL"] },
+  { id: "database", title: "Database", keys: ["_backup", "_import", "_reset"] },
 ]
 
 export function SettingsClient({
@@ -124,6 +144,15 @@ export function SettingsClient({
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [othersOpen, setOthersOpen] = useState(false)
+  const [backingUp, setBackingUp] = useState(false)
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
+  const [importConfirm, setImportConfirm] = useState("")
+  const [importing, setImporting] = useState(false)
+  const [resetOpen, setResetOpen] = useState(false)
+  const [resetConfirm, setResetConfirm] = useState("")
+  const [resetting, setResetting] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   function getStoredValue(key: string): string | null {
     return settings.find((s) => s.key === key)?.value ?? null
@@ -136,6 +165,9 @@ export function SettingsClient({
   function matchesSearch(key: string): boolean {
     const q = search.trim().toLowerCase()
     if (!q) return true
+    if (key === "_backup") return ["backup", "download", "database", "salinan"].some((s) => s.includes(q))
+    if (key === "_import") return ["import", "restore", "upload", "database", "masuk", "pulihkan"].some((s) => s.includes(q))
+    if (key === "_reset") return ["reset", "hapus", "data transaksi", "database", "pinjaman"].some((s) => s.includes(q))
     const meta = knownMeta[key]
     const hay = [key, meta?.label, meta?.description].filter(Boolean).join(" ").toLowerCase()
     return hay.includes(q)
@@ -237,6 +269,174 @@ export function SettingsClient({
     setError(null)
   }
 
+  async function handleBackup() {
+    setBackingUp(true)
+    try {
+      const res = await fetch("/api/database/backup")
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({} as { error?: string }))
+        throw new Error(data.error ?? "Gagal membuat backup")
+      }
+      const blob = await res.blob()
+      const disposition = res.headers.get("Content-Disposition") ?? ""
+      const match = disposition.match(/filename="([^"]+)"/)
+      const filename =
+        match?.[1] ??
+        `tobak_os_backup_${new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14)}.sql`
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+      toast.success("Backup database berhasil diunduh")
+    } catch (err) {
+      toast.error((err as Error).message)
+    } finally {
+      setBackingUp(false)
+    }
+  }
+
+  async function handleImport() {
+    if (!importFile) return
+    setImporting(true)
+    try {
+      const form = new FormData()
+      form.append("file", importFile)
+      const res = await fetch("/api/database/import", {
+        method: "POST",
+        body: form,
+      })
+      const data = await res.json().catch(() => ({} as { error?: string; statements?: number; tables?: number }))
+      if (!res.ok) throw new Error(data.error ?? "Gagal import")
+      toast.success(
+        `Import selesai — ${data.tables ?? 0} tabel, ${data.statements ?? 0} pernyataan dieksekusi.`
+      )
+      setImportOpen(false)
+      setImportFile(null)
+      if (fileInputRef.current) fileInputRef.current.value = ""
+    } catch (err) {
+      toast.error((err as Error).message)
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  async function handleDatabaseReset() {
+    if (resetConfirm !== "RESET") return
+    setResetting(true)
+    try {
+      const res = await fetch("/api/database/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: "RESET" }),
+      })
+      const data = await res.json().catch(() => ({} as { error?: string; deleted?: Record<string, number> }))
+      if (!res.ok) throw new Error(data.error ?? "Gagal reset database")
+      const d = data.deleted ?? {}
+      toast.success(
+        `Reset berhasil — ${d.purchases ?? 0} transaksi, ${d.payments ?? 0} pembayaran, ${d.farmerLoans ?? 0} buku pinjaman dihapus.`
+      )
+      setResetOpen(false)
+      setResetConfirm("")
+    } catch (err) {
+      toast.error((err as Error).message)
+    } finally {
+      setResetting(false)
+    }
+  }
+
+  function renderBackupRow() {
+    return (
+      <div key="_backup" className="rounded-xl border border-border-soft bg-panel-alt/40 px-3.5 py-3">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="min-w-[180px] flex-1">
+            <p className="text-[12.5px] font-bold text-foreground">Backup Database</p>
+            <p className="text-[10.5px] text-muted-2 mt-0.5">
+              Unduh salinan lengkap database (.sql) berisi struktur dan seluruh data. Simpan secara berkala untuk berjaga-jaga.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleBackup}
+            disabled={backingUp}
+            className="rounded-lg bg-panel border border-border-soft px-3 py-2 font-bold text-[12px] text-emerald cursor-pointer hover:border-emerald/60 disabled:opacity-50 inline-flex items-center gap-1.5 shrink-0"
+          >
+            {backingUp ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+            {backingUp ? "Membuat…" : "Download"}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  function renderImportRow() {
+    return (
+      <div key="_import" className="rounded-xl border border-border-soft bg-panel-alt/40 px-3.5 py-3">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="min-w-[180px] flex-1">
+            <p className="text-[12.5px] font-bold text-foreground">Import / Restore Database</p>
+            <p className="text-[10.5px] text-muted-2 mt-0.5">
+              Pulihkan data dari file backup (.sql) hasil Download — misalnya saat pindah ke server baru. Tabel yang ada di file akan ditimpa. Disarankan dilakukan ke database kosong.
+            </p>
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".sql"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0] ?? null
+              if (f) {
+                setImportFile(f)
+                setImportConfirm("")
+                setImportOpen(true)
+              }
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+            className="rounded-lg bg-panel border border-border-soft px-3 py-2 font-bold text-[12px] text-foreground cursor-pointer hover:border-emerald/60 disabled:opacity-50 inline-flex items-center gap-1.5 shrink-0"
+          >
+            <Upload className="w-3.5 h-3.5" />
+            Pilih File…
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  function renderResetRow() {
+    return (
+      <div key="_reset" className="rounded-xl border border-border-soft bg-panel-alt/40 px-3.5 py-3">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="min-w-[180px] flex-1">
+            <p className="text-[12.5px] font-bold text-foreground">Reset Data Transaksi</p>
+            <p className="text-[10.5px] text-muted-2 mt-0.5">
+              Hapus semua data transaksi, pembayaran, dan pinjaman petani. Master data, pengaturan, dan akun pengguna tetap aman. Tindakan ini tidak bisa dibatalkan.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setResetConfirm("")
+              setResetOpen(true)
+            }}
+            disabled={resetting}
+            className="rounded-lg bg-panel border border-border-soft px-3 py-2 font-bold text-[12px] text-red cursor-pointer hover:border-red/60 disabled:opacity-50 inline-flex items-center gap-1.5 shrink-0"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            Reset
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   function renderEditor(key: string) {
     const meta = knownMeta[key]
     const inputClass =
@@ -292,6 +492,10 @@ export function SettingsClient({
   }
 
   function renderRow(key: string) {
+    if (key === "_backup") return renderBackupRow()
+    if (key === "_import") return renderImportRow()
+    if (key === "_reset") return renderResetRow()
+
     const meta = knownMeta[key]
     const label = meta?.label ?? key
     const { text, set } = displayValue(key)
@@ -435,6 +639,67 @@ export function SettingsClient({
       <p className="text-[11px] text-muted-2">
         Pengaturan tambahan dapat ditambahkan langsung melalui database.
       </p>
+
+      <AlertDialog open={importOpen} onOpenChange={(open) => { setImportOpen(open); if (!open) setImportConfirm("") }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Import Database?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Data dari <span className="font-mono text-foreground">{importFile?.name}</span> ({importFile ? (importFile.size / 1024).toFixed(0) : 0} KB) akan dieksekusi ke database. Tabel yang ada di file akan <strong>ditimpa</strong> — pastikan Anda sudah punya backup. Disarankan import ke database kosong.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <input
+            type="text"
+            value={importConfirm}
+            onChange={(e) => setImportConfirm(e.target.value)}
+            placeholder="Ketik IMPORT untuk konfirmasi"
+            disabled={importing}
+            autoFocus
+            className="w-full bg-panel border border-border text-foreground text-[13.5px] px-2.5 py-2 rounded-lg outline-none focus:border-emerald/60 font-mono"
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={importing}>Batal</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={importConfirm !== "IMPORT" || importing}
+              onClick={handleImport}
+            >
+              {importing && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              Mulai Import
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={resetOpen} onOpenChange={setResetOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset Data Transaksi?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Semua data transaksi, pembayaran, dan pinjaman petani akan dihapus permanen. Master data (petani, customer, jenis, gudang), pengaturan, dan akun pengguna tetap aman. Tindakan ini tidak bisa dibatalkan.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <input
+            type="text"
+            value={resetConfirm}
+            onChange={(e) => setResetConfirm(e.target.value)}
+            placeholder="Ketik RESET untuk konfirmasi"
+            disabled={resetting}
+            autoFocus
+            className="w-full bg-panel border border-border text-foreground text-[13.5px] px-2.5 py-2 rounded-lg outline-none focus:border-red/60 font-mono"
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={resetting}>Batal</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={resetConfirm !== "RESET" || resetting}
+              onClick={handleDatabaseReset}
+            >
+              {resetting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              Ya, Reset
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
