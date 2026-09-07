@@ -329,7 +329,7 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
             </p>
           )}
 
-          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-2 gap-y-1.5 items-end">
+          <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 items-end">
             <label className="text-[10px] font-bold uppercase tracking-[0.06em] text-muted-foreground whitespace-nowrap">
               Berat Timbangan (kg)
             </label>
@@ -353,13 +353,13 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
                 </span>
               )}
             </div>
-            <div className="flex h-[36px] items-center bg-panel-alt rounded-lg border border-border-soft p-0.5">
+            <div className="flex h-[36px] items-center bg-panel-alt rounded-lg border border-border-soft p-0.5 gap-0.5">
               {roundingOptions.map((opt) => (
                 <button
                   key={opt.value}
                   type="button"
                   onClick={() => onRoundingModeChange(opt.value)}
-                  className={`h-full px-2.5 rounded-md text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center ${
+                  className={`flex-1 h-full px-2 rounded-md text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center ${
                     roundingMode === opt.value
                       ? "bg-emerald text-primary-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground"
