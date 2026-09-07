@@ -6,7 +6,64 @@
  * dan pernyataan SET SESSION sql_mode untuk deteksi NO_BACKSLASH_ESCAPES.
  */
 
-type Mode = "normal" | "str" | "backtick" | "linecomment"
+type Mode = "normal" | "str" | "backtick" | "dquote" | "linecomment"
+
+/**
+ * Mengubah identifier double-quote "..." menjadi backtick `...` di luar
+ * string single-quote ('...'). Dipakai untuk menormalkan DDL hasil
+ * SHOW CREATE TABLE dari server yang berjalan dengan ANSI_QUOTES
+ * (mis. Aiven MySQL) agar valid di semua server tanpa ANSI_QUOTES.
+ */
+export function normalizeDdlIdentifiers(sql: string): string {
+  let out = ""
+  let inStr = false
+  let i = 0
+  const n = sql.length
+  while (i < n) {
+    const c = sql[i]
+    const next = sql[i + 1]
+    if (inStr) {
+      if (c === "\\" && next !== undefined) {
+        out += c + next
+        i += 2
+        continue
+      }
+      if (c === "'") {
+        if (next === "'") {
+          out += "''"
+          i += 2
+          continue
+        }
+        out += c
+        inStr = false
+      } else {
+        out += c
+      }
+      i++
+      continue
+    }
+    if (c === "'") {
+      inStr = true
+      out += c
+      i++
+      continue
+    }
+    if (c === '"') {
+      if (next === '"') {
+        out += "``"
+        i += 2
+        continue
+      }
+      out += "`"
+      i++
+      continue
+    }
+    out += c
+    i++
+    continue
+  }
+  return out
+}
 
 export function splitSqlStatements(sql: string): string[] {
   const statements: string[] = []
@@ -53,6 +110,22 @@ export function splitSqlStatements(sql: string): string[] {
       continue
     }
 
+    if (mode === "dquote") {
+      if (c === '"') {
+        if (next === '"') {
+          buf += "``"
+          i += 2
+          continue
+        }
+        buf += "`"
+        mode = "normal"
+      } else {
+        buf += c
+      }
+      i++
+      continue
+    }
+
     if (mode === "str") {
       if (c === "\\" && !noBackslashEscapes && next !== undefined) {
         buf += c + next
@@ -83,6 +156,11 @@ export function splitSqlStatements(sql: string): string[] {
       case "`":
         buf += c
         mode = "backtick"
+        i++
+        break
+      case '"':
+        buf += "`"
+        mode = "dquote"
         i++
         break
       case "-":

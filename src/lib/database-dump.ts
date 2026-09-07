@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db"
+import { normalizeDdlIdentifiers } from "@/lib/sql-splitter"
 
 interface ColumnInfo {
   tableName: string
@@ -92,16 +93,18 @@ export async function generateSqlDump(dbName: string): Promise<string> {
       `SHOW CREATE TABLE ${sqlIdent(table)}`
     )
     const row = show[0] ?? {}
-    const ddl = Object.values(row).find((v) => /^CREATE TABLE/i.test((v ?? "").trim()))
-    if (!ddl) {
+    const createStmt = Object.values(row).find((v) => /^CREATE TABLE/i.test((v ?? "").trim()))
+    if (!createStmt) {
       lines.push(`-- SKIPPED ${table}: gagal membaca definisi tabel.`)
       lines.push("")
       continue
     }
 
+    const ddl = normalizeDdlIdentifiers(createStmt.trim()).replace(/;$/g, "") + ";"
+
     lines.push(`-- Table structure for ${table}`)
     lines.push(`DROP TABLE IF EXISTS ${sqlIdent(table)};`)
-    lines.push(ddl.trim().replace(/;$/, "") + ";")
+    lines.push(ddl)
     lines.push("")
 
     const rows = await prisma.$queryRawUnsafe<Row[]>(
