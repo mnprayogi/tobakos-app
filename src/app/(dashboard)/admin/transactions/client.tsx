@@ -11,7 +11,7 @@ import { formatCurrency, formatDate } from "@/lib/utils"
 import { StatusPill } from "@/components/shared/status-pill"
 import { Pagination } from "@/components/shared/pagination"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
-import { Search, Wallet, ReceiptText } from "lucide-react"
+import { Search, Wallet, ReceiptText, ClipboardCheck, FileText, RotateCcw, Trash2 } from "lucide-react"
 import { PageHeader } from "@/components/shared/page-header"
 import type { WarehouseScope } from "@/lib/actions/scope"
 import {
@@ -386,32 +386,47 @@ export function TransactionsClient({
                       {p.status === "VOIDED" ? (
                         <span className="text-[11px] text-muted-2">Dibatalkan</span>
                       ) : (
-                        <div className="flex flex-col gap-1">
+                        <div className="flex flex-wrap items-center gap-1">
                           {p.status === "DRAFT" && (
                             <span className="text-[11px] text-muted-2">{allWeighed ? "Menunggu ditimbang Pos 2" : "Proses grading"}</span>
                           )}
                           {p.status === "WEIGHED" && (
                             <Link
                               href={`/admin/transactions/${p.id}/review`}
-                              className="text-[11px] font-bold text-emerald cursor-pointer hover:underline"
+                              title="Review & setujui"
+                              className="p-1.5 text-emerald hover:bg-emerald/10 rounded-lg cursor-pointer inline-flex"
                             >
-                              Review &amp; Setujui
+                              <ClipboardCheck className="w-3.5 h-3.5" />
                             </Link>
                           )}
                           {p.status === "APPROVED" && (
                             <>
                               {remaining > 0.005 && (
-                                <button onClick={() => setPayTarget(payPurchase)} className="text-left text-[11px] font-bold text-emerald cursor-pointer hover:underline">
-                                  Catat Pembayaran
+                                <button
+                                  onClick={() => window.open(`/pengantar/${p.id}`, "_blank")}
+                                  title="Cetak surat pengantar"
+                                  className="p-1.5 text-emerald hover:bg-emerald/10 rounded-lg cursor-pointer"
+                                >
+                                  <FileText className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                              {remaining > 0.005 && (
+                                <button
+                                  onClick={() => setPayTarget(payPurchase)}
+                                  title="Catat pembayaran"
+                                  className="p-1.5 text-emerald hover:bg-emerald/10 rounded-lg cursor-pointer"
+                                >
+                                  <Wallet className="w-3.5 h-3.5" />
                                 </button>
                               )}
                               {remaining <= 0.005 && <span className="text-[11px] text-muted-2">Lunas</span>}
                               {p.paidAmount <= 0.005 && (
                                 <button
                                   onClick={() => handleReopen(p.id)}
-                                  className="text-left mt-1 pt-1 border-t border-border-soft text-[11px] font-bold text-amber cursor-pointer hover:underline"
+                                  title="Buka kembali transaksi"
+                                  className="p-1.5 text-amber hover:bg-amber/10 rounded-lg cursor-pointer"
                                 >
-                                  Buka
+                                  <RotateCcw className="w-3.5 h-3.5" />
                                 </button>
                               )}
                             </>
@@ -419,17 +434,19 @@ export function TransactionsClient({
                           {p.status === "PAID" && (
                             <button
                               onClick={() => window.open(`/bukti/${p.id}`, "_blank")}
-                              className="text-left text-[11px] font-bold text-emerald cursor-pointer hover:underline"
+                              title="Cetak bukti lunas"
+                              className="p-1.5 text-emerald hover:bg-emerald/10 rounded-lg cursor-pointer"
                             >
-                              Cetak Bukti
+                              <ReceiptText className="w-3.5 h-3.5" />
                             </button>
                           )}
                           {role === "SUPER_ADMIN" && (
                             <button
                               onClick={() => setVoidTarget(p)}
-                              className="text-left mt-1 pt-1 border-t border-border-soft text-[11px] font-bold text-red-deduction cursor-pointer hover:underline"
+                              title="Void transaksi"
+                              className="p-1.5 text-red-deduction hover:bg-red-deduction/10 rounded-lg cursor-pointer"
                             >
-                              Void
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           )}
                         </div>

@@ -14,6 +14,7 @@ import { requireRoles } from "@/lib/roles"
 import { publishEvent } from "@/lib/events"
 import { resolveWarehouseScope } from "@/lib/actions/scope"
 import { loanTotals } from "@/lib/loan-totals"
+import { getSetting } from "@/lib/settings"
 
 export type PaymentMethodValue = "TUNAI" | "TRANSFER"
 
@@ -856,5 +857,66 @@ export async function getBuktiData(purchaseId: number): Promise<BuktiData> {
         ? { bankName: pay.bankAccount.bankName, accountNumber: pay.bankAccount.accountNumber }
         : null,
     })),
+  }
+}
+
+export interface PengantarData {
+  purchaseId: number
+  transactionCode: string
+  transactionDate: Date
+  farmerName: string
+  farmerNik: string | null
+  farmerAddress: string | null
+  warehouseLabel: string | null
+  laneCode: string | null
+  totalItems: number
+  totalNetWeight: number
+  totalPrice: number
+  paidAmount: number
+  remaining: number
+  approvedBy: string | null
+  financeName: string
+  companyName: string
+}
+
+export async function getPengantarData(purchaseId: number): Promise<PengantarData> {
+  const financeName = await requireRoles("ADMIN", "FINANCE", "OWNER")
+
+  const purchase = await prisma.purchase.findUnique({
+    where: { id: purchaseId },
+    include: {
+      farmer: true,
+      warehouse: true,
+      lane: true,
+    },
+  })
+  if (!purchase) throw new Error("Transaksi tidak ditemukan")
+  if (purchase.status !== "APPROVED")
+    throw new Error("Surat pengantar hanya untuk transaksi yang sudah disetujui (APPROVED)")
+
+  const totalPrice = Number(purchase.totalPrice)
+  const paidAmount = Number(purchase.paidAmount)
+  const remaining = roundMoney(totalPrice - paidAmount)
+  if (remaining <= 0.005) throw new Error("Sisa tagihan habis — tidak bisa mencetak surat pengantar")
+
+  const companyName = await getSetting("COMPANY_NAME", "TobakOS")
+
+  return {
+    purchaseId: purchase.id,
+    transactionCode: purchase.transactionCode,
+    transactionDate: purchase.transactionDate,
+    farmerName: purchase.farmer.name,
+    farmerNik: purchase.farmer.nik,
+    farmerAddress: purchase.farmer.address,
+    warehouseLabel: purchase.warehouse?.name ?? purchase.warehouse?.code ?? null,
+    laneCode: purchase.lane?.code ?? null,
+    totalItems: purchase.totalItems,
+    totalNetWeight: purchase.totalNetWeight,
+    totalPrice,
+    paidAmount,
+    remaining,
+    approvedBy: purchase.approvedBy,
+    financeName,
+    companyName,
   }
 }

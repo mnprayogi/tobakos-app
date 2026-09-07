@@ -128,6 +128,7 @@ export function ReviewClient({ purchase }: { purchase: ReviewPurchase }) {
         note: note || null,
       })
       toast.success("Transaksi disetujui")
+      window.open(`/pengantar/${purchase.id}`, "_blank")
       router.push("/admin/transactions")
     } catch (err) {
       toast.error((err as Error).message)
