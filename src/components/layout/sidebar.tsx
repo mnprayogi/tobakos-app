@@ -4,6 +4,7 @@ import Link from "next/link"
 import { useMemo } from "react"
 import { usePathname } from "next/navigation"
 import { signOut } from "next-auth/react"
+import { Scale } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
@@ -40,12 +41,7 @@ const navItems = [
         href: "/pos-2/weighing",
         label: "Pos 2 · Penimbangan",
         roles: ["OPERATOR", "ADMIN"],
-        icon: (
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="9" />
-            <path d="M12 7v5l3 2" />
-          </svg>
-        ),
+        icon: <Scale size={16} />,
       },
       {
         href: "/pos-2/susulan",
