@@ -1164,6 +1164,8 @@ function UsersTab({ users: initial, lanes, customers }: { users: User[]; lanes: 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
     if (!nama.trim() || !username.trim()) { toast.error("Nama dan username harus diisi"); return }
+    if (!editing && !password) { toast.error("Password wajib diisi"); return }
+    if (password && password.length < 8) { toast.error("Password minimal 8 karakter"); return }
     const assignedLaneId = role === "CUSTOMER" ? null : laneId ? Number(laneId) : null
     const assignedCustomerId = role === "CUSTOMER" ? (customerId ? Number(customerId) : null) : null
     if (role === "CUSTOMER" && assignedCustomerId == null) { toast.error("Akun CUSTOMER wajib ditautkan ke mitra bisnis"); return }

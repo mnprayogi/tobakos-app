@@ -301,13 +301,13 @@ export async function createUser(data: {
   customerId?: number | null
 }) {
   await requireRoles("ADMIN")
-  const parsed = userSchema.parse(data)
-  if (!parsed.password) {
-    throw new Error("Password wajib diisi")
-  }
-  assertNoPrivilegeEscalation(parsed.role)
-  const customerId = resolveCustomerLink(parsed.role, parsed.customerId)
   try {
+    const parsed = userSchema.parse(data)
+    if (!parsed.password) {
+      throw new Error("Password wajib diisi")
+    }
+    assertNoPrivilegeEscalation(parsed.role)
+    const customerId = resolveCustomerLink(parsed.role, parsed.customerId)
     const hashed = await bcrypt.hash(parsed.password, PASSWORD_ROUNDS)
     const user = await prisma.user.create({
       data: {
@@ -349,25 +349,25 @@ export async function updateUser(
   }
 ) {
   await requireRoles("ADMIN")
-  const parsed = userSchema.parse(data)
-  assertNoPrivilegeEscalation(parsed.role)
-  let customerId: number | null
   try {
-    customerId = resolveCustomerLink(parsed.role, parsed.customerId)
-  } catch (err) {
-    // saat edit boleh mempertahankan link lama bila tidak dikirim
-    if (parsed.customerId == null) {
-      const existing = await prisma.user.findUnique({ where: { id }, select: { role: true, customerId: true } })
-      if (!existing) throw new Error("User tidak ditemukan")
-      customerId = parsed.role === "CUSTOMER" ? existing.customerId : null
-      if (parsed.role === "CUSTOMER" && customerId == null) {
-        throw new Error("Akun CUSTOMER wajib ditautkan ke mitra bisnis")
+    const parsed = userSchema.parse(data)
+    assertNoPrivilegeEscalation(parsed.role)
+    let customerId: number | null
+    try {
+      customerId = resolveCustomerLink(parsed.role, parsed.customerId)
+    } catch (err) {
+      // saat edit boleh mempertahankan link lama bila tidak dikirim
+      if (parsed.customerId == null) {
+        const existing = await prisma.user.findUnique({ where: { id }, select: { role: true, customerId: true } })
+        if (!existing) throw new Error("User tidak ditemukan")
+        customerId = parsed.role === "CUSTOMER" ? existing.customerId : null
+        if (parsed.role === "CUSTOMER" && customerId == null) {
+          throw new Error("Akun CUSTOMER wajib ditautkan ke mitra bisnis")
+        }
+      } else {
+        throw err
       }
-    } else {
-      throw err
     }
-  }
-  try {
     const dataUpdate: Prisma.UserUncheckedUpdateInput = {
       name: parsed.name,
       username: parsed.username,
