@@ -1,19 +1,27 @@
 import type { Metadata, Viewport } from "next"
-import { Inter, JetBrains_Mono } from "next/font/google"
+import localFont from "next/font/local"
 import "./globals.css"
 import { Toaster } from "@/components/ui/sonner"
 import { ThemeProvider } from "@/components/theme-provider"
 import { SerwistProvider } from "@serwist/turbopack/react"
 import { PwaUpdater } from "@/components/pwa-updater"
 
-const inter = Inter({
+const inter = localFont({
+  src: [
+    { path: "./fonts/InterVariable.woff2", style: "normal" },
+    { path: "./fonts/InterVariable-Italic.woff2", style: "italic" },
+  ],
   variable: "--font-sans",
-  subsets: ["latin"],
 })
 
-const jetbrainsMono = JetBrains_Mono({
+const jetbrainsMono = localFont({
+  src: [
+    { path: "./fonts/JetBrainsMono-Regular.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/JetBrainsMono-SemiBold.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/JetBrainsMono-Bold.woff2", weight: "700", style: "normal" },
+    { path: "./fonts/JetBrainsMono-ExtraBold.woff2", weight: "800", style: "normal" },
+  ],
   variable: "--font-mono",
-  subsets: ["latin"],
   preload: false,
 })
 

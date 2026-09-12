@@ -132,12 +132,12 @@ export function CashClient({
         )}
         <button
           onClick={onPrint}
-          className="rounded-lg bg-panel-alt px-3.5 py-2 font-bold text-[12px] text-foreground border border-border-soft cursor-pointer inline-flex items-center gap-1.5"
+          className="rounded-lg bg-panel-alt px-3.5 py-2 font-bold text-[12px] text-foreground border border-border-soft cursor-pointer inline-flex items-center justify-center gap-1.5 w-full sm:w-auto"
         >
           <Printer className="w-3.5 h-3.5" />
           Cetak
         </button>
-        <div className="flex flex-col gap-1.5 w-full sm:flex-row sm:items-center sm:gap-1.5">
+        <div className="flex flex-col gap-1.5 w-full sm:w-auto sm:flex-row sm:items-center sm:gap-1.5">
           <input
             type="date"
             value={fromDate}
