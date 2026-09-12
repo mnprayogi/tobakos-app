@@ -468,7 +468,7 @@ export function ReportsClient({
 
       <div className="rounded-xl border border-border bg-card p-4 space-y-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex w-max bg-panel-alt rounded-xl border border-border-soft p-0.5">
+          <div className="flex w-full lg:w-max flex-nowrap overflow-x-auto no-scrollbar bg-panel-alt rounded-xl border border-border-soft p-0.5">
             {tabs.map((t) => (
               <button
                 key={t.key}

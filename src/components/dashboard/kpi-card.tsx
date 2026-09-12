@@ -93,7 +93,7 @@ export function KpiCard({
           </span>
         )}
       </div>
-      <p className={cn("mt-1.5 font-mono text-[20px] font-bold leading-tight", TONE_VALUE[tone])}>
+      <p className={cn("mt-1.5 truncate font-mono text-base font-bold leading-tight sm:text-[20px]", TONE_VALUE[tone])}>
         {value}
       </p>
       {delta && (

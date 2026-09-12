@@ -83,26 +83,26 @@ export function BankClient({
           <Printer className="w-3.5 h-3.5" />
           Cetak
         </button>
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-col gap-1.5 w-full sm:flex-row sm:items-center sm:gap-1.5">
           <input
             type="date"
             value={fromDate}
             onChange={(e) => setFromDate(e.target.value)}
-            className="field-input !py-1.5 !text-[11px] !w-[130px]"
+            className="field-input !py-1.5 !text-[11px] w-full sm:!w-[130px]"
             placeholder="Dari"
           />
-          <span className="text-[11px] text-muted-foreground">—</span>
+          <span className="hidden sm:inline text-[11px] text-muted-foreground">—</span>
           <input
             type="date"
             value={toDate}
             onChange={(e) => setToDate(e.target.value)}
-            className="field-input !py-1.5 !text-[11px] !w-[130px]"
+            className="field-input !py-1.5 !text-[11px] w-full sm:!w-[130px]"
             placeholder="Sampai"
           />
           <button
             onClick={handleExport}
             disabled={exporting}
-            className="rounded-lg bg-panel-alt px-3.5 py-2 font-bold text-[12px] text-foreground border border-border-soft cursor-pointer inline-flex items-center gap-1.5 disabled:opacity-50"
+            className="rounded-lg bg-panel-alt px-3.5 py-2 font-bold text-[12px] text-foreground border border-border-soft cursor-pointer inline-flex items-center justify-center gap-1.5 disabled:opacity-50 w-full sm:w-auto"
           >
             <Download className="w-3.5 h-3.5" />
             {exporting ? "Export…" : "Excel"}
