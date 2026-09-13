@@ -7,6 +7,7 @@ import { resolveWarehouseScope } from "@/lib/actions/scope"
 import { getDebtSummary } from "@/lib/actions/finance"
 import { getLoansData } from "@/lib/actions/loans"
 import { toDateKey } from "@/lib/utils"
+import type { Prisma } from "@/generated/prisma/client"
 import { dashboardRangeFrom, dashboardRangeTrendDays } from "@/lib/dashboard-range"
 import type { DashboardRange } from "@/lib/dashboard-range"
 
@@ -44,6 +45,15 @@ function prevRange(range: DashboardRange): { from: Date | null; to: Date } | nul
   end.setDate(end.getDate() + days - 1)
   end.setHours(23, 59, 59, 999)
   return { from, to: end }
+}
+
+// Resolusi gudang efektif untuk dashboard:
+// role scoped (GRADER/OPERATOR/FINANCE/ADMIN) selalu terikat ke gudang miliknya,
+// OWNER/SUPER_ADMIN bebas memilih warehouseId (undefined/all = semua gudang).
+async function resolveDashboardScope(warehouseId?: number): Promise<number | undefined> {
+  const scope = await resolveWarehouseScope()
+  if (scope.mode === "scoped") return scope.warehouseId
+  return warehouseId
 }
 
 // ─── Shared types ────────────────────────────────────
@@ -134,8 +144,7 @@ export async function getGradeComposition(
   warehouseId?: number
 ): Promise<GradeBreakdown[]> {
   await requireRoles("ADMIN", "OWNER", "SUPER_ADMIN")
-  const scope = await resolveWarehouseScope()
-  const effectiveWh = scope.mode === "scoped" ? scope.warehouseId : warehouseId
+  const effectiveWh = await resolveDashboardScope(warehouseId)
   const from = dashboardRangeFrom(range)
   const txDateFilter = from ? { gte: from } : undefined
   return getClosedGradeBreakdown(txDateFilter, effectiveWh)
@@ -153,13 +162,17 @@ export interface TrendRow {
 
 // ─── Tren N hari terakhir (dipakai semua role) ──────
 
-async function getTrend(days: number): Promise<TrendRow[]> {
+async function getTrend(days: number, warehouseId?: number): Promise<TrendRow[]> {
   const from = new Date()
   from.setHours(0, 0, 0, 0)
   from.setDate(from.getDate() - (days - 1))
 
   const purchases = await prisma.purchase.findMany({
-    where: { transactionDate: { gte: from }, status: { not: "VOIDED" } },
+    where: {
+      transactionDate: { gte: from },
+      status: { not: "VOIDED" },
+      ...(warehouseId != null ? { warehouseId } : {}),
+    },
     select: {
       transactionDate: true,
       totalNetWeight: true,
@@ -237,6 +250,7 @@ export async function getGraderDashboard(): Promise<GraderDashboard> {
   await requireRoles("GRADER", "ADMIN")
   const start = todayStart()
   const yStart = yesterdayStart()
+  const warehouseId = await resolveDashboardScope()
 
   const [
     createdToday,
@@ -249,16 +263,41 @@ export async function getGraderDashboard(): Promise<GraderDashboard> {
     trend,
     recentItems,
   ] = await Promise.all([
-    prisma.purchaseItem.count({ where: { createdAt: { gte: start }, purchase: { status: { not: "VOIDED" } } } }),
-    prisma.purchaseItem.count({ where: { createdAt: { gte: yStart, lt: start }, purchase: { status: { not: "VOIDED" } } } }),
-    prisma.purchase.count({ where: { status: "DRAFT", transactionDate: { gte: start } } }),
-    prisma.purchase.count({ where: { status: "DRAFT", transactionDate: { gte: yStart, lt: start } } }),
-    prisma.purchase.groupBy({ by: ["farmerId"], where: { transactionDate: { gte: start }, status: { not: "VOIDED" } } }),
-    prisma.purchase.groupBy({ by: ["farmerId"], where: { transactionDate: { gte: yStart, lt: start }, status: { not: "VOIDED" } } }),
-    prisma.purchaseItem.count({ where: { status: "GRADED", purchase: { status: { not: "VOIDED" } } } }),
-    getTrend(7),
+    prisma.purchaseItem.count({
+      where: {
+        createdAt: { gte: start },
+        purchase: { status: { not: "VOIDED" }, ...(warehouseId != null ? { warehouseId } : {}) },
+      },
+    }),
+    prisma.purchaseItem.count({
+      where: {
+        createdAt: { gte: yStart, lt: start },
+        purchase: { status: { not: "VOIDED" }, ...(warehouseId != null ? { warehouseId } : {}) },
+      },
+    }),
+    prisma.purchase.count({
+      where: { status: "DRAFT", transactionDate: { gte: start }, ...(warehouseId != null ? { warehouseId } : {}) },
+    }),
+    prisma.purchase.count({
+      where: { status: "DRAFT", transactionDate: { gte: yStart, lt: start }, ...(warehouseId != null ? { warehouseId } : {}) },
+    }),
+    prisma.purchase.groupBy({
+      by: ["farmerId"],
+      where: { transactionDate: { gte: start }, status: { not: "VOIDED" }, ...(warehouseId != null ? { warehouseId } : {}) },
+    }),
+    prisma.purchase.groupBy({
+      by: ["farmerId"],
+      where: { transactionDate: { gte: yStart, lt: start }, status: { not: "VOIDED" }, ...(warehouseId != null ? { warehouseId } : {}) },
+    }),
+    prisma.purchaseItem.count({
+      where: { status: "GRADED", purchase: { status: { not: "VOIDED" }, ...(warehouseId != null ? { warehouseId } : {}) } },
+    }),
+    getTrend(7, warehouseId),
     prisma.purchaseItem.findMany({
-      where: { createdAt: { gte: start }, purchase: { status: { not: "VOIDED" } } },
+      where: {
+        createdAt: { gte: start },
+        purchase: { status: { not: "VOIDED" }, ...(warehouseId != null ? { warehouseId } : {}) },
+      },
       orderBy: { createdAt: "desc" },
       take: 10,
       include: {
@@ -311,23 +350,30 @@ export async function getOperatorDashboard(): Promise<OperatorDashboard> {
   await requireRoles("OPERATOR", "ADMIN")
   const start = todayStart()
   const yStart = yesterdayStart()
+  const warehouseId = await resolveDashboardScope()
+  const itemWhere = (dateWhere: { createdAt: { gte: Date; lt?: Date } }): Prisma.PurchaseItemWhereInput => ({
+    ...dateWhere,
+    purchase: { status: { not: "VOIDED" }, ...(warehouseId != null ? { warehouseId } : {}) },
+  })
 
   const [todayWeighed, yesterdayWeighed, awaitingWeigh, todayAgg, yesterdayAgg, trend, recentWeighed] =
     await Promise.all([
-      prisma.purchaseItem.count({ where: { status: "WEIGHED", createdAt: { gte: start }, purchase: { status: { not: "VOIDED" } } } }),
-      prisma.purchaseItem.count({ where: { status: "WEIGHED", createdAt: { gte: yStart, lt: start }, purchase: { status: { not: "VOIDED" } } } }),
-      prisma.purchaseItem.count({ where: { status: "GRADED", purchase: { status: { not: "VOIDED" } } } }),
+      prisma.purchaseItem.count({ where: { status: "WEIGHED", ...itemWhere({ createdAt: { gte: start } }) } }),
+      prisma.purchaseItem.count({ where: { status: "WEIGHED", ...itemWhere({ createdAt: { gte: yStart, lt: start } }) } }),
+      prisma.purchaseItem.count({
+        where: { status: "GRADED", purchase: { status: { not: "VOIDED" }, ...(warehouseId != null ? { warehouseId } : {}) } },
+      }),
       prisma.purchaseItem.aggregate({
-        where: { status: "WEIGHED", createdAt: { gte: start }, purchase: { status: { not: "VOIDED" } } },
+        where: { status: "WEIGHED", ...itemWhere({ createdAt: { gte: start } }) },
         _sum: { grossWeight: true, netWeight: true, subtotal: true },
       }),
       prisma.purchaseItem.aggregate({
-        where: { status: "WEIGHED", createdAt: { gte: yStart, lt: start }, purchase: { status: { not: "VOIDED" } } },
+        where: { status: "WEIGHED", ...itemWhere({ createdAt: { gte: yStart, lt: start } }) },
         _sum: { grossWeight: true, netWeight: true, subtotal: true },
       }),
-      getTrend(7),
+      getTrend(7, warehouseId),
       prisma.purchaseItem.findMany({
-        where: { status: "WEIGHED", purchase: { status: { not: "VOIDED" } } },
+        where: { status: "WEIGHED", purchase: { status: { not: "VOIDED" }, ...(warehouseId != null ? { warehouseId } : {}) } },
         orderBy: { updatedAt: "desc" },
         take: 10,
         include: {
@@ -383,33 +429,47 @@ export async function getFinanceDashboard(): Promise<FinanceDashboard> {
   await requireRoles("FINANCE", "ADMIN")
   const start = todayStart()
   const yStart = yesterdayStart()
+  const warehouseId = await resolveDashboardScope()
 
   const [debt, loans, awaitingReview, payments, todayPayAgg, yesterdayPayAgg, txAgg, trend] =
     await Promise.all([
       getDebtSummary(),
       getLoansData(),
-      prisma.purchase.count({ where: { status: "WEIGHED" } }),
+      prisma.purchase.count({
+        where: { status: "WEIGHED", ...(warehouseId != null ? { warehouseId } : {}) },
+      }),
       prisma.payment.findMany({
-        where: { voidedAt: null, purchase: { status: { not: "VOIDED" } } },
+        where: {
+          voidedAt: null,
+          purchase: { status: { not: "VOIDED" }, ...(warehouseId != null ? { warehouseId } : {}) },
+        },
         orderBy: { paidAt: "desc" },
         take: 10,
         include: { purchase: { include: { farmer: true } }, bankAccount: true },
       }),
       prisma.payment.aggregate({
-        where: { paidAt: { gte: start }, voidedAt: null, purchase: { status: { not: "VOIDED" } } },
+        where: {
+          paidAt: { gte: start },
+          voidedAt: null,
+          purchase: { status: { not: "VOIDED" }, ...(warehouseId != null ? { warehouseId } : {}) },
+        },
         _count: { _all: true },
         _sum: { amount: true },
       }),
       prisma.payment.aggregate({
-        where: { paidAt: { gte: yStart, lt: start }, voidedAt: null, purchase: { status: { not: "VOIDED" } } },
+        where: {
+          paidAt: { gte: yStart, lt: start },
+          voidedAt: null,
+          purchase: { status: { not: "VOIDED" }, ...(warehouseId != null ? { warehouseId } : {}) },
+        },
         _count: { _all: true },
         _sum: { amount: true },
       }),
       prisma.purchase.aggregate({
-        where: { status: { not: "VOIDED" } },
+        where: { status: { not: "VOIDED" }, ...(warehouseId != null ? { warehouseId } : {}) },
         _sum: { totalPrice: true, paidAmount: true },
       }),
-      getTrend(7),
+      getTrend(7, warehouseId),
     ])
 
   const debtRemaining = debt.reduce((s, f) => s + f.sisa, 0)
@@ -474,7 +534,6 @@ export interface OwnerDashboard {
   totalPrice: number
   totalPaid: number
   totalRemaining: number
-  debtRemaining: number
   loanOutstanding: number
   trend: TrendRow[]
   byWarehouse: WarehouseSummary[]
@@ -484,50 +543,52 @@ export interface OwnerDashboard {
   recentTransactions: OwnerRecentTransaction[]
 }
 
-export async function getOwnerDashboard(range: DashboardRange = "all"): Promise<OwnerDashboard> {
+export async function getOwnerDashboard(
+  range: DashboardRange = "all",
+  warehouseId?: number
+): Promise<OwnerDashboard> {
   await requireRoles("OWNER", "ADMIN", "FINANCE")
 
+  const warehouseFilter = warehouseId != null ? { warehouseId } : {}
   const from = dashboardRangeFrom(range)
   const txDateFilter = from ? { gte: from } : undefined
 
-  const [txAgg, byStatusAgg, baleCount, trend, debt, loans, whAgg, warehouses, recentTx, closedByGrade] =
+  const [txAgg, byStatusAgg, baleCount, trend, loans, whAgg, warehouses, recentTx, closedByGrade] =
     await Promise.all([
       prisma.purchase.aggregate({
-        where: { transactionDate: txDateFilter, status: { not: "VOIDED" } },
+        where: { transactionDate: txDateFilter, status: { not: "VOIDED" }, ...warehouseFilter },
         _count: { _all: true },
         _sum: { totalGrossWeight: true, totalNetWeight: true, totalPrice: true, paidAmount: true },
       }),
       prisma.purchase.groupBy({
         by: ["status"],
-        where: { transactionDate: txDateFilter, status: { not: "VOIDED" } },
+        where: { transactionDate: txDateFilter, status: { not: "VOIDED" }, ...warehouseFilter },
         _count: { _all: true },
       }),
       prisma.purchaseItem.count({
-        where: { purchase: { transactionDate: txDateFilter, status: { not: "VOIDED" } } },
+        where: { purchase: { transactionDate: txDateFilter, status: { not: "VOIDED" }, ...warehouseFilter } },
       }),
-      getTrend(dashboardRangeTrendDays(range)),
-      getDebtSummary(),
-      getLoansData(),
+      getTrend(dashboardRangeTrendDays(range), warehouseId),
+      getLoansData(warehouseId),
       prisma.purchase.groupBy({
         by: ["warehouseId"],
-        where: { transactionDate: txDateFilter, status: { not: "VOIDED" } },
+        where: { transactionDate: txDateFilter, status: { not: "VOIDED" }, ...warehouseFilter },
         _count: { _all: true },
         _sum: { totalNetWeight: true, totalPrice: true },
       }),
       prisma.warehouse.findMany({ select: { id: true, code: true, name: true } }),
       prisma.purchase.findMany({
-        where: { transactionDate: txDateFilter, status: { not: "VOIDED" } },
+        where: { transactionDate: txDateFilter, status: { not: "VOIDED" }, ...warehouseFilter },
         orderBy: { transactionDate: "desc" },
         take: 8,
         include: { farmer: true, lane: true, _count: { select: { items: true } } },
       }),
-      getClosedGradeBreakdown(txDateFilter),
+      getClosedGradeBreakdown(txDateFilter, warehouseId),
     ])
 
   const totalPrice = Number(txAgg._sum.totalPrice ?? 0)
   const totalPaid = Number(txAgg._sum.paidAmount ?? 0)
   const totalRemaining = roundMoney(totalPrice - totalPaid)
-  const debtRemaining = debt.reduce((s, f) => s + f.sisa, 0)
   const loanOutstanding = loans.reduce((s, l) => s + l.balance, 0)
 
   const statusOrder: ("DRAFT" | "WEIGHED" | "APPROVED" | "PAID")[] = [
@@ -560,7 +621,6 @@ export async function getOwnerDashboard(range: DashboardRange = "all"): Promise<
     totalPaid: roundMoney(totalPaid),
     totalRemaining,
     byStatus,
-    debtRemaining: roundMoney(debtRemaining),
     loanOutstanding: roundMoney(loanOutstanding),
     trend,
     byWarehouse,
@@ -584,6 +644,7 @@ export async function getOwnerDashboard(range: DashboardRange = "all"): Promise<
 // ─── ADMIN ───────────────────────────────────────────
 
 export interface AdminDashboard {
+  warehouseName: string
   today: {
     graded: number
     yesterdayGraded: number
@@ -601,7 +662,6 @@ export interface AdminDashboard {
     totalPaid: number
     totalRemaining: number
     awaitingReview: number
-    debtRemaining: number
     loanOutstanding: number
     totalPricePrev: number | null
     totalPaidPrev: number | null
@@ -622,7 +682,9 @@ export interface AdminDashboard {
 export async function getAdminDashboard(range: DashboardRange = "all"): Promise<AdminDashboard> {
   await requireRoles("ADMIN")
   const scope = await resolveWarehouseScope()
+  const warehouseName = scope.mode === "scoped" ? scope.warehouseName : "Semua Gudang"
   const scopeWarehouseId = scope.mode === "scoped" ? scope.warehouseId : undefined
+  const scopeFilter = scopeWarehouseId != null ? { warehouseId: scopeWarehouseId } : {}
   const start = todayStart()
   const yStart = yesterdayStart()
 
@@ -645,7 +707,6 @@ export async function getAdminDashboard(range: DashboardRange = "all"): Promise<
     prevAgg,
     pendingReview,
     awaitingReview,
-    debt,
     loans,
     byStatusAgg,
     trend,
@@ -653,23 +714,37 @@ export async function getAdminDashboard(range: DashboardRange = "all"): Promise<
     payments,
     closedByGrade,
   ] = await Promise.all([
-    prisma.purchaseItem.count({ where: { createdAt: { gte: start }, purchase: { status: { not: "VOIDED" } } } }),
-    prisma.purchaseItem.count({ where: { createdAt: { gte: yStart, lt: start }, purchase: { status: { not: "VOIDED" } } } }),
-    prisma.purchase.count({ where: { status: "DRAFT", transactionDate: { gte: start } } }),
-    prisma.purchase.count({ where: { status: "DRAFT", transactionDate: { gte: yStart, lt: start } } }),
-    prisma.purchaseItem.count({ where: { status: "WEIGHED", createdAt: { gte: start }, purchase: { status: { not: "VOIDED" } } } }),
-    prisma.purchaseItem.count({ where: { status: "WEIGHED", createdAt: { gte: yStart, lt: start }, purchase: { status: { not: "VOIDED" } } } }),
-    prisma.purchaseItem.count({ where: { status: "GRADED", purchase: { status: { not: "VOIDED" } } } }),
+    prisma.purchaseItem.count({
+      where: { createdAt: { gte: start }, purchase: { status: { not: "VOIDED" }, ...scopeFilter } },
+    }),
+    prisma.purchaseItem.count({
+      where: { createdAt: { gte: yStart, lt: start }, purchase: { status: { not: "VOIDED" }, ...scopeFilter } },
+    }),
+    prisma.purchase.count({
+      where: { status: "DRAFT", transactionDate: { gte: start }, ...scopeFilter },
+    }),
+    prisma.purchase.count({
+      where: { status: "DRAFT", transactionDate: { gte: yStart, lt: start }, ...scopeFilter },
+    }),
+    prisma.purchaseItem.count({
+      where: { status: "WEIGHED", createdAt: { gte: start }, purchase: { status: { not: "VOIDED" }, ...scopeFilter } },
+    }),
+    prisma.purchaseItem.count({
+      where: { status: "WEIGHED", createdAt: { gte: yStart, lt: start }, purchase: { status: { not: "VOIDED" }, ...scopeFilter } },
+    }),
+    prisma.purchaseItem.count({
+      where: { status: "GRADED", purchase: { status: { not: "VOIDED" }, ...scopeFilter } },
+    }),
     prisma.purchaseItem.aggregate({
-      where: { status: "WEIGHED", createdAt: { gte: start }, purchase: { status: { not: "VOIDED" } } },
+      where: { status: "WEIGHED", createdAt: { gte: start }, purchase: { status: { not: "VOIDED" }, ...scopeFilter } },
       _sum: { subtotal: true },
     }),
     prisma.purchaseItem.aggregate({
-      where: { status: "WEIGHED", createdAt: { gte: yStart, lt: start }, purchase: { status: { not: "VOIDED" } } },
+      where: { status: "WEIGHED", createdAt: { gte: yStart, lt: start }, purchase: { status: { not: "VOIDED" }, ...scopeFilter } },
       _sum: { subtotal: true },
     }),
     prisma.purchase.aggregate({
-      where: { transactionDate: txDateFilter, status: { not: "VOIDED" } },
+      where: { transactionDate: txDateFilter, status: { not: "VOIDED" }, ...scopeFilter },
       _count: { _all: true },
       _sum: { totalPrice: true, paidAmount: true },
     }),
@@ -678,12 +753,13 @@ export async function getAdminDashboard(range: DashboardRange = "all"): Promise<
           where: {
             transactionDate: { gte: prevWindow.from!, lte: prevWindow.to },
             status: { not: "VOIDED" },
+            ...scopeFilter,
           },
           _sum: { totalPrice: true, paidAmount: true },
         })
       : null,
     prisma.purchase.findMany({
-      where: { status: "WEIGHED" },
+      where: { status: "WEIGHED", ...scopeFilter },
       orderBy: { createdAt: "desc" },
       take: 5,
       select: {
@@ -693,17 +769,16 @@ export async function getAdminDashboard(range: DashboardRange = "all"): Promise<
         farmer: { select: { name: true } },
       },
     }),
-    prisma.purchase.count({ where: { status: "WEIGHED" } }),
-    getDebtSummary(),
+    prisma.purchase.count({ where: { status: "WEIGHED", ...scopeFilter } }),
     getLoansData(),
     prisma.purchase.groupBy({
       by: ["status"],
-      where: { transactionDate: txDateFilter, status: { not: "VOIDED" } },
+      where: { transactionDate: txDateFilter, status: { not: "VOIDED" }, ...scopeFilter },
       _count: { _all: true },
     }),
-    getTrend(dashboardRangeTrendDays(range)),
+    getTrend(dashboardRangeTrendDays(range), scopeWarehouseId),
     prisma.purchaseItem.findMany({
-      where: { purchase: { transactionDate: txDateFilter, status: { not: "VOIDED" } } },
+      where: { purchase: { transactionDate: txDateFilter, status: { not: "VOIDED" }, ...scopeFilter } },
       orderBy: { createdAt: "desc" },
       take: 8,
       include: {
@@ -712,7 +787,10 @@ export async function getAdminDashboard(range: DashboardRange = "all"): Promise<
       },
     }),
     prisma.payment.findMany({
-      where: { voidedAt: null, purchase: { transactionDate: txDateFilter, status: { not: "VOIDED" } } },
+      where: {
+        voidedAt: null,
+        purchase: { transactionDate: txDateFilter, status: { not: "VOIDED" }, ...scopeFilter },
+      },
       orderBy: { paidAt: "desc" },
       take: 8,
       include: { purchase: { include: { farmer: true } }, bankAccount: true },
@@ -722,7 +800,6 @@ export async function getAdminDashboard(range: DashboardRange = "all"): Promise<
 
   const totalPrice = Number(txAgg._sum.totalPrice ?? 0)
   const totalPaid = Number(txAgg._sum.paidAmount ?? 0)
-  const debtRemaining = debt.reduce((s, f) => s + f.sisa, 0)
   const loanOutstanding = loans.reduce((s, l) => s + l.balance, 0)
 
   const statusOrder: ("DRAFT" | "WEIGHED" | "APPROVED" | "PAID")[] = [
@@ -738,6 +815,7 @@ export async function getAdminDashboard(range: DashboardRange = "all"): Promise<
   }))
 
   return {
+    warehouseName,
     today: {
       graded: gradedToday,
       yesterdayGraded: gradedYesterday,
@@ -755,7 +833,6 @@ export async function getAdminDashboard(range: DashboardRange = "all"): Promise<
       totalPaid: roundMoney(totalPaid),
       totalRemaining: roundMoney(totalPrice - totalPaid),
       awaitingReview,
-      debtRemaining: roundMoney(debtRemaining),
       loanOutstanding: roundMoney(loanOutstanding),
       totalPricePrev: prevAgg ? roundMoney(Number(prevAgg._sum.totalPrice ?? 0)) : null,
       totalPaidPrev: prevAgg ? roundMoney(Number(prevAgg._sum.paidAmount ?? 0)) : null,

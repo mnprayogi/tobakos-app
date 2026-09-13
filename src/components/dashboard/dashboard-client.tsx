@@ -34,7 +34,11 @@ export type DashboardView =
   | { role: "ADMIN"; data: AdminDashboard }
   | { role: "SUPER_ADMIN"; data: OwnerDashboard }
 
-function loadRange(view: DashboardView, range: DashboardRange): Promise<DashboardView> {
+function loadRange(
+  view: DashboardView,
+  range: DashboardRange,
+  warehouseId: number | null
+): Promise<DashboardView> {
   switch (view.role) {
     case "GRADER":
       return getGraderDashboard().then((data) => ({ role: "GRADER", data }))
@@ -43,9 +47,9 @@ function loadRange(view: DashboardView, range: DashboardRange): Promise<Dashboar
     case "FINANCE":
       return getFinanceDashboard().then((data) => ({ role: "FINANCE", data }))
     case "OWNER":
-      return getOwnerDashboard(range).then((data) => ({ role: "OWNER", data }))
+      return getOwnerDashboard(range, warehouseId ?? undefined).then((data) => ({ role: "OWNER", data }))
     case "SUPER_ADMIN":
-      return getOwnerDashboard(range).then((data) => ({ role: "SUPER_ADMIN", data }))
+      return getOwnerDashboard(range, warehouseId ?? undefined).then((data) => ({ role: "SUPER_ADMIN", data }))
     case "ADMIN":
       return getAdminDashboard(range).then((data) => ({ role: "ADMIN", data }))
   }
@@ -53,6 +57,10 @@ function loadRange(view: DashboardView, range: DashboardRange): Promise<Dashboar
 
 function showsGlobalRangeFilter(role: string): boolean {
   return role === "ADMIN"
+}
+
+function showsWarehouseFilter(role: string): boolean {
+  return role === "OWNER" || role === "SUPER_ADMIN"
 }
 
 export function DashboardClient({
@@ -64,23 +72,35 @@ export function DashboardClient({
 }) {
   const [view, setView] = useState<DashboardView>(initialView)
   const [range, setRange] = useState<DashboardRange>("all")
+  const [warehouseId, setWarehouseId] = useState<number | null>(null)
   const requestSeq = useRef(0)
 
   const reload = useCallback(async () => {
     const seq = ++requestSeq.current
-    const next = await loadRange(view, range)
+    const next = await loadRange(view, range, warehouseId)
     if (seq === requestSeq.current) setView(next)
-  }, [view, range])
+  }, [view, range, warehouseId])
 
   const handleRangeChange = useCallback(
     (r: DashboardRange) => {
       const seq = ++requestSeq.current
       setRange(r)
-      loadRange(view, r).then((data) => {
+      loadRange(view, r, warehouseId).then((data) => {
         if (seq === requestSeq.current) setView(data)
       })
     },
-    [view]
+    [view, warehouseId]
+  )
+
+  const handleWarehouseChange = useCallback(
+    (w: number | null) => {
+      const seq = ++requestSeq.current
+      setWarehouseId(w)
+      loadRange(view, range, w).then((data) => {
+        if (seq === requestSeq.current) setView(data)
+      })
+    },
+    [view, range]
   )
 
   useRealtime(null, [reload])
@@ -96,9 +116,25 @@ export function DashboardClient({
       {view.role === "GRADER" && <GraderView data={view.data} />}
       {view.role === "OPERATOR" && <OperatorView data={view.data} />}
       {view.role === "FINANCE" && <FinanceView data={view.data} />}
-      {view.role === "OWNER" && <OwnerView data={view.data} range={range} onRangeChange={handleRangeChange} />}
+      {view.role === "OWNER" && (
+        <OwnerView
+          data={view.data}
+          range={range}
+          onRangeChange={handleRangeChange}
+          warehouseId={showsWarehouseFilter(view.role) ? warehouseId : null}
+          onWarehouseChange={handleWarehouseChange}
+        />
+      )}
       {view.role === "ADMIN" && <AdminView data={view.data} range={range} />}
-      {view.role === "SUPER_ADMIN" && <OwnerView data={view.data} range={range} onRangeChange={handleRangeChange} />}
+      {view.role === "SUPER_ADMIN" && (
+        <OwnerView
+          data={view.data}
+          range={range}
+          onRangeChange={handleRangeChange}
+          warehouseId={showsWarehouseFilter(view.role) ? warehouseId : null}
+          onWarehouseChange={handleWarehouseChange}
+        />
+      )}
     </div>
   )
 }

@@ -58,11 +58,13 @@ export interface LoanBook {
   entries: LoanEntryInfo[]
 }
 
-export async function getLoansData(): Promise<LoanAccount[]> {
+export async function getLoansData(warehouseId?: number): Promise<LoanAccount[]> {
   await requireRoles("ADMIN", "FINANCE", "OWNER")
   const scope = await resolveWarehouseScope()
+  const warehouseFilter =
+    scope.mode === "scoped" ? { warehouseId: scope.warehouseId } : warehouseId != null ? { warehouseId } : {}
   const loans = await prisma.farmerLoan.findMany({
-    where: scope.mode === "scoped" ? { warehouseId: scope.warehouseId } : {},
+    where: warehouseFilter,
     orderBy: { updatedAt: "desc" },
     include: {
       farmer: true,

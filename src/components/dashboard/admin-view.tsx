@@ -3,7 +3,6 @@ import {
   ClipboardList,
   Clock,
   FileText,
-  HandCoins,
   Landmark,
   Scale,
   ScanLine,
@@ -65,7 +64,7 @@ export function AdminView({ data, range }: { data: AdminDashboard; range: Dashbo
 
       <section className="space-y-2.5">
         <KpiSectionTitle label="Keuangan" />
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           <KpiCard label="Total transaksi" value={String(data.finance.totalTransactions)} icon={ClipboardList} />
           <KpiCard
             label="Total terbayar"
@@ -81,12 +80,6 @@ export function AdminView({ data, range }: { data: AdminDashboard; range: Dashbo
             tone={data.finance.totalRemaining > 0 ? "red" : "default"}
           />
           <KpiCard label="Menunggu review" value={String(data.finance.awaitingReview)} icon={Clock} tone="amber" />
-          <KpiCard
-            label="Utang transaksi"
-            value={formatCurrency(data.finance.debtRemaining)}
-            icon={HandCoins}
-            tone={data.finance.debtRemaining > 0 ? "amber" : "default"}
-          />
           <KpiCard
             label="Utang piutang"
             value={formatCurrency(data.finance.loanOutstanding)}
@@ -118,9 +111,7 @@ export function AdminView({ data, range }: { data: AdminDashboard; range: Dashbo
           <Panel title="Per Grade / Komposisi">
             <GradeCompositionPanel
               initialItems={data.closedByGrade}
-              range={range}
-              selectable={false}
-              warehouses={[]}
+              fixedWarehouseName={data.warehouseName}
             />
           </Panel>
         </div>

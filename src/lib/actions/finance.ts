@@ -667,13 +667,15 @@ export interface DebtFarmer {
   purchases: DebtPurchase[]
 }
 
-export async function getDebtSummary(): Promise<DebtFarmer[]> {
+export async function getDebtSummary(warehouseId?: number): Promise<DebtFarmer[]> {
   await requireRoles("ADMIN", "FINANCE", "OWNER")
   const scope = await resolveWarehouseScope()
+  const warehouseFilter =
+    scope.mode === "scoped" ? { warehouseId: scope.warehouseId } : warehouseId != null ? { warehouseId } : {}
   const purchases = await prisma.purchase.findMany({
     where: {
       status: { in: ["APPROVED", "PAID"] },
-      ...(scope.mode === "scoped" ? { warehouseId: scope.warehouseId } : {}),
+      ...warehouseFilter,
     },
     orderBy: [{ farmerId: "asc" }, { createdAt: "desc" }],
     include: {
@@ -702,7 +704,7 @@ export async function getDebtSummary(): Promise<DebtFarmer[]> {
     where: {
       farmerId: { in: farmerIds },
       status: "ACTIVE",
-      ...(scope.mode === "scoped" ? { warehouseId: scope.warehouseId } : {}),
+      ...warehouseFilter,
     },
     include: { entries: { select: { type: true, amount: true, voidedAt: true } } },
   })

@@ -4,7 +4,6 @@ import Link from "next/link"
 import {
   Boxes,
   ClipboardList,
-  HandCoins,
   Landmark,
   Scale,
   TrendingDown,
@@ -29,15 +28,39 @@ export function OwnerView({
   data,
   range,
   onRangeChange,
+  warehouseId,
+  onWarehouseChange,
 }: {
   data: OwnerDashboard
   range: DashboardRange
   onRangeChange: (r: DashboardRange) => void
+  warehouseId: number | null
+  onWarehouseChange: (w: number | null) => void
 }) {
   const trendDays = dashboardRangeTrendDays(range)
   const warehouseTotal = data.byWarehouse.reduce((s, w) => s + w.totalPrice, 0)
+  const selectedWarehouseName =
+    warehouseId != null ? data.warehouses.find((w) => w.id === warehouseId)?.name ?? null : null
   return (
     <div className="space-y-5">
+      <section className="flex flex-wrap items-center justify-end gap-2">
+        <div className="relative w-64">
+          <Warehouse className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-2" />
+          <select
+            value={warehouseId ?? ""}
+            onChange={(e) => onWarehouseChange(e.target.value ? Number(e.target.value) : null)}
+            className="w-full cursor-pointer appearance-none rounded-md border border-border-soft bg-panel-alt py-1.5 pl-8 pr-8 text-[12px] font-bold text-foreground focus:border-emerald/50 focus:outline-none"
+          >
+            <option value="">Semua Gudang</option>
+            {data.warehouses.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.code} · {w.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </section>
+
       <section className="space-y-2.5">
         <KpiSectionTitle label="Operasional" />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -49,7 +72,7 @@ export function OwnerView({
 
       <section className="space-y-2.5">
         <KpiSectionTitle label="Keuangan" />
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           <KpiCard label="Nilai transaksi" value={formatCurrency(data.totalPrice)} icon={Wallet} tone="blue" />
           <KpiCard label="Total terbayar" value={formatCurrency(data.totalPaid)} icon={TrendingUp} tone="emerald" />
           <KpiCard
@@ -57,12 +80,6 @@ export function OwnerView({
             value={formatCurrency(data.totalRemaining)}
             icon={TrendingDown}
             tone={data.totalRemaining > 0 ? "red" : "default"}
-          />
-          <KpiCard
-            label="Utang transaksi"
-            value={formatCurrency(data.debtRemaining)}
-            icon={HandCoins}
-            tone={data.debtRemaining > 0 ? "amber" : "default"}
           />
           <KpiCard
             label="Utang piutang beredar"
@@ -146,9 +163,7 @@ export function OwnerView({
         <Panel title="Per Grade / Komposisi">
           <GradeCompositionPanel
             initialItems={data.closedByGrade}
-            range={range}
-            selectable
-            warehouses={data.warehouses}
+            fixedWarehouseName={selectedWarehouseName ?? "Semua Gudang"}
           />
         </Panel>
       </div>
