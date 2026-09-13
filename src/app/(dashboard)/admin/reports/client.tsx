@@ -23,12 +23,14 @@ import {
   getCustomerSummary,
   getCapitalFlow,
   getTaxSummary,
+  getFinancialPosition,
   type FarmerSummaryRow,
   type PeriodSummaryRow,
   type TransactionDetailRow,
   type CustomerSummaryRow,
   type CapitalFlowRow,
   type TaxSummaryRow,
+  type FinancialPositionRow,
 } from "@/lib/actions/reports"
 import type { WarehouseScope } from "@/lib/actions/scope"
 import { formatCurrency, formatDate } from "@/lib/utils"
@@ -52,7 +54,7 @@ const ReportPrint = lazyPrint(() =>
 interface WarehouseMeta { id: number; code: string; name: string }
 interface FarmerMeta { id: number; name: string; nik: string | null }
 
-type Tab = "farmer" | "period" | "transaction" | "customer" | "capital" | "tax"
+type Tab = "farmer" | "period" | "transaction" | "customer" | "capital" | "tax" | "position"
 
 const PRESETS: { key: string; label: string; type: "days" | "month"; days?: number }[] = [
   { key: "today", label: "Hari Ini", type: "days", days: 0 },
@@ -108,6 +110,7 @@ export function ReportsClient({
   const [customerRows, setCustomerRows] = useState<CustomerSummaryRow[] | null>(null)
   const [capitalRows, setCapitalRows] = useState<CapitalFlowRow[] | null>(null)
   const [taxRows, setTaxRows] = useState<TaxSummaryRow[] | null>(null)
+  const [positionRows, setPositionRows] = useState<FinancialPositionRow[] | null>(null)
   const [openTx, setOpenTx] = useState<number[]>([])
 
   const printRef = useRef<HTMLDivElement>(null)
@@ -171,6 +174,7 @@ export function ReportsClient({
       }
       if (tab === "capital") setCapitalRows(await getCapitalFlow(filters))
       if (tab === "tax") setTaxRows(await getTaxSummary(filters))
+      if (tab === "position") setPositionRows(await getFinancialPosition(filters))
     } catch (err) {
       toast.error((err as Error).message)
     } finally {
@@ -184,7 +188,7 @@ export function ReportsClient({
       const { exportReportExcel } = await import("@/lib/export-excel")
       await exportReportExcel(
         tab,
-        { farmerRows, periodRows, txRows, customerRows, capitalRows, taxRows },
+        { farmerRows, periodRows, txRows, customerRows, capitalRows, taxRows, positionRows },
         from,
         to
       )
@@ -221,6 +225,7 @@ export function ReportsClient({
     setCustomerRows(null)
     setCapitalRows(null)
     setTaxRows(null)
+    setPositionRows(null)
     setOpenTx([])
   }
 
@@ -243,6 +248,7 @@ export function ReportsClient({
     setCustomerRows(null)
     setCapitalRows(null)
     setTaxRows(null)
+    setPositionRows(null)
     setOpenTx([])
   }
 
@@ -304,6 +310,10 @@ export function ReportsClient({
         totalOut: capitalRows.reduce((s, r) => s + r.totalOut, 0),
         netFlow: capitalRows.reduce((s, r) => s + r.netFlow, 0),
         taxAmount: capitalRows.reduce((s, r) => s + r.taxAmount, 0),
+        endingKasPembelian: capitalRows.reduce((s, r) => s + r.endingKasPembelian, 0),
+        endingKasOperasional: capitalRows.reduce((s, r) => s + r.endingKasOperasional, 0),
+        endingBank: capitalRows.reduce((s, r) => s + r.endingBank, 0),
+        endingTotal: capitalRows.reduce((s, r) => s + r.endingTotal, 0),
       }
     : null
 
@@ -314,6 +324,19 @@ export function ReportsClient({
       }
     : null
 
+  const positionTotals = positionRows
+    ? {
+        kasPembelian: positionRows.reduce((s, r) => s + r.kasPembelian, 0),
+        kasOperasional: positionRows.reduce((s, r) => s + r.kasOperasional, 0),
+        totalKas: positionRows.reduce((s, r) => s + r.totalKas, 0),
+        totalBank: positionRows.reduce((s, r) => s + r.totalBank, 0),
+        piutangModal: positionRows.reduce((s, r) => s + r.piutangModal, 0),
+        totalAset: positionRows.reduce((s, r) => s + r.totalAset, 0),
+        utangKePetani: positionRows.reduce((s, r) => s + r.utangKePetani, 0),
+        posisiBersih: positionRows.reduce((s, r) => s + r.posisiBersih, 0),
+      }
+    : null
+
   const tabs: { key: Tab; label: string }[] = [
     { key: "farmer", label: "Rekap Per Petani" },
     { key: "period", label: "Rekap Per Periode" },
@@ -321,16 +344,18 @@ export function ReportsClient({
     { key: "customer", label: "Rekap Per Customer" },
     { key: "capital", label: "Arus Modal" },
     { key: "tax", label: "Rekap Pajak" },
+    { key: "position", label: "Posisi Keuangan" },
   ]
 
-  const loaded = farmerRows !== null || periodRows !== null || txRows !== null || customerRows !== null || capitalRows !== null || taxRows !== null
+  const loaded = farmerRows !== null || periodRows !== null || txRows !== null || customerRows !== null || capitalRows !== null || taxRows !== null || positionRows !== null
   const currentCount =
     tab === "farmer" ? farmerRows?.length
     : tab === "period" ? periodRows?.length
     : tab === "transaction" ? txRows?.length
     : tab === "customer" ? customerRows?.length
     : tab === "capital" ? capitalRows?.length
-    : taxRows?.length
+    : tab === "tax" ? taxRows?.length
+    : positionRows?.length
 
   const chips: { key: ChipKey; label: string; locked?: boolean }[] = []
   if (from || to) chips.push({ key: "date", label: `${displayDate(from)} → ${displayDate(to)}` })
@@ -708,7 +733,7 @@ export function ReportsClient({
             <NoDataEmpty onReset={resetFilters} />
           ) : (
             <>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-8 gap-3">
                 <Stat label="Gudang" value={String(capitalRows.length)} />
                 <Stat label="Total Masuk" value={formatCurrency(capitalTotals!.totalIn)} tone="emerald" />
                 <Stat label="Total Keluar" value={formatCurrency(capitalTotals!.totalOut)} tone="amber" />
@@ -719,16 +744,19 @@ export function ReportsClient({
                 />
                 <Stat label="Pembelian Tunai" value={formatCurrency(capitalTotals!.purchaseCash + capitalTotals!.purchaseBank)} tone="amber" />
                 <Stat label="Pajak" value={formatCurrency(capitalTotals!.taxAmount)} tone="red" />
+                <Stat label="Saldo Kas Akhir" value={formatCurrency(capitalTotals!.endingKasPembelian + capitalTotals!.endingKasOperasional)} tone="emerald" />
+                <Stat label="Saldo Bank Akhir" value={formatCurrency(capitalTotals!.endingBank)} tone="emerald" />
               </div>
               <div className="max-h-[560px] overflow-auto rounded-lg border border-border-soft">
-                <table className="w-full min-w-[1080px] border-collapse text-[12.5px]">
+                <table className="w-full min-w-[1380px] border-collapse text-[12.5px]">
                   <thead>
                     <tr>
                       <th rowSpan={2} className={`${thBase} text-left pr-2 align-bottom`}>Gudang</th>
                       <th colSpan={4} className={`${thBase} text-center px-2 border-b border-border-soft text-emerald`}>MASUK</th>
                       <th colSpan={5} className={`${thBase} text-center px-2 border-b border-border-soft text-amber`}>KELUAR</th>
                       <th rowSpan={2} className={`${thBase} text-right px-2 align-bottom`}>Selisih</th>
-                      <th rowSpan={2} className={`${thBase} text-right pl-2 align-bottom`}>Pajak</th>
+                      <th rowSpan={2} className={`${thBase} text-right px-2 align-bottom`}>Pajak</th>
+                      <th colSpan={4} className={`${thBase} text-center pl-2 border-b border-border-soft text-emerald`}>SALDO AKHIR</th>
                     </tr>
                     <tr>
                       <th className={`${thBase} text-right px-2`}>Bayar Hutang</th>
@@ -740,6 +768,10 @@ export function ReportsClient({
                       <th className={`${thBase} text-right px-2`}>Pinjam Modal</th>
                       <th className={`${thBase} text-right px-2`}>Operasional</th>
                       <th className={`${thBase} text-right px-2`}>Total</th>
+                      <th className={`${thBase} text-right px-2`}>Kas Pembelian</th>
+                      <th className={`${thBase} text-right px-2`}>Kas Operasional</th>
+                      <th className={`${thBase} text-right px-2`}>Bank</th>
+                      <th className={`${thBase} text-right pl-2`}>Total</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -761,7 +793,11 @@ export function ReportsClient({
                         <td className="py-2 px-2 border-b border-border-soft font-mono text-right font-bold">
                           <span className={r.netFlow >= 0 ? "text-emerald" : "text-red-deduction"}>{formatCurrency(r.netFlow)}</span>
                         </td>
-                        <td className="py-2 pl-2 border-b border-border-soft font-mono text-right text-red-deduction">{formatCurrency(r.taxAmount)}</td>
+                        <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-red-deduction">{formatCurrency(r.taxAmount)}</td>
+                        <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-emerald">{formatCurrency(r.endingKasPembelian)}</td>
+                        <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-emerald">{formatCurrency(r.endingKasOperasional)}</td>
+                        <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-emerald">{formatCurrency(r.endingBank)}</td>
+                        <td className="py-2 pl-2 border-b border-border-soft font-mono text-right font-bold text-emerald">{formatCurrency(r.endingTotal)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -780,7 +816,11 @@ export function ReportsClient({
                       <td className="py-2.5 px-2 font-mono text-right font-bold">
                         <span className={capitalTotals!.netFlow >= 0 ? "text-emerald" : "text-red-deduction"}>{formatCurrency(capitalTotals!.netFlow)}</span>
                       </td>
-                      <td className="py-2.5 pl-2 font-mono text-right font-bold text-red-deduction">{formatCurrency(capitalTotals!.taxAmount)}</td>
+                      <td className="py-2.5 px-2 font-mono text-right font-bold text-red-deduction">{formatCurrency(capitalTotals!.taxAmount)}</td>
+                      <td className="py-2.5 px-2 font-mono text-right font-bold text-emerald">{formatCurrency(capitalTotals!.endingKasPembelian)}</td>
+                      <td className="py-2.5 px-2 font-mono text-right font-bold text-emerald">{formatCurrency(capitalTotals!.endingKasOperasional)}</td>
+                      <td className="py-2.5 px-2 font-mono text-right font-bold text-emerald">{formatCurrency(capitalTotals!.endingBank)}</td>
+                      <td className="py-2.5 pl-2 font-mono text-right font-bold text-emerald">{formatCurrency(capitalTotals!.endingTotal)}</td>
                     </tr>
                   </tfoot>
                 </table>
@@ -789,8 +829,90 @@ export function ReportsClient({
                 Menampilkan <b className="text-foreground">seluruh mutasi kas &amp; bank</b> pada periode ini per gudang.{" "}
                 <b className="text-emerald">Masuk</b> = kas/bank yang masuk (bayar hutang tunai, kas manual, bank masuk);{" "}
                 <b className="text-amber">Keluar</b> = kas/bank yang keluar (beli tembakau tunai/transfer, pinjamkan modal, operasional, kas manual).{" "}
-                <b className="text-foreground">Selisih</b> = Masuk − Keluar (negatif berarti net pengeluaran modal). Pengeluaran modal untuk
-                potongan hutang tercatat sebagai <b className="text-foreground">Pinjam Modal</b> saat dana diberikan, bukan saat dipotong dari transaksi.
+                <b className="text-foreground">Selisih</b> = Masuk − Keluar (negatif berarti net pengeluaran modal). <b className="text-foreground">SALDO AKHIR</b>{" "}
+                adalah posisi kas/bank kumulatif s/d akhir periode (tidak dibatasi tanggal mulai). Basis arus mengikuti tanggal mutasi ({`createdAt`}),
+                bukan tanggal transaksi; pengeluaran modal untuk potongan hutang tercatat sebagai{" "}
+                <b className="text-foreground">Pinjam Modal</b> saat dana diberikan, bukan saat dipotong dari transaksi.
+              </p>
+            </>
+          )
+        ) : tab === "position" ? (
+          positionRows === null ? (
+            <InitialEmpty />
+          ) : positionRows.length === 0 ? (
+            <NoDataEmpty onReset={resetFilters} />
+          ) : (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
+                <Stat label="Gudang" value={String(positionRows.length)} />
+                <Stat label="Total Kas" value={formatCurrency(positionTotals!.totalKas)} tone="emerald" />
+                <Stat label="Saldo Bank" value={formatCurrency(positionTotals!.totalBank)} tone="emerald" />
+                <Stat label="Piutang Modal Petani" value={formatCurrency(positionTotals!.piutangModal)} tone="amber" />
+                <Stat label="Total Aset" value={formatCurrency(positionTotals!.totalAset)} tone="amber" />
+                <Stat label="Utang ke Petani" value={formatCurrency(positionTotals!.utangKePetani)} tone="red" />
+                <Stat
+                  label="Posisi Bersih"
+                  value={formatCurrency(positionTotals!.posisiBersih)}
+                  tone={positionTotals!.posisiBersih >= 0 ? "emerald" : "red"}
+                />
+              </div>
+              <div className="max-h-[560px] overflow-auto rounded-lg border border-border-soft">
+                <table className="w-full min-w-[940px] border-collapse text-[12.5px]">
+                  <thead>
+                    <tr>
+                      <th className={`${thBase} text-left pr-2`}>Gudang</th>
+                      <th className={`${thBase} text-right px-2`}>Kas Pembelian</th>
+                      <th className={`${thBase} text-right px-2`}>Kas Operasional</th>
+                      <th className={`${thBase} text-right px-2`}>Total Kas</th>
+                      <th className={`${thBase} text-right px-2`}>Saldo Bank</th>
+                      <th className={`${thBase} text-right px-2`}>Piutang Modal</th>
+                      <th className={`${thBase} text-right px-2`}>Total Aset</th>
+                      <th className={`${thBase} text-right px-2`}>Utang Petani</th>
+                      <th className={`${thBase} text-right pl-2`}>Posisi Bersih</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {positionRows.map((r) => (
+                      <tr key={r.warehouseId ?? "shared"} className="transition-colors hover:bg-panel-alt/50">
+                        <td className="py-2 pr-2 border-b border-border-soft text-foreground">
+                          <b>{r.warehouseName}</b>
+                          {r.warehouseCode && <span className="block font-mono text-[10.5px] text-muted-2">{r.warehouseCode}</span>}
+                        </td>
+                        <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-emerald">{formatCurrency(r.kasPembelian)}</td>
+                        <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-emerald">{formatCurrency(r.kasOperasional)}</td>
+                        <td className="py-2 px-2 border-b border-border-soft font-mono text-right font-bold text-emerald">{formatCurrency(r.totalKas)}</td>
+                        <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-emerald">{formatCurrency(r.totalBank)}</td>
+                        <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-amber">{formatCurrency(r.piutangModal)}</td>
+                        <td className="py-2 px-2 border-b border-border-soft font-mono text-right font-bold text-amber">{formatCurrency(r.totalAset)}</td>
+                        <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-red-deduction">{formatCurrency(r.utangKePetani)}</td>
+                        <td className="py-2 pl-2 border-b border-border-soft font-mono text-right font-bold">
+                          <span className={r.posisiBersih >= 0 ? "text-emerald" : "text-red-deduction"}>{formatCurrency(r.posisiBersih)}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-border bg-panel-alt/60">
+                      <td className="py-2.5 pr-2 text-[11px] font-extrabold uppercase tracking-wide text-foreground">Total</td>
+                      <td className="py-2.5 px-2 font-mono text-right font-bold text-emerald">{formatCurrency(positionTotals!.kasPembelian)}</td>
+                      <td className="py-2.5 px-2 font-mono text-right font-bold text-emerald">{formatCurrency(positionTotals!.kasOperasional)}</td>
+                      <td className="py-2.5 px-2 font-mono text-right font-bold text-emerald">{formatCurrency(positionTotals!.totalKas)}</td>
+                      <td className="py-2.5 px-2 font-mono text-right font-bold text-emerald">{formatCurrency(positionTotals!.totalBank)}</td>
+                      <td className="py-2.5 px-2 font-mono text-right font-bold text-amber">{formatCurrency(positionTotals!.piutangModal)}</td>
+                      <td className="py-2.5 px-2 font-mono text-right font-bold text-amber">{formatCurrency(positionTotals!.totalAset)}</td>
+                      <td className="py-2.5 px-2 font-mono text-right font-bold text-red-deduction">{formatCurrency(positionTotals!.utangKePetani)}</td>
+                      <td className="py-2.5 pl-2 font-mono text-right font-bold">
+                        <span className={positionTotals!.posisiBersih >= 0 ? "text-emerald" : "text-red-deduction"}>{formatCurrency(positionTotals!.posisiBersih)}</span>
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              <p className="text-[11px] text-muted-2">
+                Posisi keuangan per <b className="text-foreground">akhir periode ({to ? formatDate(to) : "sekarang"})</b> — snapshot kumulatif{" "}
+                (tidak dibatasi tanggal mulai). <b className="text-emerald">Aset</b> = kas + bank + piutang modal petani;{" "}
+                <b className="text-red-deduction">Utang ke Petani</b> = sisa tagihan transaksi <b className="text-foreground">APPROVED</b> yang belum dibayar;{" "}
+                <b className="text-foreground">Posisi Bersih</b> = Aset − Utang.
               </p>
             </>
           )
@@ -884,6 +1006,9 @@ export function ReportsClient({
                         <span className="flex items-center gap-2.5 flex-wrap">
                           <span className="font-mono text-[10.5px] text-muted-2">{p.totalBales} bale</span>
                           <span className="font-mono text-[12.5px] font-bold text-amber">{formatCurrency(p.totalPrice)}</span>
+                          {p.originalTotalPrice != null && p.originalTotalPrice !== p.totalPrice && (
+                            <span className="font-mono text-[10.5px] text-muted-2 line-through">awal {formatCurrency(p.originalTotalPrice)}</span>
+                          )}
                           {p.remaining > 0 ? (
                             <>
                               <span className="font-mono text-[11px] text-emerald">{formatCurrency(p.paidAmount)}</span>
@@ -965,6 +1090,7 @@ export function ReportsClient({
           customerRows={customerRows}
           capitalRows={capitalRows}
           taxRows={taxRows}
+          positionRows={positionRows}
           companyName={companyName}
           warehouseLabel={warehouseLabel}
           printedBy={userName}

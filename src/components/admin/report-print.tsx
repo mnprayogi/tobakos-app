@@ -7,6 +7,7 @@ import type {
   CustomerSummaryRow,
   CapitalFlowRow,
   TaxSummaryRow,
+  FinancialPositionRow,
 } from "@/lib/actions/reports"
 
 function fmtCurrency(v: number): string {
@@ -26,7 +27,7 @@ function dateLabel(s: string): string {
 }
 
 interface ReportPrintProps {
-  tab: "farmer" | "period" | "transaction" | "customer" | "capital" | "tax"
+  tab: "farmer" | "period" | "transaction" | "customer" | "capital" | "tax" | "position"
   from: string
   to: string
   farmerRows: FarmerSummaryRow[] | null
@@ -35,6 +36,7 @@ interface ReportPrintProps {
   customerRows?: CustomerSummaryRow[] | null
   capitalRows?: CapitalFlowRow[] | null
   taxRows?: TaxSummaryRow[] | null
+  positionRows?: FinancialPositionRow[] | null
   companyName?: string
   warehouseLabel?: string
   printedBy?: string
@@ -59,7 +61,7 @@ const td: CSSProperties = {
 }
 
 export const ReportPrint = forwardRef<HTMLDivElement, ReportPrintProps>(function ReportPrint(
-  { tab, from, to, farmerRows, periodRows, txRows, customerRows, capitalRows, taxRows, companyName = "TobakOS", warehouseLabel, printedBy = "", printedAt = "" },
+  { tab, from, to, farmerRows, periodRows, txRows, customerRows, capitalRows, taxRows, positionRows, companyName = "TobakOS", warehouseLabel, printedBy = "", printedAt = "" },
   ref
 ) {
   const title =
@@ -68,6 +70,7 @@ export const ReportPrint = forwardRef<HTMLDivElement, ReportPrintProps>(function
     : tab === "transaction" ? "RINCIAN TRANSAKSI"
     : tab === "customer" ? "REKAP PER CUSTOMER"
     : tab === "capital" ? "ARUS MODAL"
+    : tab === "position" ? "POSISI KEUANGAN"
     : "REKAP PAJAK"
 
   const farmerTotals = farmerRows
@@ -100,7 +103,20 @@ export const ReportPrint = forwardRef<HTMLDivElement, ReportPrintProps>(function
       }
     : null
 
-  const rows = farmerRows ?? periodRows ?? txRows ?? customerRows ?? capitalRows ?? taxRows ?? []
+  const posTotals = positionRows
+    ? {
+        kasPembelian: positionRows.reduce((s, r) => s + r.kasPembelian, 0),
+        kasOperasional: positionRows.reduce((s, r) => s + r.kasOperasional, 0),
+        totalKas: positionRows.reduce((s, r) => s + r.totalKas, 0),
+        totalBank: positionRows.reduce((s, r) => s + r.totalBank, 0),
+        piutangModal: positionRows.reduce((s, r) => s + r.piutangModal, 0),
+        totalAset: positionRows.reduce((s, r) => s + r.totalAset, 0),
+        utangKePetani: positionRows.reduce((s, r) => s + r.utangKePetani, 0),
+        posisiBersih: positionRows.reduce((s, r) => s + r.posisiBersih, 0),
+      }
+    : null
+
+  const rows = farmerRows ?? periodRows ?? txRows ?? customerRows ?? capitalRows ?? taxRows ?? positionRows ?? []
 
   return (
     <div ref={ref} style={{ width: "100%", maxWidth: "180mm", margin: "0 auto", fontFamily: "'Courier New', Courier, monospace" }}>
@@ -207,6 +223,9 @@ export const ReportPrint = forwardRef<HTMLDivElement, ReportPrintProps>(function
                     <td style={{ ...td, textAlign: "center" }}>{p.warehouseCode ?? "\u2014"}</td>
                     <td style={{ ...td, textAlign: "center" }}>{p.status}</td>
                     <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>{fmtCurrency(p.totalPrice)}</td>
+                    {p.originalTotalPrice != null && p.originalTotalPrice !== p.totalPrice && (
+                      <td style={{ ...td, textAlign: "right" }}>Awal: {fmtCurrency(p.originalTotalPrice)}</td>
+                    )}
                   </tr>
                 </tbody>
               </table>
@@ -296,6 +315,7 @@ export const ReportPrint = forwardRef<HTMLDivElement, ReportPrintProps>(function
               <th style={th} colSpan={5}>KELUAR</th>
               <th style={th}>Selisih</th>
               <th style={th}>Pajak</th>
+              <th style={th} colSpan={4}>SALDO AKHIR</th>
             </tr>
             <tr>
               <th style={th} />
@@ -310,6 +330,10 @@ export const ReportPrint = forwardRef<HTMLDivElement, ReportPrintProps>(function
               <th style={th}>Total Keluar</th>
               <th style={th} />
               <th style={th} />
+              <th style={th}>Kas Pembelian</th>
+              <th style={th}>Kas Operasional</th>
+              <th style={th}>Bank</th>
+              <th style={th}>Total</th>
             </tr>
           </thead>
           <tbody>
@@ -327,6 +351,10 @@ export const ReportPrint = forwardRef<HTMLDivElement, ReportPrintProps>(function
                 <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>{fmtCurrency(r.totalOut)}</td>
                 <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>{fmtCurrency(r.netFlow)}</td>
                 <td style={{ ...td, textAlign: "right" }}>{fmtCurrency(r.taxAmount)}</td>
+                <td style={{ ...td, textAlign: "right" }}>{fmtCurrency(r.endingKasPembelian)}</td>
+                <td style={{ ...td, textAlign: "right" }}>{fmtCurrency(r.endingKasOperasional)}</td>
+                <td style={{ ...td, textAlign: "right" }}>{fmtCurrency(r.endingBank)}</td>
+                <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>{fmtCurrency(r.endingTotal)}</td>
               </tr>
             ))}
           </tbody>
@@ -350,6 +378,50 @@ export const ReportPrint = forwardRef<HTMLDivElement, ReportPrintProps>(function
                 <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>{fmtCurrency(r.taxAmount)}</td>
               </tr>
             ))}
+          </tbody>
+        </table>
+      )}
+
+      {tab === "position" && positionRows && posTotals && (
+        <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "3mm" }}>
+          <thead>
+            <tr>
+              <th style={th}>Gudang</th>
+              <th style={th}>Kas Pembelian</th>
+              <th style={th}>Kas Operasional</th>
+              <th style={th}>Total Kas</th>
+              <th style={th}>Saldo Bank</th>
+              <th style={th}>Piutang Modal</th>
+              <th style={th}>Total Aset</th>
+              <th style={th}>Utang Petani</th>
+              <th style={th}>Posisi Bersih</th>
+            </tr>
+          </thead>
+          <tbody>
+            {positionRows.map((r) => (
+              <tr key={r.warehouseId ?? -1}>
+                <td style={{ ...td, fontWeight: 700 }}>{r.warehouseName}</td>
+                <td style={{ ...td, textAlign: "right" }}>{fmtCurrency(r.kasPembelian)}</td>
+                <td style={{ ...td, textAlign: "right" }}>{fmtCurrency(r.kasOperasional)}</td>
+                <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>{fmtCurrency(r.totalKas)}</td>
+                <td style={{ ...td, textAlign: "right" }}>{fmtCurrency(r.totalBank)}</td>
+                <td style={{ ...td, textAlign: "right" }}>{fmtCurrency(r.piutangModal)}</td>
+                <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>{fmtCurrency(r.totalAset)}</td>
+                <td style={{ ...td, textAlign: "right" }}>{fmtCurrency(r.utangKePetani)}</td>
+                <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>{fmtCurrency(r.posisiBersih)}</td>
+              </tr>
+            ))}
+            <tr>
+              <td style={{ ...td, fontWeight: 800 }}>TOTAL</td>
+              <td style={{ ...td, textAlign: "right", fontWeight: 800 }}>{fmtCurrency(posTotals.kasPembelian)}</td>
+              <td style={{ ...td, textAlign: "right", fontWeight: 800 }}>{fmtCurrency(posTotals.kasOperasional)}</td>
+              <td style={{ ...td, textAlign: "right", fontWeight: 800 }}>{fmtCurrency(posTotals.totalKas)}</td>
+              <td style={{ ...td, textAlign: "right", fontWeight: 800 }}>{fmtCurrency(posTotals.totalBank)}</td>
+              <td style={{ ...td, textAlign: "right", fontWeight: 800 }}>{fmtCurrency(posTotals.piutangModal)}</td>
+              <td style={{ ...td, textAlign: "right", fontWeight: 800 }}>{fmtCurrency(posTotals.totalAset)}</td>
+              <td style={{ ...td, textAlign: "right", fontWeight: 800 }}>{fmtCurrency(posTotals.utangKePetani)}</td>
+              <td style={{ ...td, textAlign: "right", fontWeight: 800 }}>{fmtCurrency(posTotals.posisiBersih)}</td>
+            </tr>
           </tbody>
         </table>
       )}

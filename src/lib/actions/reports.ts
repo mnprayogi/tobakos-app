@@ -322,6 +322,11 @@ export interface CapitalFlowRow {
   // SELISIH
   netFlow: number
   taxAmount: number
+  // SALDO AKHIR (kumulatif s/d akhir periode, tidak dibatasi tanggal 'dari')
+  endingKasPembelian: number
+  endingKasOperasional: number
+  endingBank: number
+  endingTotal: number
 }
 
 export async function getCapitalFlow(filters: ReportFilters): Promise<CapitalFlowRow[]> {
@@ -329,28 +334,20 @@ export async function getCapitalFlow(filters: ReportFilters): Promise<CapitalFlo
   const { from, to } = dateRange(filters)
   const scope = await resolveWarehouseScope()
 
-  const scopedWarehouse =
+  const warehouses =
     scope.mode === "scoped"
-      ? [{ id: scope.warehouseId, code: "", name: "" }]
-      : await prisma.warehouse.findMany({ where: { active: true }, orderBy: { code: "asc" } })
+      ? await prisma.warehouse.findMany({
+          where: { id: scope.warehouseId },
+          select: { id: true, code: true, name: true },
+        })
+      : await prisma.warehouse.findMany({
+          where: { active: true, ...(filters.warehouseId ? { id: filters.warehouseId } : {}) },
+          orderBy: { code: "asc" },
+          select: { id: true, code: true, name: true },
+        })
 
-  const warehouseIds = scopedWarehouse.map((w) => w.id)
-  const widFilter =
-    warehouseIds.length > 0 ? { warehouseId: { in: warehouseIds } } : {}
-  const bankAccountIdsByWarehouse = new Map<number, number[]>()
-
-  if (scope.mode !== "scoped") {
-    const banks = await prisma.bankAccount.findMany({
-      where: { active: true, warehouseId: { not: null } },
-      select: { id: true, warehouseId: true },
-    })
-    for (const b of banks) {
-      if (b.warehouseId == null) continue
-      const arr = bankAccountIdsByWarehouse.get(b.warehouseId) ?? []
-      arr.push(b.id)
-      bankAccountIdsByWarehouse.set(b.warehouseId, arr)
-    }
-  }
+  const warehouseIds = warehouses.map((w) => w.id)
+  const widFilter = warehouseIds.length > 0 ? { warehouseId: { in: warehouseIds } } : {}
 
   const [purchases, cashes, banks] = await Promise.all([
     prisma.purchase.findMany({
@@ -359,10 +356,8 @@ export async function getCapitalFlow(filters: ReportFilters): Promise<CapitalFlo
         status: { in: ["APPROVED", "PAID"] },
         ...widFilter,
         ...(filters.farmerId ? { farmerId: filters.farmerId } : {}),
-        ...(filters.warehouseId && scope.mode !== "scoped" ? { warehouseId: filters.warehouseId } : {}),
       },
       select: {
-        id: true,
         warehouseId: true,
         taxAmount: true,
       },
@@ -371,7 +366,7 @@ export async function getCapitalFlow(filters: ReportFilters): Promise<CapitalFlo
       where: {
         voidedAt: null,
         ...widFilter,
-        createdAt: { gte: from, lte: to },
+        createdAt: { lte: to },
       },
       select: {
         warehouseId: true,
@@ -381,12 +376,13 @@ export async function getCapitalFlow(filters: ReportFilters): Promise<CapitalFlo
         purchaseId: true,
         loanEntryId: true,
         loanEntry: { select: { type: true } },
+        createdAt: true,
       },
     }),
     prisma.bankEntry.findMany({
       where: {
         voidedAt: null,
-        createdAt: { gte: from, lte: to },
+        createdAt: { lte: to },
         ...(scope.mode !== "scoped"
           ? filters.warehouseId
             ? { bankAccount: { warehouseId: filters.warehouseId } }
@@ -402,6 +398,7 @@ export async function getCapitalFlow(filters: ReportFilters): Promise<CapitalFlo
         type: true,
         amount: true,
         purchaseId: true,
+        createdAt: true,
         bankAccount: { select: { warehouseId: true } },
         purchase: { select: { warehouseId: true } },
       },
@@ -418,7 +415,7 @@ export async function getCapitalFlow(filters: ReportFilters): Promise<CapitalFlo
     return b.bankAccount?.warehouseId ?? b.purchase?.warehouseId ?? null
   }
 
-  const rows: CapitalFlowRow[] = scopedWarehouse.map((w) => {
+  const rows: CapitalFlowRow[] = warehouses.map((w) => {
     let loanRepayCash = 0
     let cashInManual = 0
     let purchaseCash = 0
@@ -427,10 +424,16 @@ export async function getCapitalFlow(filters: ReportFilters): Promise<CapitalFlo
     let cashOutManual = 0
     let purchaseBank = 0
     let bankIn = 0
+    let endingKasPembelian = 0
+    let endingKasOperasional = 0
+    let endingBank = 0
 
     for (const c of cashes) {
       if (c.warehouseId !== w.id) continue
       const amount = Number(c.amount)
+      if (c.category === "KAS_PEMBELIAN") endingKasPembelian += c.type === "MASUK" ? amount : -amount
+      else endingKasOperasional += c.type === "MASUK" ? amount : -amount
+      if (c.createdAt < from) continue
       if (c.type === "MASUK") {
         if (c.loanEntryId != null && c.loanEntry?.type === "REPAYMENT") loanRepayCash += amount
         else cashInManual += amount
@@ -445,12 +448,15 @@ export async function getCapitalFlow(filters: ReportFilters): Promise<CapitalFlo
     for (const b of banks) {
       if (bankWarehouseId(b) !== w.id) continue
       const amount = Number(b.amount)
+      endingBank += b.type === "MASUK" ? amount : -amount
+      if (b.createdAt < from) continue
       if (b.type === "MASUK") bankIn += amount
       else if (b.purchaseId != null) purchaseBank += amount
     }
 
     const totalIn = roundMoney(loanRepayCash + cashInManual + bankIn)
     const totalOut = roundMoney(purchaseCash + purchaseBank + loanDisburse + operational + cashOutManual)
+    const endingKas = roundMoney(endingKasPembelian + endingKasOperasional)
 
     return {
       warehouseId: w.id,
@@ -468,10 +474,186 @@ export async function getCapitalFlow(filters: ReportFilters): Promise<CapitalFlo
       totalOut,
       netFlow: roundMoney(totalIn - totalOut),
       taxAmount: roundMoney(taxByWarehouse.get(w.id) ?? 0),
+      endingKasPembelian: roundMoney(endingKasPembelian),
+      endingKasOperasional: roundMoney(endingKasOperasional),
+      endingBank: roundMoney(endingBank),
+      endingTotal: roundMoney(endingKas + endingBank),
     }
   })
 
-  return rows.filter((r) => r.totalIn > 0 || r.totalOut > 0)
+  return rows.filter((r) => scope.mode === "scoped" || r.totalIn > 0 || r.totalOut > 0)
+}
+
+export interface FinancialPositionRow {
+  warehouseId: number | null
+  warehouseCode: string | null
+  warehouseName: string | null
+  kasPembelian: number
+  kasOperasional: number
+  totalKas: number
+  totalBank: number
+  piutangModal: number
+  totalAset: number
+  utangKePetani: number
+  posisiBersih: number
+}
+
+export async function getFinancialPosition(filters: ReportFilters): Promise<FinancialPositionRow[]> {
+  await requireRoles("ADMIN", "FINANCE", "OWNER")
+  const { to } = dateRange(filters)
+  const asOf = to
+  const scope = await resolveWarehouseScope()
+
+  const warehouses =
+    scope.mode === "scoped"
+      ? await prisma.warehouse.findMany({
+          where: { id: scope.warehouseId },
+          select: { id: true, code: true, name: true },
+        })
+      : await prisma.warehouse.findMany({
+          where: { active: true, ...(filters.warehouseId ? { id: filters.warehouseId } : {}) },
+          orderBy: { code: "asc" },
+          select: { id: true, code: true, name: true },
+        })
+
+  const warehouseIds = warehouses.map((w) => w.id)
+  const widFilter = warehouseIds.length > 0 ? { warehouseId: { in: warehouseIds } } : {}
+
+  const [cashEntries, bankEntries, loans, purchases] = await Promise.all([
+    prisma.cashEntry.findMany({
+      where: {
+        voidedAt: null,
+        ...widFilter,
+        createdAt: { lte: asOf },
+      },
+      select: {
+        warehouseId: true,
+        category: true,
+        type: true,
+        amount: true,
+      },
+    }),
+    prisma.bankEntry.findMany({
+      where: {
+        voidedAt: null,
+        createdAt: { lte: asOf },
+        ...(scope.mode !== "scoped"
+          ? filters.warehouseId
+            ? { bankAccount: { warehouseId: filters.warehouseId } }
+            : { bankAccount: { warehouseId: { in: warehouseIds } } }
+          : {
+              OR: [
+                { bankAccount: { warehouseId: scope.warehouseId } },
+                { bankAccount: { warehouseId: null } },
+              ],
+            }),
+      },
+      select: {
+        type: true,
+        amount: true,
+        bankAccount: { select: { warehouseId: true } },
+      },
+    }),
+    prisma.farmerLoan.findMany({
+      where: { warehouseId: { in: warehouseIds } },
+      select: {
+        warehouseId: true,
+        entries: { select: { type: true, amount: true, voidedAt: true } },
+      },
+    }),
+    prisma.purchase.findMany({
+      where: {
+        status: "APPROVED",
+        ...(scope.mode === "scoped"
+          ? { warehouseId: scope.warehouseId }
+          : filters.warehouseId
+            ? { warehouseId: filters.warehouseId }
+            : {}),
+      },
+      select: {
+        warehouseId: true,
+        totalPrice: true,
+        paidAmount: true,
+      },
+    }),
+  ])
+
+  const kasPer = new Map<number, { pembelian: number; operasional: number }>()
+  for (const c of cashEntries) {
+    const m = kasPer.get(c.warehouseId) ?? { pembelian: 0, operasional: 0 }
+    const amount = Number(c.amount)
+    if (c.category === "KAS_PEMBELIAN") m.pembelian += c.type === "MASUK" ? amount : -amount
+    else m.operasional += c.type === "MASUK" ? amount : -amount
+    kasPer.set(c.warehouseId, m)
+  }
+
+  let sharedBank = 0
+  const bankPer = new Map<number, number>()
+  for (const b of bankEntries) {
+    const wid = b.bankAccount.warehouseId
+    if (wid == null) {
+      if (scope.mode === "scoped") bankPer.set(scope.warehouseId, (bankPer.get(scope.warehouseId) ?? 0) + (b.type === "MASUK" ? Number(b.amount) : -Number(b.amount)))
+      else sharedBank += b.type === "MASUK" ? Number(b.amount) : -Number(b.amount)
+      continue
+    }
+    bankPer.set(wid, (bankPer.get(wid) ?? 0) + (b.type === "MASUK" ? Number(b.amount) : -Number(b.amount)))
+  }
+
+  const loanPer = new Map<number, number>()
+  for (const l of loans) {
+    let net = 0
+    for (const e of l.entries) {
+      if (e.voidedAt) continue
+      net += e.type === "DISBURSEMENT" ? Number(e.amount) : -Number(e.amount)
+    }
+    if (net > 0) loanPer.set(l.warehouseId, (loanPer.get(l.warehouseId) ?? 0) + roundMoney(net))
+  }
+
+  const debtPer = new Map<number, number>()
+  for (const p of purchases) {
+    if (p.warehouseId == null) continue
+    debtPer.set(p.warehouseId, (debtPer.get(p.warehouseId) ?? 0) + roundMoney(Number(p.totalPrice) - Number(p.paidAmount)))
+  }
+
+  const rows: FinancialPositionRow[] = warehouses.map((w) => {
+    const k = kasPer.get(w.id) ?? { pembelian: 0, operasional: 0 }
+    const totalKas = roundMoney(k.pembelian + k.operasional)
+    const totalBank = roundMoney(bankPer.get(w.id) ?? 0)
+    const piutangModal = roundMoney(loanPer.get(w.id) ?? 0)
+    const totalAset = roundMoney(totalKas + totalBank + piutangModal)
+    const utangKePetani = roundMoney(debtPer.get(w.id) ?? 0)
+    return {
+      warehouseId: w.id,
+      warehouseCode: w.code,
+      warehouseName: w.name,
+      kasPembelian: roundMoney(k.pembelian),
+      kasOperasional: roundMoney(k.operasional),
+      totalKas,
+      totalBank,
+      piutangModal,
+      totalAset,
+      utangKePetani,
+      posisiBersih: roundMoney(totalAset - utangKePetani),
+    }
+  })
+
+  if (scope.mode !== "scoped" && Math.abs(sharedBank) > 0) {
+    rows.push({
+      warehouseId: null,
+      warehouseCode: null,
+      warehouseName: "Tidak teralokasi",
+      kasPembelian: 0,
+      kasOperasional: 0,
+      totalKas: 0,
+      totalBank: roundMoney(sharedBank),
+      piutangModal: 0,
+      totalAset: roundMoney(sharedBank),
+      utangKePetani: 0,
+      posisiBersih: roundMoney(sharedBank),
+    })
+  }
+
+  return rows
 }
 
 export interface TaxSummaryRow {
