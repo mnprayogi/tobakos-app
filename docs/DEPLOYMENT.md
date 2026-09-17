@@ -316,7 +316,7 @@ Ringkasan langkah keamanan yang sudah diterapkan, plus hal yang sengaja ditunda.
 | **Rate limiting login** | Brute-force online | Password minimal 8 karakter di-enforce. Rencana: tambah `@upstash/ratelimit` bila perlu |
 | **Pemilihan jalur dinamis** (`?lane=`) | User tanpa lane dapat mengakses data jalur lain sesuai picker | Ini desain *shared tablet*. Jika ingin ketat: wajibkan lane di akun (ubah form user + seed) |
 | **`prisma` downgrade** (`deepmerge-ts`/`mysql2` advisory) | DoS stack-exhaustion (server-only) | Tunggu patch Prisma ≥8; `npm audit fix --force` akan men-downgrade ke 6.x (jangan) |
-| **Driver `mariadb`** (cleartext password via MitM) | **Tidak ada fix resmi** | PENTING: aktifkan **TLS wajib** di koneksi produksi — `?ssl-mode=REQUIRED` di `DATABASE_URL` kini dihormati (fallback terenkripsi tanpa verifikasi CA); **disarankan** set `DATABASE_SSL_CA` = CA Aiven agar sertifikat diverifikasi. Batasi IP yang bisa konek ke Aiven (allowlist IP Vercel) |
+| **Driver `mariadb`** (cleartext password via MitM) | **Tidak ada fix resmi** | PENTING: aktifkan **TLS wajib** di koneksi produksi — `?ssl-mode=REQUIRED` / `?ssl=true` di `DATABASE_URL` dipetakan ke TLS terenkripsi (tanpa CA, verifikasi dimatikan default — lihat `src/lib/db-url.ts`); **disarankan** set `DATABASE_SSL_CA` = CA Aiven agar sertifikat diverifikasi penuh. Batasi IP yang bisa konek ke Aiven (allowlist IP Vercel) |
 
 ### Perintah audit
 ```bash
@@ -334,10 +334,10 @@ npm audit            # cek keamanan dependensi
 | 3 | Restore data error *Access denied* / *password* | `$env:MYSQL_PWD` belum diset atau salah; pastikan di-set sebelum perintah `mysql.exe` (window PowerShell yang sama) |
 | 4 | Restore data error *Unknown database* | Nama database salah — harus `defaultdb` |
 | 5 | Login tidak bisa | Seed belum jalan (Fase 2.2) atau `AUTH_SECRET` berubah (JWT lama jadi invalid — normal, tinggal login ulang) |
-| 5b | Login error *CallbackRouteError / pool timeout* (sekali-sekali) | Koneksi DB sempat tersendat sesaat (cold-start / maintenance Aiven free-tier). Biasanya transient: coba login lagi. Pool kini punya timeout lebih longgar + retry otomatis. Kalau sering terjadi, cek status service Aiven (tab Overview → RUNNING) dan pastikan **Allowed IPs** tidak membatasi egress Vercel |
+| 5b | Login error *CallbackRouteError / pool timeout* (sekali-sekali) | Koneksi DB sempat tersendat sesaat (cold-start / maintenance Aiven free-tier) — transient, coba login lagi. **Periksa juga error TLS** di Vercel Logs: kalau muncul `SELF_SIGNED_CERT_IN_CHAIN` saat konek Aiven, inti masalahnya verifikasi sertifikat, bukan pool — solusi: pastikan `DATABASE_URL` punya `?ssl=true`/`ssl-mode=REQUIRED` (patch `db-url.ts` sudah menangani) atau set `DATABASE_SSL_CA`. Cek status service Aiven (Overview → RUNNING) dan pastikan **Allowed IPs** tidak membatasi egress Vercel |
 | 6 | Pos 2 tidak update real-time | Refresh manual dulu. Kalau refresh manual jalan tapi real-time tidak: koneksi SSE putus — buka DevTools (F12) → tab Network → filter `events` → lihat status. Biasanya pulih sendiri (EventSource auto-reconnect + fallback polling) |
 | 7 | Tanggal transaksi salah (beda hari) | Env var `TZ=Asia/Jakarta` belum diset → set (3.3) → Redeploy |
-| 8 | Error *SSL* saat konek DB | Coba ganti `?ssl-mode=REQUIRED` → `?ssl=true` di `DATABASE_URL` (keduanya env var Aiven & PowerShell), lalu ulangi Fase 2.1 dan Redeploy |
+| 8 | Error *SSL* saat konek DB | Pastikan `DATABASE_URL` memakai `?ssl=true` atau `?ssl-mode=REQUIRED` (di-honor oleh `src/lib/db-url.ts`, TLS aktif tanpa verifikasi CA). Untuk verifikasi penuh set `DATABASE_SSL_CA` = CA Aiven (unduh dari Overview → Connection information). Lalu Redeploy. Error `SELF_SIGNED_CERT_IN_CHAIN` = TLS aktif tapi CA tidak dikenali — atasi dengan `DATABASE_SSL_CA` |
 | 9 | Halaman muncul tapi lambat sekali pertama kali | Cold start serverless normal (2–5 detik). Setelah dibuka, halaman di-cache PWA |
 | 10 | PWA tidak bisa di-install | Pastikan membuka via **HTTPS** (https://... bukan http://) dan login dulu |
 

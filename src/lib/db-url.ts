@@ -31,9 +31,13 @@ function tlsRequested(url: URL): boolean {
  * Membangun koneksi config mariadb dari DATABASE_URL + env SSL cloud.
  * Dipakai db.ts (Prisma adapter) dan route backup/import (koneksi raw).
  *
- * TLS diaktifkan bila: `DATABASE_SSL_CA` diset (verifikasi CA), atau URL meminta
- * TLS (`ssl=true` / `ssl-mode=REQUIRED`) — menyusul perilaku `?ssl=true` milik
- * driver mariadb yang hanya mengenali `ssl=true`, bukan `ssl-mode=REQUIRED`.
+ * TLS diaktifkan bila: `DATABASE_SSL_CA` diset (verifikasi CA aktif secara default),
+ * atau URL meminta TLS (`ssl=true` / `ssl-mode=REQUIRED`). Tanpa CA, TLS aktif
+ * sebagai fallback terenkripsi tanpa verifikasi CA (process.env.DATABASE_SSL_VERIFY
+ * bisa dipakai untuk mengaktifkan verifikasi secara eksplisit). Bezanya dari
+ * `ssl: true` mentah: driver mariadb 3.4.x tetap memverifikasi sertifikat terhadap
+ * root CA standar Node, sehingga Aiven (self-signed CA) gagal dengan
+ * SELF_SIGNED_CERT_IN_CHAIN — dihindari dengan object rejectUnauthorized.
  */
 export function buildConnectionConfig(rawUrl: string): ConnectionConfig {
   const url = new URL(rawUrl)
@@ -55,7 +59,9 @@ export function buildConnectionConfig(rawUrl: string): ConnectionConfig {
       rejectUnauthorized: process.env.DATABASE_SSL_VERIFY !== "false",
     }
   } else if (tlsRequested(url)) {
-    config.ssl = true
+    config.ssl = {
+      rejectUnauthorized: process.env.DATABASE_SSL_VERIFY === "true",
+    }
   }
 
   return config
