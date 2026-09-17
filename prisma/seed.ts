@@ -1,12 +1,16 @@
 import "dotenv/config"
 import { PrismaClient } from "../src/generated/prisma/client"
 import { PrismaMariaDb } from "@prisma/adapter-mariadb"
+import { buildConnectionConfig } from "../src/lib/db-url"
 import bcrypt from "bcryptjs"
 
 const SEED_PASSWORD = "tobakos123"
 
 async function main() {
-  const adapter = new PrismaMariaDb(process.env.DATABASE_URL!)
+  type PrismaMariaDbCtor = ConstructorParameters<typeof PrismaMariaDb>[0]
+  const adapter = new PrismaMariaDb(
+    buildConnectionConfig(process.env.DATABASE_URL!) as PrismaMariaDbCtor
+  )
   const prisma = new PrismaClient({ adapter })
 
   const users = [

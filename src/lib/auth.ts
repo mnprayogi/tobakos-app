@@ -7,6 +7,28 @@ import { prisma } from "@/lib/db"
 // (mencegah user enumeration via timing attack).
 const DUMMY_HASH = "$2b$12$DP0JNt6wBO3X8cOUJFUFG.FypOfak6HCAlfAc8XgpojQzABB87CD2"
 
+// Pool koneksi DB sesekali gagal sesaat — di dev, cold-compile Turbopack bisa
+// mengunci proses ~30–90 detik; di produksi, jeda failover DB beberapa puluh
+// detik. Di sini: retry berurutan yang totalnya mencakup ~2 menit, supaya
+// jendela sesaat itu terlewati dan login tidak pernah hard-fail.
+async function findUserWithRetry(username: string) {
+  const attempts = 4
+  const backoffMs = [0, 500, 1000, 1500]
+  let lastError: unknown
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      return await prisma.user.findUnique({ where: { username } })
+    } catch (error) {
+      lastError = error
+      const delay = backoffMs[attempt] ?? 1500
+      if (attempt < attempts - 1) {
+        await new Promise((resolve) => setTimeout(resolve, delay))
+      }
+    }
+  }
+  throw lastError
+}
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
   // Di Vercel, host di-trust otomatis (env VERCEL). Di tempat lain aktifkan
   // eksplisit via AUTH_TRUST_HOST — jangan pakai `true` mentah (host poisoning).
@@ -22,9 +44,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       async authorize(credentials) {
         if (!credentials?.username || !credentials?.password) return null
         const passwordInput = credentials.password as string
-        const user = await prisma.user.findUnique({
-          where: { username: credentials.username as string },
-        })
+        const user = await findUserWithRetry(credentials.username as string)
         if (!user) {
           // Normalisasi timing: tetap lakukan bcrypt walau user tidak ada,
           // agar durasi tidak membedakan user valid vs tidak valid.

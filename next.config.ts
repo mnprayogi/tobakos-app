@@ -5,6 +5,11 @@ const isProd = process.env.NODE_ENV === "production";
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["192.168.100.111"],
+  // Prisma driver adapter + mariadb wajib dimuat dari node_modules asli.
+  // Jika di-bundle Turbopack, koneksi driver menggantung (pool timeout
+  // active=0 idle=0) padahal DB sehat — @prisma/client sudah di-default
+  // external oleh Next, tapi mariadb & adapter tidak.
+  serverExternalPackages: ["mariadb", "@prisma/adapter-mariadb"],
   async headers() {
     return [
       {
