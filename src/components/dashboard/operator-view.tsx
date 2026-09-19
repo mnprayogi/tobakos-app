@@ -1,6 +1,6 @@
 import { Clock, ScanBarcode, Scale, Wallet, Weight } from "lucide-react"
 
-import { formatCurrency } from "@/lib/utils"
+import { formatCurrency, formatWeightNumber } from "@/lib/utils"
 import type { OperatorDashboard } from "@/lib/actions/dashboard"
 import { KpiCard } from "./kpi-card"
 import { MiniBarChart } from "./mini-bar-chart"
@@ -22,7 +22,7 @@ export function OperatorView({ data }: { data: OperatorDashboard }) {
         <KpiCard label="Menunggu timbang" value={String(data.awaitingWeigh)} icon={Clock} tone="amber" />
         <KpiCard
           label="Netto hari ini"
-          value={`${data.todayNetWeight.toFixed(1)} kg`}
+          value={`${formatWeightNumber(data.todayNetWeight, 1)} kg`}
           icon={Weight}
           delta={{ value: data.todayNetWeight, compare: data.yesterdayNetWeight }}
         />

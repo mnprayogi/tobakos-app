@@ -21,7 +21,8 @@ export function GradeComposition({ items }: { items: GradeBreakdown[] }) {
                 Grade / Komposisi
               </th>
               <th className="px-2 pb-1.5 text-right text-[10px] font-bold uppercase text-muted-2">Bale</th>
-              <th className="pb-1.5 pl-2 text-right text-[10px] font-bold uppercase text-muted-2">Netto</th>
+              <th className="px-2 pb-1.5 text-right text-[10px] font-bold uppercase text-muted-2">Netto</th>
+              <th className="pb-1.5 pl-2 text-right text-[10px] font-bold uppercase text-muted-2">Rata²/kg</th>
             </tr>
           </thead>
           <tbody>
@@ -42,6 +43,15 @@ export function GradeComposition({ items }: { items: GradeBreakdown[] }) {
                 <td className="py-2 pl-2 text-right">
                   <span className="font-mono tabular-nums text-foreground">{formatWeight(b.netWeight)}</span>
                   <span className="ml-1.5 font-mono text-[10px] text-muted-2">({b.netWeightPercent.toFixed(1)}%)</span>
+                </td>
+                <td className="py-2 pl-2 text-right">
+                  {b.netWeight > 0 ? (
+                    <span className="font-mono tabular-nums font-bold text-amber">
+                      {Math.round(b.subtotal / b.netWeight).toLocaleString("id-ID")}
+                    </span>
+                  ) : (
+                    <span className="font-mono text-muted-2">—</span>
+                  )}
                 </td>
               </tr>
             ))}

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react"
 import { Search } from "lucide-react"
 
-import { formatDateTime, formatCurrency } from "@/lib/utils"
+import { formatDateTime, formatCurrency, formatWeightNumber } from "@/lib/utils"
 import { StatusPill } from "@/components/shared/status-pill"
 import type { RecentBale } from "@/lib/actions/dashboard"
 
@@ -71,7 +71,7 @@ export function BaleTable({ items, empty }: { items: RecentBale[]; empty: string
                 <td className="border-b border-border-soft px-2 py-2 font-mono text-foreground">{b.grade}</td>
                 <td className="border-b border-border-soft px-2 py-2 text-muted-foreground">{b.customerName ?? "—"}</td>
                 <td className="border-b border-border-soft px-2 py-2 text-right font-mono text-foreground">
-                  {b.netWeight != null ? `${b.netWeight.toFixed(1)} kg` : "—"}
+                  {b.netWeight != null ? `${formatWeightNumber(b.netWeight, 1)} kg` : "—"}
                 </td>
                 <td className="border-b border-border-soft px-2 py-2 text-right font-mono font-bold text-amber">
                   {formatCurrency(b.subtotal)}

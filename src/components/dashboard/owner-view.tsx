@@ -12,7 +12,7 @@ import {
   Wallet,
 } from "lucide-react"
 
-import { formatCurrency, formatDateTime } from "@/lib/utils"
+import { formatCurrency, formatDateTime, formatWeightNumber } from "@/lib/utils"
 import type { OwnerDashboard } from "@/lib/actions/dashboard"
 import { dashboardRangeTrendDays } from "@/lib/dashboard-range"
 import type { DashboardRange } from "@/lib/dashboard-range"
@@ -66,7 +66,7 @@ export function OwnerView({
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <KpiCard label="Total transaksi" value={String(data.totalTransactions)} icon={ClipboardList} />
           <KpiCard label="Total bale" value={String(data.totalBales)} icon={Boxes} />
-          <KpiCard label="Total netto" value={`${data.totalNetWeight.toFixed(1)} kg`} icon={Scale} />
+          <KpiCard label="Total netto" value={`${formatWeightNumber(data.totalNetWeight, 1)} kg`} icon={Scale} />
         </div>
       </section>
 
@@ -151,7 +151,7 @@ export function OwnerView({
                         </span>
                       </td>
                       <td className="border-b border-border-soft px-2 py-2 text-right font-mono text-foreground">{w.transactionCount}</td>
-                      <td className="border-b border-border-soft px-2 py-2 text-right font-mono text-foreground">{w.totalNetWeight.toFixed(1)} kg</td>
+                      <td className="border-b border-border-soft px-2 py-2 text-right font-mono text-foreground">{formatWeightNumber(w.totalNetWeight, 1)} kg</td>
                       <td className="border-b border-border-soft py-2 pl-2 text-right font-mono font-bold text-amber">{formatCurrency(w.totalPrice)}</td>
                     </tr>
                   )

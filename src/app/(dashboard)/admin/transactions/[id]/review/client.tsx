@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { reviewAndApprove } from "@/lib/actions/finance"
 import { negotiateItems, roundMoney } from "@/lib/calculations"
-import { formatCurrency, formatDate } from "@/lib/utils"
+import { formatCurrency, formatDate, formatWeightNumber } from "@/lib/utils"
 import { StatusPill } from "@/components/shared/status-pill"
 import { Pagination } from "@/components/shared/pagination"
 import { Warehouse, ClipboardCheck } from "lucide-react"
@@ -84,7 +84,9 @@ export function ReviewClient({ purchase }: { purchase: ReviewPurchase }) {
       const cur = map.get(i.grade) ?? { count: 0, net: 0 }
       map.set(i.grade, { count: cur.count + 1, net: cur.net + Number(i.netWeight ?? 0) })
     }
-    return Array.from(map.entries())
+    return Array.from(map.entries()).sort(
+      (a, b) => b[1].net - a[1].net || b[1].count - a[1].count || a[0].localeCompare(b[0])
+    )
   }, [purchase.items])
 
   const filtered = useMemo(() => {
@@ -178,7 +180,7 @@ export function ReviewClient({ purchase }: { purchase: ReviewPurchase }) {
             </div>
             <div className="bg-panel-alt border border-border-soft rounded-lg p-3">
               <p className="text-[10px] uppercase font-bold text-muted-2">Total Netto</p>
-              <p className="font-mono font-bold text-foreground text-lg mt-1">{purchase.totalNetWeight.toFixed(2)} kg</p>
+              <p className="font-mono font-bold text-foreground text-lg mt-1">{formatWeightNumber(purchase.totalNetWeight)} kg</p>
             </div>
           </div>
           <div className="bg-panel-alt border border-border-soft rounded-lg p-3 text-center">
@@ -350,7 +352,7 @@ export function ReviewClient({ purchase }: { purchase: ReviewPurchase }) {
                           : "bg-panel-alt text-muted-foreground border-border-soft hover:border-emerald/50"
                       }`}
                     >
-                      {g}: {count} bale · {net.toFixed(1)} kg
+                      {g}: {count} bale · {formatWeightNumber(net, 1)} kg
                       {totalNet > 0 ? ` · ${((net / totalNet) * 100).toFixed(1)}%` : ""}
                     </button>
                   )
@@ -385,7 +387,7 @@ export function ReviewClient({ purchase }: { purchase: ReviewPurchase }) {
                       <td className="px-2 py-1.5 font-mono text-foreground">{i.labelCode}</td>
                       <td className="px-2 py-1.5 font-mono text-foreground">{i.grade}</td>
                       <td className="px-2 py-1.5 text-muted-foreground">{i.customerName ?? "—"}</td>
-                      <td className="px-2 py-1.5 text-right font-mono text-foreground">{(i.netWeight ?? 0).toFixed(2)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-foreground">{formatWeightNumber(i.netWeight)}</td>
                       <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{formatCurrency(i.pricePerKg)}</td>
                       <td className={`px-2 py-1.5 text-right font-mono ${adj < 0 ? "text-red-deduction" : "text-emerald"}`}>
                         {adj < 0 ? "" : "+"}
@@ -409,7 +411,7 @@ export function ReviewClient({ purchase }: { purchase: ReviewPurchase }) {
 
           <div className="flex flex-wrap justify-between gap-2 pt-3 text-[11px]">
             <span className="text-muted-2">
-              Netto tampil: <span className="font-mono text-foreground">{filteredTotals.net.toFixed(2)} kg</span>
+              Netto tampil: <span className="font-mono text-foreground">{formatWeightNumber(filteredTotals.net)} kg</span>
             </span>
             <span className="text-muted-2">
               Subtotal lama: <span className="font-mono text-foreground">{formatCurrency(filteredTotals.oldTotal)}</span>

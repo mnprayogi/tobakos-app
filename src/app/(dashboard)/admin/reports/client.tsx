@@ -33,7 +33,7 @@ import {
   type FinancialPositionRow,
 } from "@/lib/actions/reports"
 import type { WarehouseScope } from "@/lib/actions/scope"
-import { formatCurrency, formatDate } from "@/lib/utils"
+import { formatCurrency, formatDate, formatWeightNumber } from "@/lib/utils"
 import { StatusPill } from "@/components/shared/status-pill"
 import { usePrintDocument, printBaseStyle } from "@/lib/print"
 import { lazyPrint } from "@/components/shared/lazy-print"
@@ -558,7 +558,7 @@ export function ReportsClient({
                 <Stat label="Petani" value={String(farmerRows.length)} />
                 <Stat label="Transaksi" value={String(farmerTotals!.transactionCount)} />
                 <Stat label="Bale" value={String(farmerTotals!.totalBales)} />
-                <Stat label="Total Netto" value={`${farmerTotals!.totalNetWeight.toFixed(1)} kg`} />
+                <Stat label="Total Netto" value={`${formatWeightNumber(farmerTotals!.totalNetWeight, 1)} kg`} />
                 <Stat label="Total Harga" value={formatCurrency(farmerTotals!.totalPrice)} tone="amber" />
                 <Stat
                   label="Sisa"
@@ -592,7 +592,7 @@ export function ReportsClient({
                         </td>
                         <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-foreground">{r.transactionCount}</td>
                         <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-foreground">{r.totalBales}</td>
-                        <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-foreground">{r.totalNetWeight.toFixed(1)}</td>
+                        <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-foreground">{formatWeightNumber(r.totalNetWeight, 1)}</td>
                         <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-amber font-bold">{formatCurrency(r.totalPrice)}</td>
                         <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-emerald">{formatCurrency(r.totalPaid)}</td>
                         <td className="py-2 px-2 border-b border-border-soft font-mono text-right">
@@ -608,7 +608,7 @@ export function ReportsClient({
                     <tr className="border-t-2 border-border bg-panel-alt/60">
                       <td colSpan={2} className="py-2.5 pr-2 text-[11px] font-extrabold uppercase tracking-wide text-foreground">Total</td>
                       <td className="py-2.5 px-2 font-mono text-right font-bold text-foreground">{farmerTotals!.totalBales}</td>
-                      <td className="py-2.5 px-2 font-mono text-right font-bold text-foreground">{farmerTotals!.totalNetWeight.toFixed(1)}</td>
+                      <td className="py-2.5 px-2 font-mono text-right font-bold text-foreground">{formatWeightNumber(farmerTotals!.totalNetWeight, 1)}</td>
                       <td className="py-2.5 px-2 font-mono text-right font-bold text-amber">{formatCurrency(farmerTotals!.totalPrice)}</td>
                       <td className="py-2.5 px-2 font-mono text-right font-bold text-emerald">{formatCurrency(farmerTotals!.totalPaid)}</td>
                       <td className="py-2.5 px-2 font-mono text-right font-bold text-foreground">{formatCurrency(farmerTotals!.remaining)}</td>
@@ -630,7 +630,7 @@ export function ReportsClient({
                 <Stat label="Hari" value={String(periodRows.length)} />
                 <Stat label="Transaksi" value={String(periodTotals!.transactionCount)} />
                 <Stat label="Bale" value={String(periodTotals!.totalBales)} />
-                <Stat label="Total Netto" value={`${periodTotals!.totalNetWeight.toFixed(1)} kg`} />
+                <Stat label="Total Netto" value={`${formatWeightNumber(periodTotals!.totalNetWeight, 1)} kg`} />
                 <Stat label="Total Harga" value={formatCurrency(periodTotals!.totalPrice)} tone="amber" />
                 <Stat label="Dibayar" value={formatCurrency(periodTotals!.totalPaid)} tone="emerald" />
               </div>
@@ -652,7 +652,7 @@ export function ReportsClient({
                         <td className="py-2 pr-2 border-b border-border-soft font-mono text-foreground">{formatDate(r.label)}</td>
                         <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-foreground">{r.transactionCount}</td>
                         <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-foreground">{r.totalBales}</td>
-                        <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-foreground">{r.totalNetWeight.toFixed(1)}</td>
+                        <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-foreground">{formatWeightNumber(r.totalNetWeight, 1)}</td>
                         <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-amber font-bold">{formatCurrency(r.totalPrice)}</td>
                         <td className="py-2 pl-2 border-b border-border-soft font-mono text-right text-emerald">{formatCurrency(r.totalPaid)}</td>
                       </tr>
@@ -663,7 +663,7 @@ export function ReportsClient({
                       <td className="py-2.5 pr-2 text-[11px] font-extrabold uppercase tracking-wide text-foreground">Total</td>
                       <td className="py-2.5 px-2 font-mono text-right font-bold text-foreground">{periodTotals!.transactionCount}</td>
                       <td className="py-2.5 px-2 font-mono text-right font-bold text-foreground">{periodTotals!.totalBales}</td>
-                      <td className="py-2.5 px-2 font-mono text-right font-bold text-foreground">{periodTotals!.totalNetWeight.toFixed(1)}</td>
+                      <td className="py-2.5 px-2 font-mono text-right font-bold text-foreground">{formatWeightNumber(periodTotals!.totalNetWeight, 1)}</td>
                       <td className="py-2.5 px-2 font-mono text-right font-bold text-amber">{formatCurrency(periodTotals!.totalPrice)}</td>
                       <td className="py-2.5 pl-2 font-mono text-right font-bold text-emerald">{formatCurrency(periodTotals!.totalPaid)}</td>
                     </tr>
@@ -682,7 +682,7 @@ export function ReportsClient({
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                 <Stat label="Customer" value={String(customerRows.length)} />
                 <Stat label="Bale" value={String(customerTotals!.totalBales)} />
-                <Stat label="Total Netto" value={`${customerTotals!.totalNetWeight.toFixed(1)} kg`} />
+                <Stat label="Total Netto" value={`${formatWeightNumber(customerTotals!.totalNetWeight, 1)} kg`} />
                 <Stat label="Total Harga" value={formatCurrency(customerTotals!.totalPrice)} tone="amber" />
                 <Stat label="Rata-rata Harga/kg" value={formatCurrency(customerTotals!.totalNetWeight > 0 ? customerTotals!.totalPrice / customerTotals!.totalNetWeight : 0)} />
               </div>
@@ -706,7 +706,7 @@ export function ReportsClient({
                         </td>
                         <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-foreground">{r.transactionCount}</td>
                         <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-foreground">{r.totalBales}</td>
-                        <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-foreground">{r.totalNetWeight.toFixed(1)}</td>
+                        <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-foreground">{formatWeightNumber(r.totalNetWeight, 1)}</td>
                         <td className="py-2 px-2 border-b border-border-soft font-mono text-right text-amber font-bold">{formatCurrency(r.totalPrice)}</td>
                         <td className="py-2 pl-2 border-b border-border-soft font-mono text-right text-foreground">{formatCurrency(r.avgPricePerKg)}</td>
                       </tr>
@@ -717,7 +717,7 @@ export function ReportsClient({
                       <td className="py-2.5 pr-2 text-[11px] font-extrabold uppercase tracking-wide text-foreground">Total</td>
                       <td className="py-2.5 px-2" />
                       <td className="py-2.5 px-2 font-mono text-right font-bold text-foreground">{customerTotals!.totalBales}</td>
-                      <td className="py-2.5 px-2 font-mono text-right font-bold text-foreground">{customerTotals!.totalNetWeight.toFixed(1)}</td>
+                      <td className="py-2.5 px-2 font-mono text-right font-bold text-foreground">{formatWeightNumber(customerTotals!.totalNetWeight, 1)}</td>
                       <td className="py-2.5 px-2 font-mono text-right font-bold text-amber">{formatCurrency(customerTotals!.totalPrice)}</td>
                       <td className="py-2.5 pl-2" />
                     </tr>
@@ -970,7 +970,7 @@ export function ReportsClient({
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                 <Stat label="Transaksi" value={String(txRows.length)} />
                 <Stat label="Bale" value={String(txTotals!.totalBales)} />
-                <Stat label="Total Netto" value={`${txTotals!.totalNetWeight.toFixed(1)} kg`} />
+                <Stat label="Total Netto" value={`${formatWeightNumber(txTotals!.totalNetWeight, 1)} kg`} />
                 <Stat label="Total Harga" value={formatCurrency(txTotals!.totalPrice)} tone="amber" />
                 <Stat label="Dibayar" value={formatCurrency(txTotals!.paidAmount)} tone="emerald" />
                 <Stat
@@ -1043,10 +1043,10 @@ export function ReportsClient({
                                   <td className="py-1.5 px-3 font-mono text-foreground">{i.labelCode}</td>
                                   <td className="py-1.5 px-2 font-mono text-foreground">{i.grade}</td>
                                   <td className="py-1.5 px-2 text-muted-foreground">{i.customerName ?? "—"}</td>
-                                  <td className="py-1.5 px-2 font-mono text-right text-foreground">{i.grossWeight != null ? i.grossWeight.toFixed(1) : "—"}</td>
-                                  <td className="py-1.5 px-2 font-mono text-right text-red-deduction">{i.moistureDeduction != null ? i.moistureDeduction.toFixed(1) : "—"}</td>
-                                  <td className="py-1.5 px-2 font-mono text-right text-red-deduction">{i.packingWeight > 0 ? i.packingWeight.toFixed(1) : "—"}</td>
-                                  <td className="py-1.5 px-2 font-mono text-right text-foreground">{i.netWeight != null ? i.netWeight.toFixed(1) : "—"}</td>
+                                  <td className="py-1.5 px-2 font-mono text-right text-foreground">{i.grossWeight != null ? formatWeightNumber(i.grossWeight, 1) : "—"}</td>
+                                  <td className="py-1.5 px-2 font-mono text-right text-red-deduction">{i.moistureDeduction != null ? formatWeightNumber(i.moistureDeduction, 1) : "—"}</td>
+                                  <td className="py-1.5 px-2 font-mono text-right text-red-deduction">{i.packingWeight > 0 ? formatWeightNumber(i.packingWeight, 1) : "—"}</td>
+                                  <td className="py-1.5 px-2 font-mono text-right text-foreground">{i.netWeight != null ? formatWeightNumber(i.netWeight, 1) : "—"}</td>
                                   <td className="py-1.5 px-2 font-mono text-right text-foreground">{i.pricePerKg != null ? i.pricePerKg.toLocaleString("id-ID") : "—"}</td>
                                   <td className="py-1.5 px-2 font-mono text-right text-amber">
                                     {i.priceAdjustment > 0 ? `+${i.priceAdjustment}` : i.priceAdjustment}
@@ -1060,7 +1060,7 @@ export function ReportsClient({
                                 <td colSpan={6} className="py-2 px-3 text-[10.5px] font-extrabold uppercase tracking-wide text-muted-2">
                                   Total {p.totalBales} bale
                                 </td>
-                                <td className="py-2 px-2 font-mono text-right font-bold text-foreground">{p.totalNetWeight.toFixed(1)} kg</td>
+                                <td className="py-2 px-2 font-mono text-right font-bold text-foreground">{formatWeightNumber(p.totalNetWeight, 1)} kg</td>
                                 <td className="py-2 px-2" />
                                 <td className="py-2 px-2" />
                                 <td className="py-2 px-3 font-mono text-right font-bold text-amber">{formatCurrency(p.totalPrice)}</td>

@@ -16,9 +16,20 @@ export function formatCurrency(amount: number | string | { toNumber: () => numbe
   }).format(num)
 }
 
+export function formatWeightNumber(kg: number | null | undefined, decimals = 2): string {
+  if (kg == null || Number.isNaN(kg)) return "—"
+  return new Intl.NumberFormat("id-ID", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(kg)
+}
+
 export function formatWeight(kg: number | null | undefined): string {
-  if (kg == null) return "—"
-  return `${kg.toFixed(2)} KG`
+  if (kg == null || Number.isNaN(kg)) return "—"
+  return `${new Intl.NumberFormat("id-ID", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(kg)} KG`
 }
 
 export function formatDate(date: Date | string): string {

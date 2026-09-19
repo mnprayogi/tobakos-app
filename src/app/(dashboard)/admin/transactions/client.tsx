@@ -7,7 +7,7 @@ import { toast } from "sonner"
 import { reopenTransaction, voidTransaction } from "@/lib/actions/finance"
 import { getTransactionsExport } from "@/lib/actions/transactions"
 import { useSse } from "@/hooks/useSse"
-import { formatCurrency, formatDate } from "@/lib/utils"
+import { formatCurrency, formatDate, formatWeightNumber } from "@/lib/utils"
 import { StatusPill } from "@/components/shared/status-pill"
 import { Pagination } from "@/components/shared/pagination"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
@@ -347,7 +347,7 @@ export function TransactionsClient({
                     <td className="py-2 px-2 border-b border-border-soft text-foreground">{p.farmer.name}</td>
                     <td className="py-2 px-2 border-b border-border-soft font-mono text-foreground">{formatDate(p.transactionDate)}</td>
                     <td className="py-2 px-2 border-b border-border-soft font-mono text-foreground">{p.totalItems}</td>
-                    <td className="py-2 px-2 border-b border-border-soft font-mono text-foreground">{p.totalNetWeight.toFixed(2)} kg</td>
+                    <td className="py-2 px-2 border-b border-border-soft font-mono text-foreground">{formatWeightNumber(p.totalNetWeight)} kg</td>
                     <td className="py-2 px-2 border-b border-border-soft font-mono text-amber font-bold">
                       {formatCurrency(p.totalPrice)}
                       {p.originalTotalPrice != null && p.originalTotalPrice !== p.totalPrice && (
