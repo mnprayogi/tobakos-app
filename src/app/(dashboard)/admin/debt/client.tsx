@@ -108,6 +108,101 @@ export function DebtClient({
     setPayTarget(null)
   }
 
+  function renderFarmerDetail(f: DebtFarmer) {
+    return (
+      <div className="space-y-3">
+        {f.purchases.map((p) => {
+          const payPurchase: PayPurchase = {
+            id: p.id,
+            transactionCode: p.transactionCode,
+            farmerName: f.farmerName,
+            totalPrice: p.totalPrice,
+            paidAmount: p.paidAmount,
+            remaining: p.remaining,
+            payments: p.payments,
+            loanBalance: f.loanBalance,
+          }
+          return (
+            <div key={p.id} className="rounded-lg border border-border-soft bg-panel-alt p-3">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-3">
+                <span className="font-mono font-bold text-emerald text-xs">{p.transactionCode}</span>
+                <span className="text-[10.5px] text-muted-2 font-mono">{formatDate(p.transactionDate)}</span>
+                <span className="text-[10.5px] text-muted-2">({p.itemCount} bale)</span>
+              </div>
+              <div className="flex items-center gap-3">
+                {p.derived !== "LUNAS" && (
+                  <button
+                    type="button"
+                    onClick={() => setPayTarget(payPurchase)}
+                    className="text-[10.5px] font-bold text-emerald cursor-pointer hover:underline"
+                  >
+                    Catat Pembayaran
+                  </button>
+                )}
+                {p.derived === "LUNAS" && (
+                  <button
+                    type="button"
+                    onClick={() => window.open(`/bukti/${p.id}`, "_blank")}
+                    className="text-[10.5px] font-bold text-emerald cursor-pointer hover:underline"
+                  >
+                    Cetak Bukti
+                  </button>
+                )}
+                <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${statusStyle[p.derived]}`}>
+                  {statusLabel[p.derived]}
+                </span>
+              </div>
+              </div>
+              <div className="flex gap-6 mt-2 text-[11.5px] flex-wrap">
+                <span className="text-muted-foreground">Tagihan: <b className="font-mono text-foreground">{formatCurrency(p.totalPrice)}</b></span>
+                <span className="text-muted-foreground">Dibayar: <b className="font-mono text-emerald">{formatCurrency(p.paidAmount)}</b></span>
+                <span className="text-muted-foreground">Sisa: <b className="font-mono text-red-deduction">{formatCurrency(p.remaining)}</b></span>
+              </div>
+
+              {p.payments.length > 0 && (
+                <div className="mt-2.5 border-t border-border-soft pt-2">
+                  <p className="text-[9.5px] uppercase font-bold text-muted-2 mb-1">Riwayat Pembayaran</p>
+                  <div className="space-y-1">
+                    {p.payments.map((pay) => (
+                      <div key={pay.id} className="flex items-center justify-between text-[11px]">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-foreground">{formatCurrency(pay.amount)}</span>
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${pay.method === "TUNAI" ? "bg-emerald/12 text-emerald" : "bg-amber/12 text-amber"}`}>
+                            {pay.method}
+                          </span>
+                          {pay.method === "TRANSFER" && pay.bankAccount && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue/12 text-blue border border-blue/40">
+                              {pay.bankAccount.bankName} · {pay.bankAccount.accountNumber}
+                            </span>
+                          )}
+                          {pay.method === "TRANSFER" && pay.recipientAccount && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-muted/12 text-muted-foreground border border-border-soft">
+                              Ke: {pay.recipientAccount}
+                            </span>
+                          )}
+                          {pay.loanDeduction > 0 && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-deduction/12 text-red-deduction">
+                              Hutang −{formatCurrency(pay.loanDeduction)}
+                            </span>
+                          )}
+                          {pay.note && <span className="text-muted-2 text-[10px] italic">{pay.note}</span>}
+                        </div>
+                        <span className="text-muted-2 text-[10px] font-mono">
+                          {formatDateTime(pay.paidAt)} · {pay.paidBy ?? "—"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -176,7 +271,8 @@ export function DebtClient({
           <p className="py-6 text-center text-muted-foreground">Tidak ada data hutang.</p>
         )}
         {filteredFarmers.length > 0 && (
-          <div className="overflow-x-auto">
+          <>
+          <div className="hidden lg:block overflow-x-auto">
           <table className="w-full min-w-[720px] border-collapse text-[12.5px]">
             <thead>
               <tr>
@@ -212,96 +308,7 @@ export function DebtClient({
                     {isOpen && (
                       <tr>
                         <td colSpan={7} className="py-2 pl-8 pr-2 border-b border-border-soft">
-                          <div className="space-y-3">
-                            {f.purchases.map((p) => {
-                              const payPurchase: PayPurchase = {
-                                id: p.id,
-                                transactionCode: p.transactionCode,
-                                farmerName: f.farmerName,
-                                totalPrice: p.totalPrice,
-                                paidAmount: p.paidAmount,
-                                remaining: p.remaining,
-                                payments: p.payments,
-                                loanBalance: f.loanBalance,
-                              }
-                              return (
-                                <div key={p.id} className="rounded-lg border border-border-soft bg-panel-alt p-3">
-                                  <div className="flex items-center justify-between flex-wrap gap-2">
-                                  <div className="flex items-center gap-3">
-                                    <span className="font-mono font-bold text-emerald text-xs">{p.transactionCode}</span>
-                                    <span className="text-[10.5px] text-muted-2 font-mono">{formatDate(p.transactionDate)}</span>
-                                    <span className="text-[10.5px] text-muted-2">({p.itemCount} bale)</span>
-                                  </div>
-                                  <div className="flex items-center gap-3">
-                                    {p.derived !== "LUNAS" && (
-                                      <button
-                                        type="button"
-                                        onClick={() => setPayTarget(payPurchase)}
-                                        className="text-[10.5px] font-bold text-emerald cursor-pointer hover:underline"
-                                      >
-                                        Catat Pembayaran
-                                      </button>
-                                    )}
-                                    {p.derived === "LUNAS" && (
-                                      <button
-                                        type="button"
-                                        onClick={() => window.open(`/bukti/${p.id}`, "_blank")}
-                                        className="text-[10.5px] font-bold text-emerald cursor-pointer hover:underline"
-                                      >
-                                        Cetak Bukti
-                                      </button>
-                                    )}
-                                    <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${statusStyle[p.derived]}`}>
-                                      {statusLabel[p.derived]}
-                                    </span>
-                                  </div>
-                                  </div>
-                                  <div className="flex gap-6 mt-2 text-[11.5px] flex-wrap">
-                                    <span className="text-muted-foreground">Tagihan: <b className="font-mono text-foreground">{formatCurrency(p.totalPrice)}</b></span>
-                                    <span className="text-muted-foreground">Dibayar: <b className="font-mono text-emerald">{formatCurrency(p.paidAmount)}</b></span>
-                                    <span className="text-muted-foreground">Sisa: <b className="font-mono text-red-deduction">{formatCurrency(p.remaining)}</b></span>
-                                  </div>
-
-                                  {p.payments.length > 0 && (
-                                    <div className="mt-2.5 border-t border-border-soft pt-2">
-                                      <p className="text-[9.5px] uppercase font-bold text-muted-2 mb-1">Riwayat Pembayaran</p>
-                                      <div className="space-y-1">
-                                        {p.payments.map((pay) => (
-                                          <div key={pay.id} className="flex items-center justify-between text-[11px]">
-                                            <div className="flex items-center gap-2">
-                                              <span className="font-mono font-bold text-foreground">{formatCurrency(pay.amount)}</span>
-                                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${pay.method === "TUNAI" ? "bg-emerald/12 text-emerald" : "bg-amber/12 text-amber"}`}>
-                                                {pay.method}
-                                              </span>
-                                              {pay.method === "TRANSFER" && pay.bankAccount && (
-                                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue/12 text-blue border border-blue/40">
-                                                  {pay.bankAccount.bankName} · {pay.bankAccount.accountNumber}
-                                                </span>
-                                              )}
-                                              {pay.method === "TRANSFER" && pay.recipientAccount && (
-                                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-muted/12 text-muted-foreground border border-border-soft">
-                                                  Ke: {pay.recipientAccount}
-                                                </span>
-                                              )}
-                                              {pay.loanDeduction > 0 && (
-                                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-deduction/12 text-red-deduction">
-                                                  Hutang −{formatCurrency(pay.loanDeduction)}
-                                                </span>
-                                              )}
-                                              {pay.note && <span className="text-muted-2 text-[10px] italic">{pay.note}</span>}
-                                            </div>
-                                            <span className="text-muted-2 text-[10px] font-mono">
-                                              {formatDateTime(pay.paidAt)} · {pay.paidBy ?? "—"}
-                                            </span>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              )
-                            })}
-                          </div>
+                          {renderFarmerDetail(f)}
                         </td>
                       </tr>
                     )}
@@ -311,6 +318,53 @@ export function DebtClient({
             </tbody>
           </table>
           </div>
+
+          <div className="lg:hidden space-y-3">
+            {filteredFarmers.map((f) => {
+              const isOpen = expanded.has(f.farmerId)
+              return (
+                <article key={f.farmerId} className="rounded-xl border border-border bg-card p-3">
+                  <button
+                    type="button"
+                    onClick={() => toggle(f.farmerId)}
+                    aria-expanded={isOpen}
+                    className="w-full text-left flex items-center justify-between gap-2"
+                  >
+                    <span className="flex items-center gap-2 min-w-0">
+                      {isOpen ? <ChevronDown className="w-4 h-4 text-muted-2 shrink-0" /> : <ChevronRight className="w-4 h-4 text-muted-2 shrink-0" />}
+                      <span className="min-w-0">
+                        <span className="block text-[12.5px] font-bold text-foreground truncate" title={f.farmerName}>{f.farmerName}</span>
+                        <span className="block font-mono text-[10.5px] text-muted-2">{f.farmerNik ?? "—"}</span>
+                      </span>
+                    </span>
+                    <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${statusStyle[f.status]}`}>
+                      {statusLabel[f.status]}
+                    </span>
+                  </button>
+
+                  {isOpen ? (
+                    <div className="mt-3">{renderFarmerDetail(f)}</div>
+                  ) : (
+                    <div className="mt-2.5 grid grid-cols-3 gap-x-3 gap-y-2">
+                      <div className="min-w-0">
+                        <p className="text-[10px] uppercase font-bold text-muted-2">Tagihan</p>
+                        <p className="font-mono text-[11.5px] font-bold text-foreground truncate" title={formatCurrency(f.totalTagihan)}>{formatCurrency(f.totalTagihan)}</p>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[10px] uppercase font-bold text-muted-2">Dibayar</p>
+                        <p className="font-mono text-[11.5px] font-bold text-emerald truncate" title={formatCurrency(f.totalDibayar)}>{formatCurrency(f.totalDibayar)}</p>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[10px] uppercase font-bold text-muted-2">Sisa</p>
+                        <p className="font-mono text-[11.5px] font-bold text-red-deduction truncate" title={formatCurrency(f.sisa)}>{formatCurrency(f.sisa)}</p>
+                      </div>
+                    </div>
+                  )}
+                </article>
+              )
+            })}
+          </div>
+          </>
         )}
       </div>
 

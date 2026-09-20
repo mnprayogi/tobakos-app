@@ -90,7 +90,8 @@ export function LoansClient({
           </Empty>
         )}
         {loans.length > 0 && (
-          <div className="overflow-x-auto">
+          <>
+          <div className="hidden lg:block overflow-x-auto">
           <table className="w-full min-w-[800px] border-collapse text-[12.5px]">
             <thead>
               <tr>
@@ -142,6 +143,58 @@ export function LoansClient({
             </tbody>
           </table>
           </div>
+
+          <div className="lg:hidden space-y-3">
+            {loans.map((l) => (
+              <article key={l.loanId} className="rounded-xl border border-border bg-card p-3">
+                <div className="flex items-start justify-between gap-2 border-b border-border-soft pb-2">
+                  <div className="min-w-0">
+                    <p className="text-[12.5px] font-bold text-foreground truncate" title={l.farmerName}>{l.farmerName}</p>
+                    <p className="font-mono text-[10.5px] text-muted-2">{(l.farmerNik ?? "—")} · {l.warehouseName}</p>
+                  </div>
+                  <div className="shrink-0">
+                    <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                      l.status === "ACTIVE" && l.balance > 0.005
+                        ? "bg-amber/12 text-amber border-amber/35"
+                        : "bg-blue/12 text-blue border-blue/40"
+                    }`}>
+                      {l.status === "ACTIVE" && l.balance > 0.005 ? "Berhutang" : "Lunas"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-2.5 grid grid-cols-2 gap-x-4 gap-y-2.5">
+                  <div>
+                    <p className="text-[10px] uppercase font-bold text-muted-2">Total Pinjam</p>
+                    <p className="font-mono text-[12px] font-bold text-amber">{formatCurrency(l.totalBorrowed)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase font-bold text-muted-2">Total Bayar</p>
+                    <p className="font-mono text-[12px] font-bold text-emerald">{formatCurrency(l.totalRepaid)}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <p className="text-[10px] uppercase font-bold text-muted-2">Sisa Hutang</p>
+                    <p className="font-mono text-[12px] font-bold text-red-deduction">{formatCurrency(l.balance)}</p>
+                  </div>
+                </div>
+
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border-soft pt-2">
+                  {l.status === "ACTIVE" && l.balance > 0.005 && (
+                    <button
+                      onClick={() => setDialog({ mode: "repay", loanId: l.loanId, farmerName: l.farmerName, loanBalance: l.balance })}
+                      className="text-[11px] font-bold text-emerald cursor-pointer hover:underline"
+                    >
+                      Bayar Tunai
+                    </button>
+                  )}
+                  <Link href={`/admin/loans/${l.loanId}`} className="text-[11px] font-bold text-foreground/70 cursor-pointer hover:underline">
+                    Buku Hutang
+                  </Link>
+                </div>
+              </article>
+            ))}
+          </div>
+          </>
         )}
       </div>
 

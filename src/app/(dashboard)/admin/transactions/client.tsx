@@ -220,6 +220,91 @@ export function TransactionsClient({
     }
   }
 
+  function renderActions(p: Purchase) {
+    const allWeighed = p.items.length > 0 && p.items.every((i) => i.status === "WEIGHED" || i.status === "CLOSED")
+    const remaining = Math.round((p.totalPrice - p.paidAmount) * 100) / 100
+    const payPurchase: PayPurchase = {
+      id: p.id,
+      transactionCode: p.transactionCode,
+      farmerName: p.farmer.name,
+      totalPrice: p.totalPrice,
+      paidAmount: p.paidAmount,
+      remaining,
+      payments: p.payments,
+      loanBalance: p.loanBalance,
+      crossLoanBalance: p.crossLoanBalance,
+    }
+    if (p.status === "VOIDED") {
+      return <span className="text-[11px] text-muted-2">Dibatalkan</span>
+    }
+    return (
+      <div className="flex flex-wrap items-center gap-1">
+        {p.status === "DRAFT" && (
+          <span className="text-[11px] text-muted-2">{allWeighed ? "Menunggu ditimbang Pos 2" : "Proses grading"}</span>
+        )}
+        {p.status === "WEIGHED" && (
+          <Link
+            href={`/admin/transactions/${p.id}/review`}
+            title="Review & setujui"
+            className="p-1.5 text-emerald hover:bg-emerald/10 rounded-lg cursor-pointer inline-flex"
+          >
+            <ClipboardCheck className="w-3.5 h-3.5" />
+          </Link>
+        )}
+        {p.status === "APPROVED" && (
+          <>
+            {remaining > 0.005 && (
+              <button
+                onClick={() => window.open(`/pengantar/${p.id}`, "_blank")}
+                title="Cetak surat pengantar"
+                className="p-1.5 text-emerald hover:bg-emerald/10 rounded-lg cursor-pointer"
+              >
+                <FileText className="w-3.5 h-3.5" />
+              </button>
+            )}
+            {remaining > 0.005 && (
+              <button
+                onClick={() => setPayTarget(payPurchase)}
+                title="Catat pembayaran"
+                className="p-1.5 text-emerald hover:bg-emerald/10 rounded-lg cursor-pointer"
+              >
+                <Wallet className="w-3.5 h-3.5" />
+              </button>
+            )}
+            {remaining <= 0.005 && <span className="text-[11px] text-muted-2">Lunas</span>}
+            {p.paidAmount <= 0.005 && (
+              <button
+                onClick={() => handleReopen(p.id)}
+                title="Buka kembali transaksi"
+                className="p-1.5 text-amber hover:bg-amber/10 rounded-lg cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </>
+        )}
+        {p.status === "PAID" && (
+          <button
+            onClick={() => window.open(`/bukti/${p.id}`, "_blank")}
+            title="Cetak bukti lunas"
+            className="p-1.5 text-emerald hover:bg-emerald/10 rounded-lg cursor-pointer"
+          >
+            <ReceiptText className="w-3.5 h-3.5" />
+          </button>
+        )}
+        {role === "SUPER_ADMIN" && (
+          <button
+            onClick={() => setVoidTarget(p)}
+            title="Void transaksi"
+            className="p-1.5 text-red-deduction hover:bg-red-deduction/10 rounded-lg cursor-pointer"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -309,7 +394,8 @@ export function TransactionsClient({
             </EmptyHeader>
           </Empty>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className="hidden lg:block overflow-x-auto">
           <table className="w-full min-w-[900px] border-collapse text-[12.5px]">
             <thead>
               <tr>
@@ -328,19 +414,7 @@ export function TransactionsClient({
             </thead>
             <tbody>
               {purchases.map((p) => {
-                const allWeighed = p.items.length > 0 && p.items.every((i) => i.status === "WEIGHED" || i.status === "CLOSED")
                 const remaining = Math.round((p.totalPrice - p.paidAmount) * 100) / 100
-                const payPurchase: PayPurchase = {
-                  id: p.id,
-                  transactionCode: p.transactionCode,
-                  farmerName: p.farmer.name,
-                  totalPrice: p.totalPrice,
-                  paidAmount: p.paidAmount,
-                  remaining,
-                  payments: p.payments,
-                  loanBalance: p.loanBalance,
-                  crossLoanBalance: p.crossLoanBalance,
-                }
                 return (
                   <tr key={p.id}>
                     <td className="py-2 pr-2 border-b border-border-soft font-mono text-foreground">{p.transactionCode}</td>
@@ -383,74 +457,7 @@ export function TransactionsClient({
                       </div>
                     </td>
                     <td className="py-2 pl-2 border-b border-border-soft">
-                      {p.status === "VOIDED" ? (
-                        <span className="text-[11px] text-muted-2">Dibatalkan</span>
-                      ) : (
-                        <div className="flex flex-wrap items-center gap-1">
-                          {p.status === "DRAFT" && (
-                            <span className="text-[11px] text-muted-2">{allWeighed ? "Menunggu ditimbang Pos 2" : "Proses grading"}</span>
-                          )}
-                          {p.status === "WEIGHED" && (
-                            <Link
-                              href={`/admin/transactions/${p.id}/review`}
-                              title="Review & setujui"
-                              className="p-1.5 text-emerald hover:bg-emerald/10 rounded-lg cursor-pointer inline-flex"
-                            >
-                              <ClipboardCheck className="w-3.5 h-3.5" />
-                            </Link>
-                          )}
-                          {p.status === "APPROVED" && (
-                            <>
-                              {remaining > 0.005 && (
-                                <button
-                                  onClick={() => window.open(`/pengantar/${p.id}`, "_blank")}
-                                  title="Cetak surat pengantar"
-                                  className="p-1.5 text-emerald hover:bg-emerald/10 rounded-lg cursor-pointer"
-                                >
-                                  <FileText className="w-3.5 h-3.5" />
-                                </button>
-                              )}
-                              {remaining > 0.005 && (
-                                <button
-                                  onClick={() => setPayTarget(payPurchase)}
-                                  title="Catat pembayaran"
-                                  className="p-1.5 text-emerald hover:bg-emerald/10 rounded-lg cursor-pointer"
-                                >
-                                  <Wallet className="w-3.5 h-3.5" />
-                                </button>
-                              )}
-                              {remaining <= 0.005 && <span className="text-[11px] text-muted-2">Lunas</span>}
-                              {p.paidAmount <= 0.005 && (
-                                <button
-                                  onClick={() => handleReopen(p.id)}
-                                  title="Buka kembali transaksi"
-                                  className="p-1.5 text-amber hover:bg-amber/10 rounded-lg cursor-pointer"
-                                >
-                                  <RotateCcw className="w-3.5 h-3.5" />
-                                </button>
-                              )}
-                            </>
-                          )}
-                          {p.status === "PAID" && (
-                            <button
-                              onClick={() => window.open(`/bukti/${p.id}`, "_blank")}
-                              title="Cetak bukti lunas"
-                              className="p-1.5 text-emerald hover:bg-emerald/10 rounded-lg cursor-pointer"
-                            >
-                              <ReceiptText className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                          {role === "SUPER_ADMIN" && (
-                            <button
-                              onClick={() => setVoidTarget(p)}
-                              title="Void transaksi"
-                              className="p-1.5 text-red-deduction hover:bg-red-deduction/10 rounded-lg cursor-pointer"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      )}
+                      {renderActions(p)}
                     </td>
                   </tr>
                 )
@@ -458,6 +465,75 @@ export function TransactionsClient({
             </tbody>
           </table>
           </div>
+
+          <div className="lg:hidden space-y-3">
+            {purchases.map((p) => {
+              const remaining = Math.round((p.totalPrice - p.paidAmount) * 100) / 100
+              return (
+                <article key={p.id} className="rounded-xl border border-border bg-card p-3">
+                  <div className="flex items-start justify-between gap-2 border-b border-border-soft pb-2">
+                    <div className="min-w-0">
+                      <p className="font-mono text-[12.5px] font-bold text-foreground break-all">{p.transactionCode}</p>
+                      {p.status === "VOIDED" && p.voidNote && (
+                        <p className="mt-0.5 text-[10px] text-red-deduction/80 italic truncate" title={`${p.voidedBy ?? ""}: ${p.voidNote}`}>{p.voidNote}</p>
+                      )}
+                      {p.status !== "VOIDED" && p.priceReviewNote && (
+                        <p className="mt-0.5 text-[10px] text-muted-2 italic truncate" title={p.priceReviewNote}>{p.priceReviewNote}</p>
+                      )}
+                    </div>
+                    <div className="shrink-0">
+                      <StatusPill status={p.status as "DRAFT" | "WEIGHED" | "APPROVED" | "PAID" | "VOIDED"} />
+                    </div>
+                  </div>
+
+                  <div className="mt-2.5 grid grid-cols-2 gap-x-4 gap-y-2.5">
+                    <div className="min-w-0">
+                      <p className="text-[10px] uppercase font-bold text-muted-2">Petani</p>
+                      <p className="text-[12px] text-foreground truncate" title={p.farmer.name}>{p.farmer.name}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase font-bold text-muted-2">Tanggal</p>
+                      <p className="font-mono text-[12px] text-foreground">{formatDate(p.transactionDate)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase font-bold text-muted-2">Bale / Netto</p>
+                      <p className="font-mono text-[12px] text-foreground">{p.totalItems} · {formatWeightNumber(p.totalNetWeight)} kg</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase font-bold text-muted-2">Total</p>
+                      <p className="font-mono text-[12px] font-bold text-amber">
+                        {formatCurrency(p.totalPrice)}
+                        {p.originalTotalPrice != null && p.originalTotalPrice !== p.totalPrice && (
+                          <span className="block text-[10px] font-normal text-muted-2 line-through">{formatCurrency(p.originalTotalPrice)}</span>
+                        )}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase font-bold text-muted-2">Dibayar</p>
+                      <p className="font-mono text-[12px] font-bold text-emerald">{formatCurrency(p.paidAmount)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase font-bold text-muted-2">Sisa</p>
+                      <p className={`font-mono text-[12px] font-bold ${remaining > 0.005 ? "text-red-deduction" : "text-muted-2"}`}>{formatCurrency(remaining)}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-2.5 border-t border-border-soft pt-2 text-[10.5px] leading-snug">
+                    {p.createdBy && <p><span className="text-muted-2">Buat:</span> <span className="font-mono text-foreground break-all">{p.createdBy}</span></p>}
+                    {p.weighedBy && <p><span className="text-muted-2">Timbang:</span> <span className="font-mono text-foreground break-all">{p.weighedBy}</span></p>}
+                    {p.approvedBy && <p><span className="text-muted-2">Setuju:</span> <span className="font-mono text-foreground break-all">{p.approvedBy}</span></p>}
+                    {p.paidBy && <p><span className="text-muted-2">Bayar:</span> <span className="font-mono text-foreground break-all">{p.paidBy}</span></p>}
+                    {!p.createdBy && !p.weighedBy && !p.approvedBy && !p.paidBy && <span className="text-muted-2">—</span>}
+                  </div>
+
+                  <div className="mt-2 flex flex-wrap items-center gap-1">
+                    {renderActions(p)}
+                  </div>
+                </article>
+              )
+            })}
+          </div>
+          </>
         )}
 
         {total > 0 && (

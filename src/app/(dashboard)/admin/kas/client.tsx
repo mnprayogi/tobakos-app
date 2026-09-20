@@ -237,7 +237,8 @@ export function CashClient({
           </Empty>
         )}
         {cash.entries.length > 0 && (
-          <div className="overflow-x-auto">
+          <>
+          <div className="hidden lg:block overflow-x-auto">
             <table className="w-full min-w-[820px] border-collapse text-[12.5px]">
               <thead>
                 <tr>
@@ -316,6 +317,70 @@ export function CashClient({
               </tbody>
             </table>
           </div>
+
+          <div className="lg:hidden space-y-3">
+            {filtered.map((e) => {
+              const masuk = e.type === "MASUK"
+              return (
+                <article key={e.id} className={`rounded-xl border border-border bg-card p-3 ${e.voided ? "opacity-60" : ""}`}>
+                  <div className="flex items-start justify-between gap-2 border-b border-border-soft pb-2">
+                    <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                        e.voided
+                          ? "bg-muted/12 text-muted border-border"
+                          : masuk
+                            ? "bg-emerald/12 text-emerald border-emerald/35"
+                            : "bg-red-deduction/12 text-red-deduction border-red-deduction/35"
+                      }`}>
+                        {e.voided ? "Dibatalkan" : masuk ? "Masuk" : "Keluar"}
+                      </span>
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                        e.category === "KAS_PEMBELIAN"
+                          ? "bg-amber/12 text-amber border-amber/35"
+                          : "bg-blue/12 text-blue border-blue/40"
+                      }`}>
+                        {categoryLabel(e.category)}
+                      </span>
+                    </div>
+                    <span className={`font-mono text-[15px] font-bold shrink-0 ${masuk ? "text-emerald" : "text-red-deduction"} ${e.voided ? "line-through" : ""}`}>
+                      {masuk ? "+" : "−"} {formatCurrency(e.amount)}
+                    </span>
+                  </div>
+
+                  <div className="mt-2">
+                    <p className="font-bold text-[12px] text-foreground">{entryUraian(e)}</p>
+                    {e.farmerName && <p className="text-[11px] text-muted-foreground">Petani: {e.farmerName}</p>}
+                    {e.note && <p className="text-[11px] text-muted-foreground">{e.note}</p>}
+                    {e.transactionCode && <p className="font-mono text-[10.5px] text-emerald">{e.transactionCode}</p>}
+                    {e.voided && e.voidedBy && (
+                      <p className="text-[11px] text-muted-foreground italic">Dibatalkan oleh {e.voidedBy}</p>
+                    )}
+                  </div>
+
+                  <div className="mt-2 flex items-center justify-between gap-2 border-t border-border-soft pt-2 text-[10.5px]">
+                    <span className="text-muted-2 font-mono">{formatDateTime(e.createdAt)}</span>
+                    <span className="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
+                      <span className="text-muted-foreground">{e.createdBy ?? "—"}</span>
+                      {!e.manual && (
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald/12 text-emerald border border-emerald/35">
+                          Otomatis
+                        </span>
+                      )}
+                      {e.manual && !e.voided && (
+                        <button
+                          onClick={() => setVoidTarget(e)}
+                          className="text-[11px] font-bold text-red-deduction cursor-pointer hover:underline"
+                        >
+                          Batal
+                        </button>
+                      )}
+                    </span>
+                  </div>
+                </article>
+              )
+            })}
+          </div>
+          </>
         )}
       </div>
 
