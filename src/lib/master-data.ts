@@ -49,7 +49,7 @@ export const getCachedActiveTobaccoTypes = unstable_cache(
   async (): Promise<CachedTobaccoType[]> => {
     const rows = await prisma.tobaccoType.findMany({
       where: { active: true },
-      include: { grades: true },
+      include: { grades: { orderBy: { defaultPrice: "desc" } } },
     })
     return rows.map((t) => ({
       id: t.id,
@@ -58,7 +58,7 @@ export const getCachedActiveTobaccoTypes = unstable_cache(
       grades: t.grades.map((g) => ({ id: g.id, name: g.name, defaultPrice: Number(g.defaultPrice) })),
     }))
   },
-  ["master", "active-tobacco-types"],
+  ["master", "active-tobacco-types", "v2"],
   { revalidate: MASTER_REVALIDATE, tags: [MASTER_TAG] },
 )
 

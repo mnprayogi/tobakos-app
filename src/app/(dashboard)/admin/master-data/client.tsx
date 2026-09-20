@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import {
   createFarmer,
@@ -57,8 +57,10 @@ import {
   Pencil,
   Trash2,
   CheckCircle2,
+  Search,
 } from "lucide-react"
 import { PageHeader } from "@/components/shared/page-header"
+import { Pagination } from "@/components/shared/pagination"
 
 interface Farmer { id: number; name: string; nik: string | null; phone: string | null; address: string | null }
 interface Customer { id: number; name: string; phone: string | null; address: string | null }
@@ -177,6 +179,27 @@ function FarmersTab({ farmers: initial }: { farmers: Farmer[] }) {
   const [telepon, setTelepon] = useState("")
   const [alamat, setAlamat] = useState("")
   const [editing, setEditing] = useState<Farmer | null>(null)
+  const [query, setQuery] = useState("")
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return list
+    return list.filter(
+      (f) =>
+        f.name.toLowerCase().includes(q) ||
+        (f.nik ?? "").toLowerCase().includes(q) ||
+        (f.phone ?? "").toLowerCase().includes(q)
+    )
+  }, [list, query])
+
+  const visible = filtered.slice((page - 1) * pageSize, page * pageSize)
+
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
+    if (page > totalPages) setPage(totalPages)
+  }, [filtered.length, pageSize, page])
 
   function resetForm() { setNama(""); setNik(""); setTelepon(""); setAlamat(""); setEditing(null) }
 
@@ -250,9 +273,22 @@ function FarmersTab({ farmers: initial }: { farmers: Farmer[] }) {
       </form>
 
       <div className="lg:col-span-8 bg-panel border border-border rounded-xl p-4 space-y-3">
-        <h3 className="font-bold text-xs text-foreground uppercase tracking-wider">Daftar Petani ({list.length})</h3>
+        <h3 className="font-bold text-xs text-foreground uppercase tracking-wider">Daftar Petani ({filtered.length})</h3>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-2" />
+          <input
+            type="text"
+            placeholder="Cari nama / NIK / telepon…"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value)
+              setPage(1)
+            }}
+            className="h-9 w-full pl-9 pr-3 bg-panel-alt border border-border-soft text-foreground text-[12px] rounded-lg outline-none placeholder:text-muted-2"
+          />
+        </div>
         <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
-          {list.map((f) => (
+          {visible.map((f) => (
             <div key={f.id} className="p-3 bg-panel-alt border border-border-soft rounded-lg flex justify-between items-start text-xs gap-2">
               <div className="min-w-0">
                 <span className="font-bold text-foreground text-sm">{f.name}</span>
@@ -267,8 +303,20 @@ function FarmersTab({ farmers: initial }: { farmers: Farmer[] }) {
               </div>
             </div>
           ))}
-          {list.length === 0 && <p className="text-center text-muted-foreground py-6">Belum ada data petani.</p>}
+          {filtered.length === 0 && <p className="text-center text-muted-foreground py-6">{list.length === 0 ? "Belum ada data petani." : "Tidak ada hasil pencarian."}</p>}
         </div>
+        {filtered.length > pageSize && (
+          <Pagination
+            page={page}
+            pageSize={pageSize}
+            totalItems={filtered.length}
+            onPageChange={setPage}
+            onPageSizeChange={(s) => {
+              setPageSize(s)
+              setPage(1)
+            }}
+          />
+        )}
       </div>
     </div>
   )
@@ -280,6 +328,26 @@ function CustomersTab({ customers: initial }: { customers: Customer[] }) {
   const [telepon, setTelepon] = useState("")
   const [alamat, setAlamat] = useState("")
   const [editing, setEditing] = useState<Customer | null>(null)
+  const [query, setQuery] = useState("")
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return list
+    return list.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        (c.phone ?? "").toLowerCase().includes(q)
+    )
+  }, [list, query])
+
+  const visible = filtered.slice((page - 1) * pageSize, page * pageSize)
+
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
+    if (page > totalPages) setPage(totalPages)
+  }, [filtered.length, pageSize, page])
 
   function resetForm() { setNama(""); setTelepon(""); setAlamat(""); setEditing(null) }
 
@@ -348,9 +416,22 @@ function CustomersTab({ customers: initial }: { customers: Customer[] }) {
       </form>
 
       <div className="lg:col-span-8 bg-panel border border-border rounded-xl p-4 space-y-3">
-        <h3 className="font-bold text-xs text-foreground uppercase tracking-wider">Daftar Customer ({list.length})</h3>
+        <h3 className="font-bold text-xs text-foreground uppercase tracking-wider">Daftar Customer ({filtered.length})</h3>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-2" />
+          <input
+            type="text"
+            placeholder="Cari nama / telepon…"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value)
+              setPage(1)
+            }}
+            className="h-9 w-full pl-9 pr-3 bg-panel-alt border border-border-soft text-foreground text-[12px] rounded-lg outline-none placeholder:text-muted-2"
+          />
+        </div>
         <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
-          {list.map((c) => (
+          {visible.map((c) => (
             <div key={c.id} className="p-3 bg-panel-alt border border-border-soft rounded-lg flex justify-between items-start text-xs gap-2">
               <div className="min-w-0">
                 <span className="font-bold text-foreground text-sm">{c.name}</span>
@@ -363,8 +444,20 @@ function CustomersTab({ customers: initial }: { customers: Customer[] }) {
               </div>
             </div>
           ))}
-          {list.length === 0 && <p className="text-center text-muted-foreground py-6">Belum ada data customer.</p>}
+          {filtered.length === 0 && <p className="text-center text-muted-foreground py-6">{list.length === 0 ? "Belum ada data customer." : "Tidak ada hasil pencarian."}</p>}
         </div>
+        {filtered.length > pageSize && (
+          <Pagination
+            page={page}
+            pageSize={pageSize}
+            totalItems={filtered.length}
+            onPageChange={setPage}
+            onPageSizeChange={(s) => {
+              setPageSize(s)
+              setPage(1)
+            }}
+          />
+        )}
       </div>
     </div>
   )
@@ -627,6 +720,26 @@ function GradesTab({ grades: initial, tobaccoTypes }: { grades: Grade[]; tobacco
   const [harga, setHarga] = useState("")
   const [tobaccoTypeId, setTobaccoTypeId] = useState(tobaccoTypes[0]?.id?.toString() ?? "")
   const [editing, setEditing] = useState<Grade | null>(null)
+  const [query, setQuery] = useState("")
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return list
+    return list.filter(
+      (g) =>
+        g.name.toLowerCase().includes(q) ||
+        g.tobaccoType.name.toLowerCase().includes(q)
+    )
+  }, [list, query])
+
+  const visible = filtered.slice((page - 1) * pageSize, page * pageSize)
+
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
+    if (page > totalPages) setPage(totalPages)
+  }, [filtered.length, pageSize, page])
 
   function resetForm() { setNama(""); setHarga(""); setTobaccoTypeId(tobaccoTypes[0]?.id?.toString() ?? ""); setEditing(null) }
 
@@ -697,9 +810,22 @@ function GradesTab({ grades: initial, tobaccoTypes }: { grades: Grade[]; tobacco
       </form>
 
       <div className="lg:col-span-8 bg-panel border border-border rounded-xl p-4 space-y-3">
-        <h3 className="font-bold text-xs text-foreground uppercase tracking-wider">Daftar Grade Tembakau ({list.length})</h3>
+        <h3 className="font-bold text-xs text-foreground uppercase tracking-wider">Daftar Grade Tembakau ({filtered.length})</h3>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-2" />
+          <input
+            type="text"
+            placeholder="Cari nama grade / jenis tembakau…"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value)
+              setPage(1)
+            }}
+            className="h-9 w-full pl-9 pr-3 bg-panel-alt border border-border-soft text-foreground text-[12px] rounded-lg outline-none placeholder:text-muted-2"
+          />
+        </div>
         <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
-          {list.map((g) => (
+          {visible.map((g) => (
             <div key={g.id} className="p-3 bg-panel-alt border border-border-soft rounded-lg flex justify-between items-center text-xs">
               <div className="min-w-0">
                 <span className="font-bold text-foreground text-sm">{g.name}</span>
@@ -712,8 +838,20 @@ function GradesTab({ grades: initial, tobaccoTypes }: { grades: Grade[]; tobacco
               </div>
             </div>
           ))}
-          {list.length === 0 && <p className="text-center text-muted-foreground py-6">Belum ada data grade.</p>}
+          {filtered.length === 0 && <p className="text-center text-muted-foreground py-6">{list.length === 0 ? "Belum ada data grade." : "Tidak ada hasil pencarian."}</p>}
         </div>
+        {filtered.length > pageSize && (
+          <Pagination
+            page={page}
+            pageSize={pageSize}
+            totalItems={filtered.length}
+            onPageChange={setPage}
+            onPageSizeChange={(s) => {
+              setPageSize(s)
+              setPage(1)
+            }}
+          />
+        )}
       </div>
     </div>
   )
@@ -1144,6 +1282,28 @@ function UsersTab({ users: initial, lanes, customers }: { users: User[]; lanes: 
   const [customerId, setCustomerId] = useState("")
   const [password, setPassword] = useState("")
   const [editing, setEditing] = useState<User | null>(null)
+  const [query, setQuery] = useState("")
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return list
+    return list.filter(
+      (u) =>
+        (u.name ?? "").toLowerCase().includes(q) ||
+        (u.username ?? "").toLowerCase().includes(q) ||
+        (u.email ?? "").toLowerCase().includes(q) ||
+        u.role.toLowerCase().includes(q)
+    )
+  }, [list, query])
+
+  const visible = filtered.slice((page - 1) * pageSize, page * pageSize)
+
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
+    if (page > totalPages) setPage(totalPages)
+  }, [filtered.length, pageSize, page])
 
   function resetForm() { setNama(""); setUsername(""); setEmail(""); setRole("GRADER"); setLaneId(""); setCustomerId(""); setPassword(""); setEditing(null) }
 
@@ -1272,9 +1432,22 @@ function UsersTab({ users: initial, lanes, customers }: { users: User[]; lanes: 
       </form>
 
       <div className="lg:col-span-8 bg-panel border border-border rounded-xl p-4 space-y-3">
-        <h3 className="font-bold text-xs text-foreground uppercase tracking-wider">Daftar Users ({list.length})</h3>
+        <h3 className="font-bold text-xs text-foreground uppercase tracking-wider">Daftar Users ({filtered.length})</h3>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-2" />
+          <input
+            type="text"
+            placeholder="Cari nama / username / email / role…"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value)
+              setPage(1)
+            }}
+            className="h-9 w-full pl-9 pr-3 bg-panel-alt border border-border-soft text-foreground text-[12px] rounded-lg outline-none placeholder:text-muted-2"
+          />
+        </div>
         <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
-          {list.map((u) => (
+          {visible.map((u) => (
             <div key={u.id} className="p-3 bg-panel-alt border border-border-soft rounded-lg flex justify-between items-start text-xs gap-2">
               <div className="min-w-0">
                 <span className="font-bold text-foreground text-sm">{u.name ?? "—"}</span>
@@ -1308,8 +1481,20 @@ function UsersTab({ users: initial, lanes, customers }: { users: User[]; lanes: 
               </div>
             </div>
           ))}
-          {list.length === 0 && <p className="text-center text-muted-foreground py-6">Belum ada data user.</p>}
+          {filtered.length === 0 && <p className="text-center text-muted-foreground py-6">{list.length === 0 ? "Belum ada data user." : "Tidak ada hasil pencarian."}</p>}
         </div>
+        {filtered.length > pageSize && (
+          <Pagination
+            page={page}
+            pageSize={pageSize}
+            totalItems={filtered.length}
+            onPageChange={setPage}
+            onPageSizeChange={(s) => {
+              setPageSize(s)
+              setPage(1)
+            }}
+          />
+        )}
       </div>
     </div>
   )
