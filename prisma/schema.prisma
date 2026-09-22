@@ -398,6 +398,22 @@ model AppEvent {
   @@map("app_events")
 }
 
+model ImportJob {
+  jobId          String   @id
+  phase          String
+  message        String
+  total          Int
+  processed      Int      @default(0)
+  imported       Int      @default(0)
+  skipped        Int      @default(0)
+  generatedLabels Int     @default(0)
+  bales          Int      @default(0)
+  currentLabel   String?
+  updatedAt      DateTime @updatedAt
+
+  @@map("import_jobs")
+}
+
 enum PurchaseStatus {
   DRAFT
   WEIGHED
