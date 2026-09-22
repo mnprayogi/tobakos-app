@@ -37,6 +37,11 @@ export const LoanBookPrint = forwardRef<
     return (
       <div ref={ref} style={{ width: "100%", maxWidth: "180mm", margin: "0 auto", fontFamily: "'Courier New', Courier, monospace" }}>
         <div style={{ textAlign: "center", marginBottom: "5mm", borderBottom: "2px solid #000", paddingBottom: "3mm" }}>
+          <img
+            src="/icons/tobakos-logo.png"
+            alt={companyName}
+            style={{ height: "14mm", width: "auto", objectFit: "contain", display: "block", margin: "0 auto 2mm" }}
+          />
           <h1 style={{ fontSize: "16pt", fontWeight: 900, margin: "0 0 2mm", letterSpacing: "0.1em", color: "#000" }}>BUKU HUTANG MODAL</h1>
           <p style={{ fontSize: "11pt", fontWeight: 600, margin: "0 0 1mm", color: "#000" }}>{companyName} · {book.warehouseName}</p>
           <p style={{ fontSize: "9pt", color: "#222", margin: 0 }}>Buku ini mencatat seluruh pinjaman modal &amp; pembayarannya per petani</p>

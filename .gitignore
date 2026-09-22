@@ -46,3 +46,10 @@ yarn-error.log*
 Thumbs.db
 
 certificates
+
+# local-only data (jangan pernah di-commit)
+/docs/riwayat_transaksi.xlsx
+/docs/~$*.xlsx
+
+# sumber logo mentah (versi resize di /public/icons yang di-commit)
+/tobakos_logo.png

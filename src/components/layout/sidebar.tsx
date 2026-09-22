@@ -86,6 +86,18 @@ const navItems = [
         ),
       },
       {
+        href: "/admin/import",
+        label: "Import Riwayat",
+        roles: ["ADMIN"],
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="17 8 12 3 7 8" />
+            <line x1="12" y1="3" x2="12" y2="15" />
+          </svg>
+        ),
+      },
+      {
         href: "/admin/transactions",
         label: "Transaksi",
         roles: ["ADMIN", "FINANCE", "OWNER"],
@@ -218,9 +230,11 @@ export function Sidebar({
       )}
     >
       <div className={cn("flex items-center gap-2.5 pb-5 px-1.5 border-b border-border-soft mb-4 shrink-0", collapsed && "lg:justify-center lg:px-0")}>
-        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-emerald to-emerald/70 text-[10px] font-bold flex-shrink-0 text-primary-foreground">
-          🌿
-        </div>
+        <img
+          src="/icons/tobakos-logo.png"
+          alt={companyName}
+          className="w-8 h-8 object-contain flex-shrink-0"
+        />
         <span className={cn("font-extrabold text-[17px] tracking-tight text-foreground flex items-center", collapsed && "lg:hidden")}>
           {companyName}
           <span className="font-mono text-[9.5px] font-bold bg-border text-muted-2 px-1.5 py-0.5 rounded ml-1.5 align-middle">

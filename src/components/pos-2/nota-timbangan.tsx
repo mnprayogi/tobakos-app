@@ -126,7 +126,12 @@ export function NotaTimbangan(props: Props) {
         }}
       >
         <div style={{ width: "26%", fontFamily: SANS }}>
-          <div style={{ fontSize: "11pt", fontWeight: 800, letterSpacing: "0.14em", color: "#000" }}>TOBAKOS</div>
+          <img
+            src="/icons/tobakos-logo.png"
+            alt="TobakOS"
+            style={{ height: "9mm", width: "auto", objectFit: "contain", display: "block", marginBottom: "1mm" }}
+          />
+          <div style={{ fontSize: "8.5pt", fontWeight: 800, color: "#000", marginTop: "0.5mm" }}>TOBAKOS</div>
           <div style={{ fontSize: "8.5pt", fontWeight: 600, color: "#333", marginTop: "0.5mm" }}>
             Gudang Tembakau
           </div>

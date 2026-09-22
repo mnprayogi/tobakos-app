@@ -97,8 +97,13 @@ export const BuktiLunasPrint = forwardRef<HTMLDivElement, BuktiData>(
           }}
         >
           <div style={{ width: "26%", fontFamily: SANS }}>
-            <div style={{ fontSize: "12pt", fontWeight: 800, letterSpacing: "0.14em", color: "#000" }}>TOBAKOS</div>
-            <div style={{ fontSize: "9pt", fontWeight: 600, color: "#333", marginTop: "1mm" }}>Gudang Tembakau</div>
+            <img
+              src="/icons/tobakos-logo.png"
+              alt="TobakOS"
+              style={{ height: "11mm", width: "auto", objectFit: "contain", display: "block", marginBottom: "1.5mm" }}
+            />
+            <div style={{ fontSize: "9.5pt", fontWeight: 800, color: "#000", marginTop: "0.5mm" }}>TOBAKOS</div>
+            <div style={{ fontSize: "9pt", fontWeight: 600, color: "#333", marginTop: "0.5mm" }}>Gudang Tembakau</div>
             <div style={{ fontSize: "9pt", color: "#333", marginTop: "0.5mm" }}>
               {[warehouseLabel, laneCode].filter(Boolean).join(" \u00b7 ") || "TobakOS"}
             </div>

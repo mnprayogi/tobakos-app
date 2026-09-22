@@ -1,7 +1,7 @@
 "use client"
 
 import { signOut } from "next-auth/react"
-import { Leaf, LogOut } from "lucide-react"
+import { LogOut } from "lucide-react"
 
 export function PortalHeader({
   companyName,
@@ -16,9 +16,11 @@ export function PortalHeader({
     <header className="sticky top-0 z-30 border-b border-border bg-card/80 backdrop-blur print:hidden">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
         <div className="flex min-w-0 items-center gap-2.5">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-emerald to-emerald/70 text-primary-foreground">
-            <Leaf className="size-4" />
-          </div>
+          <img
+            src="/icons/tobakos-logo.png"
+            alt={companyName}
+            className="h-8 w-8 shrink-0 object-contain"
+          />
           <div className="min-w-0 leading-tight">
             <p className="truncate text-[13.5px] font-extrabold tracking-tight text-foreground">
               Portal Mitra

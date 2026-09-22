@@ -4,6 +4,7 @@ import { create } from "zustand"
 import { persist, createJSONStorage } from "zustand/middleware"
 import type { GradeInput } from "@/lib/actions/grading"
 import type { WeighInput } from "@/lib/actions/weighing"
+import { randomUUID } from "@/lib/utils"
 
 export type QueuedAction =
   | { id: string; type: "GRADE"; payload: GradeInput; createdAt: number }
@@ -34,8 +35,8 @@ export const useQueueStore = create<QueueState>()(
         set((s) => {
           const full: QueuedAction =
             action.type === "GRADE"
-              ? { id: crypto.randomUUID(), type: "GRADE", payload: action.payload, createdAt: Date.now() }
-              : { id: crypto.randomUUID(), type: "WEIGH", payload: action.payload, createdAt: Date.now() }
+              ? { id: randomUUID(), type: "GRADE", payload: action.payload, createdAt: Date.now() }
+              : { id: randomUUID(), type: "WEIGH", payload: action.payload, createdAt: Date.now() }
           return { pending: [...s.pending, full] }
         }),
       remove: (id) => set((s) => ({ pending: s.pending.filter((a) => a.id !== id) })),

@@ -46,7 +46,7 @@ export default function Home() {
   return (
     <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-6 bg-background px-6">
       <div className="flex size-16 items-center justify-center rounded-2xl border border-border bg-card">
-        <span className="text-2xl font-bold text-emerald">T</span>
+        <img src="/icons/tobakos-logo.png" alt="TobakOS" className="size-10 object-contain" />
       </div>
       <div className="space-y-3 text-center">
         <h1 className="text-xl font-semibold text-foreground">TobakOS</h1>

@@ -8,7 +8,6 @@ import {
   ArrowRight,
   Eye,
   EyeOff,
-  Leaf,
   LoaderCircle,
   LockKeyhole,
   Scale,
@@ -46,14 +45,11 @@ const WORKFLOW = [
 function BrandMark({ size = "md" }: { size?: "md" | "lg" }) {
   return (
     <div className="flex items-center gap-2.5">
-      <div
-        className={cn(
-          "flex items-center justify-center bg-gradient-to-br from-emerald to-emerald/70 text-primary-foreground",
-          size === "lg" ? "h-10 w-10 rounded-xl" : "h-8 w-8 rounded-lg"
-        )}
-      >
-        <Leaf className={size === "lg" ? "size-5" : "size-4"} />
-      </div>
+      <img
+        src="/icons/tobakos-logo.png"
+        alt="TobakOS"
+        className={cn("object-contain", size === "lg" ? "h-10 w-10" : "h-8 w-8")}
+      />
       <span className="flex items-center text-lg font-extrabold tracking-tight text-foreground lg:text-xl">
         TobakOS
         <span className="ml-1.5 rounded-md bg-border px-1.5 py-0.5 align-middle font-mono text-[9px] font-bold tracking-wide text-muted-2">
