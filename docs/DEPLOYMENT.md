@@ -125,8 +125,12 @@ Sekarang database kosong. Kita (a) buat struktur tabel lewat migrasi Prisma, lal
 Kembali ke **PowerShell** (window dari Fase 0). Set environment variable ke database cloud — **ganti `<URI CLOUD>` dengan URL milikmu**:
 
 ```powershell
-$env:DATABASE_URL = "mysql://avnadmin:<PASSWORD>@tobak-os-db-project-8f2a3.a.aivencloud.com:12034/defaultdb?ssl-mode=REQUIRED"
+$env:DATABASE_URL = "mysql://avnadmin:<PASSWORD>@tobak-os-db-project-8f2a3.a.aivencloud.com:12034/defaultdb?sslmode=require"
 ```
+
+> **Penting — parameter TLS berbeda untuk CLI migrasi vs runtime:**
+> - **CLI migrasi** (`prisma migrate deploy`/`status`) memakai **`?sslmode=require`** (pakai `mysql://`, bukan `prisma+mysql://` — skema itu ditolak CLI dengan error P1013 *scheme not recognized*).
+> - **Runtime aplikasi** (`.env` di Vercel/lokal) memakai **`?ssl-mode=REQUIRED`** yang sudah dipetakan `src/lib/db-url.ts` ke TLS terenkripsi; jangan menukar param CLI dan runtime.
 
 Cek tidak salah ketik (harus tampil URL cloud, bukan `localhost`):
 
@@ -146,6 +150,8 @@ Prisma schema loaded ...
 Datasource "db": MySQL database "defaultdb" at "tobak-os-db-project-....aivencloud.com:12034"
 ```
 diakhiri dengan semua migrasi **applied**. Kalau muncul error koneksi → lihat bagian Troubleshooting #2.
+
+> **Error P1013 saat CLI**: cek scheme URL harus `mysql://` dan param TLS `?sslmode=require` (bukan `ssl-mode`). Setelah sukses, akhiri sesi: `Remove-Item Env:DATABASE_URL`.
 
 ### 2.2 Pilih jalur data
 
