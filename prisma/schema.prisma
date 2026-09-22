@@ -403,6 +403,7 @@ model ImportJob {
   phase          String
   message        String
   total          Int
+  data           String?  @db.MediumText
   processed      Int      @default(0)
   imported       Int      @default(0)
   skipped        Int      @default(0)

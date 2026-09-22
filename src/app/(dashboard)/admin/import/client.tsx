@@ -4,15 +4,15 @@ import { useRef, useState, useEffect, useCallback } from "react"
 import { toast } from "sonner"
 import { FileUp, FileSpreadsheet, Loader2, ChevronDown, ShieldAlert, CheckCircle2, TriangleAlert } from "lucide-react"
 import { PageHeader } from "@/components/shared/page-header"
-import { formatCurrency, randomUUID } from "@/lib/utils"
-import { parseRiwayatUpload, importRiwayatTransactions, getImportMasterOptions, type ImportResult, type ImportMasterOptions, type ImportOverrides } from "@/lib/actions/import"
+import { formatCurrency } from "@/lib/utils"
+import { parseRiwayatUpload, importRiwayatTransactions, getImportMasterOptions, type ImportResult, type ImportChunkResult, type ImportMasterOptions, type ImportOverrides } from "@/lib/actions/import"
 import type { RiwayatPreview, RiwayatTransaction } from "@/lib/import/riwayat"
 import type { ImportProgress } from "@/lib/import/progress"
 
 type Step = "idle" | "preview" | "done"
 
-const MAX_POLL_MS = 120_000
-const FROZEN_MS = 10_000
+const MAX_POLL_MS = 900_000
+const FROZEN_MS = 30_000
 
 export function ImportRiwayatClient() {
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -70,10 +70,14 @@ export function ImportRiwayatClient() {
     setResult(null)
     setStall(null)
     try {
+      if (file.size > 5 * 1024 * 1024) {
+        throw new Error("Ukuran file maksimal 5MB")
+      }
       const form = new FormData()
       form.append("file", file)
       const parsed = await parseRiwayatUpload(form)
-      setPreview(parsed)
+      jobIdRef.current = parsed.jobId
+      setPreview(parsed.preview)
       setFileName(file.name)
       setStep("preview")
       toast.success("File berhasil dibaca")
@@ -88,6 +92,11 @@ export function ImportRiwayatClient() {
 
   async function handleImport() {
     if (!preview) return
+    const jobId = jobIdRef.current
+    if (!jobId) {
+      toast.error("Silakan baca ulang file terlebih dahulu.")
+      return
+    }
     setResult(null)
     setProgress(null)
     setStall(null)
@@ -98,11 +107,10 @@ export function ImportRiwayatClient() {
     lastMovementAtRef.current = Date.now()
     pollStartRef.current = Date.now()
 
-    const jobId = randomUUID()
-    jobIdRef.current = jobId
+    const jobIdForPoll = jobId
     pollRef.current = setInterval(async () => {
       try {
-        const res = await fetch(`/api/import/progress?job=${jobId}`)
+        const res = await fetch(`/api/import/progress?job=${jobIdForPoll}`)
         if (res.status === 404) {
           // job belum dibuat / sudah dihapus — beberapa kali berturut berarti respons action hilang
           notFoundRef.current += 1
@@ -148,12 +156,34 @@ export function ImportRiwayatClient() {
     }, 600)
 
     try {
-      const res = await importRiwayatTransactions(preview, jobId, { ...overrides, duplicateMode })
+      const overridesArg = { ...overrides, duplicateMode }
+      const acc: ImportResult = {
+        importedTransactions: 0,
+        skippedTransactions: 0,
+        importedBales: 0,
+        generatedLabels: 0,
+        payments: 0,
+        cashOutflow: 0,
+        totalPrice: 0,
+        fileName: "",
+      }
+      let chunk: ImportChunkResult
+      do {
+        chunk = await importRiwayatTransactions(jobId, overridesArg)
+        acc.importedTransactions += chunk.importedTransactions
+        acc.skippedTransactions += chunk.skippedTransactions
+        acc.importedBales += chunk.importedBales
+        acc.generatedLabels += chunk.generatedLabels
+        acc.payments += chunk.payments
+        acc.cashOutflow += chunk.cashOutflow
+        acc.totalPrice += chunk.totalPrice
+        acc.fileName = chunk.fileName || acc.fileName
+      } while (!chunk.done)
       stopPolling()
       setStall(null)
-      setResult(res)
+      setResult(acc)
       setStep("done")
-      toast.success(`${res.importedTransactions} transaksi diimpor`)
+      toast.success(`${acc.importedTransactions} transaksi diimpor`)
     } catch (err) {
       stopPolling()
       setStall(null)

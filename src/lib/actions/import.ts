@@ -1,21 +1,29 @@
 "use server"
 
+import { randomUUID } from "node:crypto"
 import { revalidatePath, revalidateTag } from "next/cache"
 import { prisma } from "@/lib/db"
 import { requireRoles } from "@/lib/roles"
 import { MASTER_TAG } from "@/lib/master-data"
 import { parseRiwayatFile, type RiwayatPreview } from "@/lib/import/riwayat"
-import { createJob, updateJob, finishJob, type ImportProgress } from "@/lib/import/progress"
+import { serializePreview, deserializePreview } from "@/lib/import/payload"
+import { createJob, updateJob, finishJob } from "@/lib/import/progress"
 
 const IMPORT_ACTOR = "Import Riwayat"
 const MAX_FILE_SIZE = 5 * 1024 * 1024
+const IMPORT_BATCH_SIZE = 10
 
 const DEFAULT_CUSTOMER = "Gudang Sendiri"
 const DEFAULT_TOBACCO_TYPE = "Virginia FC"
 const DEFAULT_LEAF_TYPE = "Lamina"
 const DEFAULT_PACKING_TYPE = "Keranjang Bambu"
 
-export async function parseRiwayatUpload(formData: FormData): Promise<RiwayatPreview> {
+export interface ParseResult {
+  jobId: string
+  preview: RiwayatPreview
+}
+
+export async function parseRiwayatUpload(formData: FormData): Promise<ParseResult> {
   await requireRoles("ADMIN", "SUPER_ADMIN")
 
   const file = formData.get("file")
@@ -26,7 +34,19 @@ export async function parseRiwayatUpload(formData: FormData): Promise<RiwayatPre
   }
 
   const buffer = Buffer.from(await file.arrayBuffer())
-  return parseRiwayatFile(buffer, file.name)
+  const preview = await parseRiwayatFile(buffer, file.name)
+
+  // Hasil parse disimpan server-side agar import berikutnya (yang berjalan ber-
+  // batch) tidak perlu mengirim ulang payload besar sebagai argumen Server Action.
+  // Bersihkan job lama tak terpakai (serverless tidak punya sweeper) sekaligus.
+  await prisma.importJob
+    .deleteMany({ where: { updatedAt: { lt: new Date(Date.now() - 10 * 60_000) } } })
+    .catch(() => {})
+
+  const jobId = randomUUID()
+  await createJob(jobId, preview.transactions.length, serializePreview(preview))
+
+  return { jobId, preview }
 }
 
 export interface ImportResult {
@@ -38,6 +58,12 @@ export interface ImportResult {
   cashOutflow: number
   totalPrice: number
   fileName: string
+}
+
+export interface ImportChunkResult extends ImportResult {
+  done: boolean
+  processed: number
+  total: number
 }
 
 function toDate(v: Date | string): Date {
@@ -89,18 +115,64 @@ export async function getImportMasterOptions(): Promise<ImportMasterOptions> {
 }
 
 export async function importRiwayatTransactions(
-  preview: RiwayatPreview,
-  jobId?: string,
+  jobId: string,
   overrides?: ImportOverrides
-): Promise<ImportResult> {
+): Promise<ImportChunkResult> {
   await requireRoles("ADMIN", "SUPER_ADMIN")
 
-  if (!preview.transactions || preview.transactions.length === 0) {
-    throw new Error("Tidak ada transaksi untuk diimpor")
+  const row = await prisma.importJob.findUnique({ where: { jobId } })
+  if (!row || !row.data) {
+    throw new Error("Job impor tidak ditemukan atau telah kedaluwarsa — baca ulang file terlebih dahulu.")
   }
-  if (jobId) await createJob(jobId, preview.transactions.length)
-  const report = async (patch: Partial<ImportProgress>) => {
-    if (jobId) await updateJob(jobId, patch)
+  if (row.phase === "done") {
+    return {
+      done: true,
+      processed: row.processed,
+      total: row.total,
+      importedTransactions: row.imported,
+      skippedTransactions: row.skipped,
+      importedBales: row.bales,
+      generatedLabels: row.generatedLabels,
+      payments: 0,
+      cashOutflow: 0,
+      totalPrice: 0,
+      fileName: "",
+    }
+  }
+
+  // Setiap pemanggilan action memproses satu slice (batch) kecil agar tetap
+  // dalam batas durasi fungsi serverless; kursor & kumulatif disimpan di job
+  // sehingga kegagalan di tengah bisa dilanjutkan (rollback per batch, tidak
+  // ada duplikat).
+  const preview = deserializePreview(row.data)
+  const total = preview.transactions.length
+  const start = Math.min(row.processed, total)
+  const slice = preview.transactions.slice(start, start + IMPORT_BATCH_SIZE)
+
+  if (slice.length === 0) {
+    const message = `Import selesai — ${row.imported} transaksi diimpor, ${row.skipped} dilewati, ${row.bales} bal, ${row.generatedLabels} label baru.`
+    await finishJob(jobId, {
+      phase: "done",
+      message,
+      processed: row.processed,
+      imported: row.imported,
+      skipped: row.skipped,
+      generatedLabels: row.generatedLabels,
+      bales: row.bales,
+    })
+    return {
+      done: true,
+      processed: row.processed,
+      total,
+      importedTransactions: row.imported,
+      skippedTransactions: row.skipped,
+      importedBales: row.bales,
+      generatedLabels: row.generatedLabels,
+      payments: 0,
+      cashOutflow: 0,
+      totalPrice: 0,
+      fileName: preview.fileName,
+    }
   }
 
   try {
@@ -235,25 +307,8 @@ export async function importRiwayatTransactions(
       let payments = 0
       let cashOutflow = 0
       let totalPrice = 0
-      let processedTx = 0
 
-      await report({
-        phase: "master",
-        message: "Master data siap — mulai impor transaksi.",
-      })
-
-      for (const txData of preview.transactions) {
-        processedTx++
-        await report({
-          phase: "importing",
-          processed: processedTx,
-          imported: importedTransactions,
-          skipped: skippedTransactions,
-          generatedLabels,
-          currentLabel: txData.transactionCode,
-          message: `Mengimpor transaksi ${processedTx}/${preview.transactions.length}…`,
-        })
-
+      for (const txData of slice) {
         const farmerId = farmerMap.get(txData.farmerCode)
         if (farmerId == null) {
           throw new Error(`Petani "${txData.farmerCode}" tidak ditemukan`)
@@ -271,15 +326,6 @@ export async function importRiwayatTransactions(
         const blockedInTx = txData.items.some((b) => blockedLabels.has(b.labelCode))
         if (duplicateMode === "skip" && blockedInTx) {
           skippedTransactions++
-          await report({
-            phase: "importing",
-            processed: processedTx,
-            imported: importedTransactions,
-            skipped: skippedTransactions,
-            generatedLabels,
-            currentLabel: txData.transactionCode,
-            message: `Transaksi "${txData.transactionCode}" dilewati — ada Kode Stok duplikat dalam file / sudah terpakai di database.`,
-          })
           continue
         }
 
@@ -367,17 +413,6 @@ export async function importRiwayatTransactions(
             },
           })
           importedBales++
-          if (importedBales % 25 === 0) {
-            await report({
-              phase: "importing",
-              processed: processedTx,
-              imported: importedTransactions,
-              skipped: skippedTransactions,
-              generatedLabels,
-              bales: importedBales,
-              currentLabel: labelCode,
-            })
-          }
         }
 
         const payment = await tx.payment.create({
@@ -409,12 +444,6 @@ export async function importRiwayatTransactions(
         cashOutflow += totalPriceTx
         totalPrice += totalPriceTx
         importedTransactions++
-        await report({
-          imported: importedTransactions,
-          skipped: skippedTransactions,
-          generatedLabels,
-          bales: importedBales,
-        })
       }
 
       return {
@@ -427,33 +456,55 @@ export async function importRiwayatTransactions(
         totalPrice,
       }
     },
-    { timeout: 60000 }
+    { timeout: 25000 }
   )
 
-  if (jobId) {
-    try {
-      await finishJob(jobId, {
-        phase: "done",
-        message: `Import selesai — ${result.importedTransactions} transaksi diimpor, ${result.skippedTransactions} dilewati, ${result.importedBales} bal, ${result.generatedLabels} label baru.`,
-        processed: result.importedTransactions + result.skippedTransactions,
-        imported: result.importedTransactions,
-        skipped: result.skippedTransactions,
-        generatedLabels: result.generatedLabels,
-        bales: result.importedBales,
-      })
-    } catch (e) {
-      console.error("Gagal menulis status selesai impor", e)
-    }
+  const processed = start + slice.length
+  const imported = row.imported + result.importedTransactions
+  const skipped = row.skipped + result.skippedTransactions
+  const generatedLabels = row.generatedLabels + result.generatedLabels
+  const bales = row.bales + result.importedBales
+
+  await updateJob(jobId, {
+    phase: "importing",
+    processed,
+    imported,
+    skipped,
+    generatedLabels,
+    bales,
+    currentLabel: slice[slice.length - 1]?.transactionCode,
+    message: `Mengimpor transaksi ${processed}/${total}…`,
+  })
+
+  if (processed >= total) {
+    const message = `Import selesai — ${imported} transaksi diimpor, ${skipped} dilewati, ${bales} bal, ${generatedLabels} label baru.`
+    await finishJob(jobId, {
+      phase: "done",
+      message,
+      processed,
+      imported,
+      skipped,
+      generatedLabels,
+      bales,
+    })
   }
 
-  return { ...result, fileName: preview.fileName }
+  return {
+    done: processed >= total,
+    processed,
+    total,
+    importedTransactions: result.importedTransactions,
+    skippedTransactions: result.skippedTransactions,
+    importedBales: result.importedBales,
+    generatedLabels: result.generatedLabels,
+    payments: result.payments,
+    cashOutflow: result.cashOutflow,
+    totalPrice: result.totalPrice,
+    fileName: preview.fileName,
+  }
   } catch (err) {
-    if (jobId) {
-      await finishJob(jobId, {
-        phase: "error",
-        message: err instanceof Error ? err.message : "Import gagal.",
-      }).catch(() => {})
-    }
+    // Batch berperilaku atomik (rollback) dan kursor job belum berubah di tabel
+    // DB, sehingga retry klien melanjutkan dari slice yang sama tanpa duplikat.
     throw err
   } finally {
     // Revalidation cache bersifat best-effort — tidak boleh menahan/menggagalkan

@@ -24,7 +24,7 @@ export interface ImportProgress {
 
 // Entri dihapus N ms setelah selesai/gagal; job basi (tanpa update) dibersihkan di getJob.
 const DELETE_AFTER_FINISH_MS = 8_000
-const STALE_AFTER_MS = 2 * 60_000
+const STALE_AFTER_MS = 5 * 60_000
 
 function toProgress(row: {
   phase: string
@@ -52,10 +52,10 @@ function toProgress(row: {
   }
 }
 
-export async function createJob(id: string, total: number): Promise<void> {
+export async function createJob(id: string, total: number, data?: string): Promise<void> {
   await prisma.importJob.upsert({
     where: { jobId: id },
-    update: { total, phase: "master", message: "Menyiapkan master data…" },
+    update: { total, phase: "master", message: "Menyiapkan master data…", ...(data != null ? { data } : {}) },
     create: {
       jobId: id,
       phase: "master",
@@ -66,6 +66,7 @@ export async function createJob(id: string, total: number): Promise<void> {
       skipped: 0,
       generatedLabels: 0,
       bales: 0,
+      ...(data != null ? { data } : {}),
     },
   })
 }

@@ -5,7 +5,7 @@ const isProd = process.env.NODE_ENV === "production";
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["192.168.100.111"],
-  experimental: { serverActions: { bodySizeLimit: "4mb" } },
+  experimental: { serverActions: { bodySizeLimit: "7mb" } },
   // Prisma driver adapter + mariadb wajib dimuat dari node_modules asli.
   // Jika di-bundle Turbopack, koneksi driver menggantung (pool timeout
   // active=0 idle=0) padahal DB sehat — @prisma/client sudah di-default
