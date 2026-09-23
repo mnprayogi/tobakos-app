@@ -440,6 +440,26 @@
   font-family: var(--font-mono);
 }
 
+@utility sticker-grade {
+  font-family: var(--font-mono);
+  font-weight: 800;
+  font-size: 17px;
+  color: #0a0a0a;
+  text-align: center;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+@utility sticker-grade-label {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 8.5px;
+  color: #444;
+  text-align: center;
+  margin-top: 1px;
+  letter-spacing: 0.08em;
+}
+
 @utility sticker-leaf {
   position: absolute;
   top: 8px;
@@ -567,23 +587,37 @@
     gap: 0 !important;
   }
   .print-sticker {
-    display: block !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
     position: absolute;
     top: 0;
     left: 0;
     width: 100mm;
     height: 60mm;
-    padding: 4mm 5mm;
+    padding: 5mm;
     background: #ffffff !important;
     border: none !important;
     box-shadow: none !important;
     border-radius: 0 !important;
     font-family: 'Courier New', monospace !important;
+    box-sizing: border-box !important;
   }
   .print-sticker .qr-container {
+    flex: 0 0 auto;
     display: flex !important;
     justify-content: center !important;
-    margin-bottom: 1mm !important;
+    align-items: center !important;
+    padding-right: 6mm;
+  }
+  .print-sticker .sticker-text-col {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+    text-align: center !important;
   }
   .print-sticker .sticker-label {
     font-size: 9pt !important;
@@ -591,11 +625,27 @@
     text-align: center !important;
     color: #000 !important;
     letter-spacing: 0.03em !important;
-    margin-bottom: 1mm !important;
+    margin-bottom: 0.7mm !important;
   }
   .print-sticker .sticker-text {
     font-size: 7.5pt !important;
     text-align: center !important;
     color: #333 !important;
+  }
+  .print-sticker .sticker-grade-label {
+    font-size: 6.5pt !important;
+    font-weight: 700 !important;
+    text-align: center !important;
+    color: #333 !important;
+    font-family: 'Courier New', monospace !important;
+    letter-spacing: 0.08em !important;
+  }
+  .print-sticker .sticker-grade {
+    font-weight: 800 !important;
+    text-align: center !important;
+    color: #000 !important;
+    font-family: 'Courier New', monospace !important;
+    white-space: nowrap !important;
+    margin: 0.4mm 0 !important;
   }
 }

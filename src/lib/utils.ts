@@ -74,3 +74,9 @@ export function toDateKey(date: Date): string {
   const d = String(date.getDate()).padStart(2, "0")
   return `${y}-${m}-${d}`
 }
+
+export function fitStickerGradeFontSize(text: string, targetPx: number, minPx = 9, maxPx = 36): number {
+  const chars = Math.max(1, text.length)
+  const px = targetPx / (chars * 0.6)
+  return Math.min(maxPx, Math.max(minPx, Math.round(px * 10) / 10))
+}

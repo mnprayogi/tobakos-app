@@ -19,7 +19,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/compone
 import { PageHeader } from "@/components/shared/page-header"
 import { StatusPill } from "@/components/shared/status-pill"
 import { PrinterManager } from "@/components/shared/printer-manager"
-import { useThermalPrinter } from "@/hooks/useThermalPrinter"
+import { useThermalPrinter, type PrinterTransport } from "@/hooks/useThermalPrinter"
 import { usePrintDocument, printBaseStyle } from "@/lib/print"
 import { StickerBatchPrint } from "@/components/pos-2/sticker-batch-print"
 import {
@@ -258,6 +258,27 @@ export function SusulanShell(props: SusulanShellProps) {
   ])
 
   const printer = useThermalPrinter()
+
+  const changePrinterTransport = (t: PrinterTransport) => {
+    printer.setTransport(t)
+    try {
+      window.localStorage.setItem("tobak:printer-transport", t)
+    } catch {
+      // penyimpanan preferensi diabaikan jika gagal
+    }
+  }
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem("tobak:printer-transport")
+      if (stored === "ble" || stored === "usb") {
+        printer.setTransport(stored)
+      }
+    } catch {
+      // preferensi printer diabaikan jika gagal
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- hanya hydrate sekali saat mount
+  }, [])
   const stickerPrintRef = useRef<HTMLDivElement>(null)
   const handleStickerPrint = usePrintDocument(stickerPrintRef, printBaseStyle, { documentTitle: "Label-Batch" })
 
@@ -1231,8 +1252,12 @@ export function SusulanShell(props: SusulanShellProps) {
                   connected={printer.connected}
                   deviceName={printer.deviceName}
                   error={printer.error}
+                  transport={printer.transport}
+                  onTransportChange={changePrinterTransport}
                   onConnect={() => printer.connect()}
                   onDisconnect={() => printer.disconnect()}
+                  onTest={printer.printTest}
+                  onForget={printer.forgetUsbDevice}
                 />
                 <div className="flex items-center gap-2 ml-auto">
                   {printing && (

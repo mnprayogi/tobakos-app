@@ -18,7 +18,7 @@ import {
   type RecentBaleItem,
 } from "@/lib/actions/grading"
 import { laneToken } from "@/lib/barcode"
-import { toDateKey, cn } from "@/lib/utils"
+import { toDateKey, cn, fitStickerGradeFontSize } from "@/lib/utils"
 import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -28,7 +28,7 @@ import { StatusPill } from "@/components/shared/status-pill"
 import { PrinterManager } from "@/components/shared/printer-manager"
 import { BaleHistoryTable } from "@/components/pos-1/bale-history-table"
 import { SyncStatusBanner } from "@/components/shared/sync-status-banner"
-import { useThermalPrinter } from "@/hooks/useThermalPrinter"
+import { useThermalPrinter, type PrinterTransport } from "@/hooks/useThermalPrinter"
 import { useOfflineQueue, isNetworkError } from "@/hooks/useOfflineQueue"
 import { useRealtime } from "@/hooks/useRealtime"
 import { useQueueStore } from "@/lib/queue"
@@ -486,7 +486,12 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
             toast.error(`Cetak thermal gagal (${(err as Error).message})`)
           }
         } else {
-          toast.info("Printer thermal belum terhubung — bale tersimpan tanpa cetak")
+          toast.info("Printer thermal belum terhubung — mencetak via browser")
+          try {
+            handlePrintSticker()
+          } catch (err) {
+            toast.error(`Cetak stiker gagal (${(err as Error).message})`)
+          }
         }
       }
     } catch (err) {
@@ -528,6 +533,27 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
   const stickerRef = useRef<HTMLDivElement>(null)
   const handlePrintSticker = usePrintDocument(stickerRef, thermalStickerPageStyle)
   const printer = useThermalPrinter()
+
+  function changePrinterTransport(t: PrinterTransport) {
+    printer.setTransport(t)
+    try {
+      window.localStorage.setItem("tobak:printer-transport", t)
+    } catch {
+      // penyimpanan preferensi diabaikan jika gagal
+    }
+  }
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem("tobak:printer-transport")
+      if (stored === "ble" || stored === "usb") {
+        printer.setTransport(stored)
+      }
+    } catch {
+      // preferensi printer diabaikan jika gagal
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- hanya hydrate sekali saat mount
+  }, [])
   const { enqueue } = useOfflineQueue()
 
   return (
@@ -553,9 +579,12 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
         connected={printer.connected}
         deviceName={printer.deviceName}
         error={printer.error}
+        transport={printer.transport}
+        onTransportChange={changePrinterTransport}
         onConnect={printer.connect}
         onDisconnect={printer.disconnect}
         onTest={printer.printTest}
+        onForget={printer.forgetUsbDevice}
       />
     </PageHeader>
 
@@ -969,9 +998,21 @@ export function GradingShell({ tobaccoTypes, leafTypes, packingTypes, farmers, c
             <QRCodeSVG value={previewLabelCode} size={110} />
           </div>
         </div>
-        <div className="sticker-label">{previewLabelCode}</div>
-        {previewFarmerName && <div className="sticker-text">{previewFarmerName}</div>}
-        <div className="sticker-text">GRADE {previewGrade} · {warehouse} · {shortLane}</div>
+        <div className="sticker-text-col">
+          <div className="sticker-label">{previewLabelCode}</div>
+          {previewFarmerName && <div className="sticker-text">{previewFarmerName}</div>}
+          <div className="sticker-grade-label">GRADE</div>
+          <div
+            className="sticker-grade"
+            style={{
+              fontSize: fitStickerGradeFontSize(previewGrade, 110),
+              letterSpacing: 0,
+            }}
+          >
+            {previewGrade}
+          </div>
+          <div className="sticker-text">{warehouse} · {shortLane}</div>
+        </div>
       </div>
     </div>
 

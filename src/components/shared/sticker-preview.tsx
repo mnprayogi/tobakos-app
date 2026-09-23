@@ -1,5 +1,5 @@
 import { QRCodeSVG } from "qrcode.react"
-import { cn } from "@/lib/utils"
+import { cn, fitStickerGradeFontSize } from "@/lib/utils"
 
 export function StickerPreview({
   labelCode,
@@ -18,6 +18,7 @@ export function StickerPreview({
   size?: number
   className?: string
 }) {
+  const gradeFontSize = fitStickerGradeFontSize(grade, size)
   return (
     <div className={cn("sticker-wf", className)}>
       <div className="absolute top-2 right-2.5 text-[14px] z-10 select-none">🌿</div>
@@ -32,8 +33,12 @@ export function StickerPreview({
           {farmerName}
         </div>
       )}
+      <div className="sticker-grade-label">GRADE</div>
+      <div className="sticker-grade" style={{ fontSize: gradeFontSize, letterSpacing: 0 }}>
+        {grade}
+      </div>
       <div className="sticker-meta">
-        GRADE {grade} · {warehouse}{lane ? ` · ${lane}` : ""}
+        {warehouse}{lane ? ` · ${lane}` : ""}
       </div>
     </div>
   )
