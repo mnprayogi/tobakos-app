@@ -115,6 +115,7 @@ model Lane {
 model Purchase {
   id               Int            @id @default(autoincrement())
   transactionCode  String         @unique
+  requestKey       String?        @unique
   farmer           Farmer         @relation(fields: [farmerId], references: [id])
   farmerId         Int
   warehouse        Warehouse?     @relation(fields: [warehouseId], references: [id])

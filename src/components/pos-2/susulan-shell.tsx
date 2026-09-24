@@ -6,7 +6,6 @@ import {
   CalendarClock,
   Check,
   CheckCircle2,
-  ChevronDown,
   ClipboardList,
   FileSpreadsheet,
   Plus,
@@ -22,6 +21,8 @@ import { PrinterManager } from "@/components/shared/printer-manager"
 import { useThermalPrinter, type PrinterTransport } from "@/hooks/useThermalPrinter"
 import { usePrintDocument, printBaseStyle } from "@/lib/print"
 import { StickerBatchPrint } from "@/components/pos-2/sticker-batch-print"
+import { LiveScalePanel } from "@/components/pos-2/live-scale-panel"
+import { SyncStatusBanner } from "@/components/shared/sync-status-banner"
 import {
   checkSusulanDuplicate,
   saveSusulanBatch,
@@ -43,6 +44,16 @@ interface GradeOption {
   id: number
   name: string
   defaultPrice: number
+}
+
+function gradeTierClass(name: string, grades: GradeOption[]): string {
+  const sorted = [...grades].sort((a, b) => b.defaultPrice - a.defaultPrice)
+  const idx = sorted.findIndex((g) => g.name === name)
+  if (idx < 0) return "bg-muted-2"
+  const third = Math.max(1, Math.ceil(sorted.length / 3))
+  if (idx < third) return "bg-emerald"
+  if (idx < third * 2) return "bg-amber"
+  return "bg-red-deduction"
 }
 interface TobaccoTypeOption {
   id: number
@@ -117,6 +128,7 @@ interface SusulanDraft {
   moisturePercent: number
   grossWeight: string
   roundingMode: RoundMode
+  requestId: string | null
 }
 
 function draftStorageKey(warehouse: string, laneCode: string) {
@@ -148,7 +160,15 @@ function emptyDraft(): SusulanDraft {
     moisturePercent: 0,
     grossWeight: "",
     roundingMode: "normal",
+    requestId: null,
   }
+}
+
+function createRequestId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID()
+  }
+  return `rq-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
 
 export function SusulanShell(props: SusulanShellProps) {
@@ -183,13 +203,11 @@ export function SusulanShell(props: SusulanShellProps) {
   const [leafTypeId, setLeafTypeId] = useState<number | null>(null)
   const [packingTypeId, setPackingTypeId] = useState<number | null>(null)
   const [gradeName, setGradeName] = useState<string | null>(null)
-  const [gradeQuery, setGradeQuery] = useState("")
-  const [gradeOpen, setGradeOpen] = useState(false)
-  const gradeBoxRef = useRef<HTMLDivElement>(null)
   const [moisturePercent, setMoisturePercent] = useState(defaultMoisturePercent)
   const [customerId, setCustomerId] = useState<number | null>(customers[0]?.id ?? null)
   const [grossWeight, setGrossWeight] = useState("")
   const [roundingMode, setRoundingMode] = useState<RoundMode>("normal")
+  const [requestId, setRequestId] = useState<string | null>(null)
 
   const [savedBales, setSavedBales] = useState<SavedBale[]>([])
 
@@ -220,26 +238,31 @@ export function SusulanShell(props: SusulanShellProps) {
     setMoisturePercent(draft.moisturePercent)
     setGrossWeight(draft.grossWeight)
     setRoundingMode(draft.roundingMode)
+    setRequestId(draft.requestId ?? null)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only hydrate once on mount
   }, [])
+
+  function currentDraft(): SusulanDraft {
+    return {
+      savedBales,
+      selectedFarmer,
+      dateValue,
+      tobaccoTypeId,
+      leafTypeId,
+      packingTypeId,
+      gradeName,
+      customerId,
+      moisturePercent,
+      grossWeight,
+      roundingMode,
+      requestId,
+    }
+  }
 
   useEffect(() => {
     if (!mounted) return
     try {
-      const draft: SusulanDraft = {
-        savedBales,
-        selectedFarmer,
-        dateValue,
-        tobaccoTypeId,
-        leafTypeId,
-        packingTypeId,
-        gradeName,
-        customerId,
-        moisturePercent,
-        grossWeight,
-        roundingMode,
-      }
-      window.localStorage.setItem(storageKey, JSON.stringify(draft))
+      window.localStorage.setItem(storageKey, JSON.stringify(currentDraft()))
     } catch {}
   }, [
     mounted,
@@ -255,6 +278,7 @@ export function SusulanShell(props: SusulanShellProps) {
     moisturePercent,
     grossWeight,
     roundingMode,
+    requestId,
   ])
 
   const printer = useThermalPrinter()
@@ -315,32 +339,15 @@ export function SusulanShell(props: SusulanShellProps) {
 
   const gradeOptions = useMemo(
     () =>
-      tobaccoTypes.find((t) => t.id === tobaccoTypeId)?.grades ?? [],
+      [...(tobaccoTypes.find((t) => t.id === tobaccoTypeId)?.grades ?? [])].sort(
+        (a, b) => b.defaultPrice - a.defaultPrice
+      ),
     [tobaccoTypes, tobaccoTypeId]
   )
 
   useEffect(() => {
     setGradeName(null)
-    setGradeQuery("")
-    setGradeOpen(false)
   }, [tobaccoTypeId])
-
-  useEffect(() => {
-    if (!gradeOpen) return
-    function onDocClick(e: MouseEvent) {
-      if (gradeBoxRef.current && !gradeBoxRef.current.contains(e.target as Node)) {
-        setGradeOpen(false)
-      }
-    }
-    document.addEventListener("mousedown", onDocClick)
-    return () => document.removeEventListener("mousedown", onDocClick)
-  }, [gradeOpen])
-
-  const filteredGradeOptions = useMemo(() => {
-    const q = gradeQuery.trim().toLowerCase()
-    if (!q) return gradeOptions
-    return gradeOptions.filter((g) => g.name.toLowerCase().includes(q))
-  }, [gradeOptions, gradeQuery])
 
   const selectedPacking =
     packingTypes.find((p) => p.id === packingTypeId) ?? null
@@ -425,6 +432,11 @@ export function SusulanShell(props: SusulanShellProps) {
     return missing
   }, [tobaccoTypeId, leafTypeId, packingTypeId, gradeName, customerId, moisturePercent, maxMoisturePercent])
 
+  function handleScaleCapture(weight: number) {
+    setGrossWeight(weight % 1 === 0 ? String(weight) : weight.toFixed(1))
+    toast.success(`Berat dari timbangan: ${weight % 1 === 0 ? weight : weight.toFixed(1)} kg`)
+  }
+
   function handleSimpanBale() {
     if (!canSaveBale) return
     if (!tobaccoTypeId || !leafTypeId || !packingTypeId || !gradeName || !customerId) return
@@ -457,10 +469,12 @@ export function SusulanShell(props: SusulanShellProps) {
     setSavedBales((prev) => [...prev, bale])
     setGradeName(null)
     setGrossWeight("")
+    setRequestId(null)
     toast.success(`Bale #${savedBales.length + 1} ditambahkan`)
   }
 
   function removeBale(key: number) {
+    setRequestId(null)
     setSavedBales((prev) => prev.filter((b) => b.key !== key))
   }
 
@@ -470,10 +484,20 @@ export function SusulanShell(props: SusulanShellProps) {
 
     setSubmitting(true)
     try {
+      const id = requestId ?? createRequestId()
+      setRequestId(id)
+      try {
+        window.localStorage.setItem(
+          storageKey,
+          JSON.stringify({ ...currentDraft(), requestId: id })
+        )
+      } catch {}
+
       const saved = await saveSusulanBatch({
         farmerId: selectedFarmer.id,
         laneCode,
         transactionDate: dateValue,
+        requestId: id,
         bales: savedBales.map((b) => ({
           tobaccoTypeId: b.tobaccoTypeId,
           leafTypeId: b.leafTypeId,
@@ -500,6 +524,7 @@ export function SusulanShell(props: SusulanShellProps) {
       setCustomerId(customers[0]?.id ?? null)
       setGrossWeight("")
       setRoundingMode("normal")
+      setRequestId(null)
       try {
         window.localStorage.removeItem(storageKey)
       } catch {}
@@ -553,6 +578,8 @@ export function SusulanShell(props: SusulanShellProps) {
         title="Pos 2 · Input Susulan"
         subtitle={`Salin formulir kertas — satu bale per simpan · Jalur ${laneCode}`}
       />
+
+      <SyncStatusBanner />
 
       {/* ===== DATA UMUM (Petani + Tanggal) ===== */}
       <div className="bg-panel border border-border rounded-xl p-4 space-y-4 w-full">
@@ -670,6 +697,8 @@ export function SusulanShell(props: SusulanShellProps) {
           </h3>
         </div>
 
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_290px] gap-4">
+          <div className="space-y-4">
         {/* Field pilihan */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {/* Jenis Tembakau */}
@@ -763,85 +792,54 @@ export function SusulanShell(props: SusulanShellProps) {
           </div>
         </div>
 
-        {/* Grade + MC + Pembulatan + Berat */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {/* Grade */}
-          <div>
-            <label className="block text-[11px] font-bold text-muted-foreground mb-1">
-              Grade *
-            </label>
-            <div ref={gradeBoxRef} className="relative">
-              {!tobaccoTypeId ? (
-                <div className="field-input field-input-disabled w-full h-[38px] flex items-center text-[12px] cursor-not-allowed">
-                  Pilih jenis tembakau dulu
-                </div>
-              ) : (
-                <>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={gradeName ?? gradeQuery}
-                      readOnly={!!gradeName}
-                      placeholder="Ketik untuk cari grade…"
-                      onFocus={() => setGradeOpen(true)}
-                      onChange={(e) => {
-                        setGradeName(null)
-                        setGradeQuery(e.target.value)
-                        setGradeOpen(true)
-                      }}
-                      className="field-input w-full h-[38px] pr-7"
-                    />
-                    <ChevronDown
-                      className={cn(
-                        "absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-2 pointer-events-none transition-transform",
-                        gradeOpen && "rotate-180"
-                      )}
-                    />
-                  </div>
-                  {gradeOpen && (
-                    <div className="absolute z-20 mt-1 w-full max-h-[200px] overflow-y-auto bg-panel-alt border border-border-soft rounded-lg p-1">
-                      {filteredGradeOptions.length === 0 ? (
-                        <p className="px-2 py-2 text-center text-[11px] text-muted-2">
-                          Grade tidak ditemukan
-                        </p>
-                      ) : (
-                        filteredGradeOptions.map((g) => {
-                          const active = gradeName === g.name
-                          return (
-                            <button
-                              key={g.id}
-                              type="button"
-                              onClick={() => {
-                                setGradeName(g.name)
-                                setGradeQuery("")
-                                setGradeOpen(false)
-                              }}
-                              className={cn(
-                                "w-full text-left px-2.5 py-1.5 rounded-md text-[12px] cursor-pointer border border-transparent",
-                                active
-                                  ? "bg-emerald/15 text-emerald border-emerald/40"
-                                  : "bg-transparent text-foreground hover:bg-panel hover:border-emerald/40"
-                              )}
-                            >
-                              <span className="font-bold">{g.name}</span>
-                              <span className="ml-1.5 font-mono text-[10px] text-muted-2">
-                                {formatCurrency(g.defaultPrice)}/kg
-                              </span>
-                            </button>
-                          )
-                        })
-                      )}
-                    </div>
-                  )}
-                </>
-              )}
+        {/* Grade (tombol seperti Pos 1) */}
+        <div>
+          <label className="block text-[11px] font-bold text-muted-foreground mb-1">
+            Grade *
+          </label>
+          {gradeOptions.length === 0 ? (
+            <div className="field-input field-input-disabled w-full h-[38px] flex items-center text-[12px] cursor-not-allowed">
+              Pilih jenis tembakau dulu
             </div>
-            {currentPreview.price != null && (
-              <p className="mt-1 font-mono text-[9.5px] text-muted-2">
-                {formatCurrency(currentPreview.price)}/kg
-              </p>
-            )}
-          </div>
+          ) : (
+            <div className="grade-grid-4">
+              {gradeOptions.map((g) => {
+                const isSelected = gradeName === g.name
+                return (
+                  <button
+                    key={g.id}
+                    type="button"
+                    onClick={() => setGradeName(g.name)}
+                    className={cn(
+                      "grade-btn grade-btn-sm",
+                      isSelected && "grade-btn-active"
+                    )}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      {!isSelected && (
+                        <span className={cn("size-1.5 rounded-full shrink-0", gradeTierClass(g.name, gradeOptions))} />
+                      )}
+                      <span>{g.name}</span>
+                      {isSelected && <Check className="size-3 shrink-0" strokeWidth={3} />}
+                    </span>
+                    <span className={cn("font-mono text-[9px]", isSelected ? "text-primary-foreground/80" : "text-muted-2")}>
+                      {formatCurrency(g.defaultPrice)}/kg
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+          {currentPreview.price != null && (
+            <div className="price-line">
+              <span>Harga/kg (snapshot Grade {gradeName})</span>
+              <b className="price-line-value">Rp {currentPreview.price.toLocaleString("id-ID")}</b>
+            </div>
+          )}
+        </div>
+
+        {/* MC + Pembulatan + Berat */}
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
 
           {/* MC */}
           <div>
@@ -858,6 +856,9 @@ export function SusulanShell(props: SusulanShellProps) {
               onChange={(e) =>
                 setMoisturePercent(e.target.value === "" ? 0 : Number(e.target.value))
               }
+              onWheel={(e) => {
+                if (e.target === document.activeElement) e.currentTarget.blur()
+              }}
             />
           </div>
 
@@ -914,6 +915,9 @@ export function SusulanShell(props: SusulanShellProps) {
                 }`}
                 value={grossWeight}
                 onChange={(e) => setGrossWeight(e.target.value)}
+                onWheel={(e) => {
+                  if (e.target === document.activeElement) e.currentTarget.blur()
+                }}
               />
             </div>
             <p className="mt-1 text-[10px] text-muted-2">
@@ -1014,6 +1018,10 @@ export function SusulanShell(props: SusulanShellProps) {
             <Plus className="w-4 h-4" />
             Simpan Bale
           </button>
+        </div>
+        </div>
+
+        <LiveScalePanel onCapture={handleScaleCapture} />
         </div>
       </div>
 

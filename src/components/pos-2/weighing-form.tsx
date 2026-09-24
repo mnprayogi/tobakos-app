@@ -345,6 +345,9 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
                 value={grossWeight}
                 onChange={(e) => setGrossWeight(e.target.value)}
                 disabled={!item || capturedWeight != null}
+                onWheel={(e) => {
+                  if (e.target === document.activeElement) e.currentTarget.blur()
+                }}
                 className="flex-1 min-w-0 h-[36px] bg-panel-alt border border-border-soft text-foreground font-sans text-[13px] px-3 rounded-lg outline-none placeholder:text-muted-2 disabled:opacity-60 disabled:cursor-not-allowed"
               />
               {capturedWeight != null && (

@@ -35,6 +35,7 @@ export interface SusulanBatchInput {
   farmerId: number
   laneCode: string
   transactionDate: string
+  requestId: string
   bales: SusulanBaleInput[]
 }
 
@@ -107,6 +108,9 @@ export async function saveSusulanBatch(input: SusulanBatchInput): Promise<Susula
   if (!Array.isArray(input.bales) || input.bales.length === 0) {
     throw new Error("Minimal satu bale harus diisi")
   }
+  if (!input.requestId?.trim()) {
+    throw new Error("Pengirim tidak valid — muat ulang halaman lalu coba lagi")
+  }
   if (input.bales.length > MAX_BALES_PER_BATCH) {
     throw new Error(`Maksimal ${MAX_BALES_PER_BATCH} bale per pengiriman`)
   }
@@ -171,10 +175,38 @@ export async function saveSusulanBatch(input: SusulanBatchInput): Promise<Susula
     })
     if (!farmer) throw new Error("Petani tidak ditemukan")
 
+    const requestKey = input.requestId?.trim() || null
+    if (requestKey) {
+      const existing = await tx.purchase.findUnique({ where: { requestKey } })
+      if (existing) {
+        const existingItems = await tx.purchaseItem.findMany({
+          where: { purchaseId: existing.id },
+          orderBy: { inputOrder: "asc" },
+        })
+        return {
+          purchase: existing,
+          farmerName: farmer.name,
+          labels: existingItems.map((it) => ({
+            labelCode: it.labelCode,
+            grade: it.grade,
+            netWeight: it.netWeight,
+            status: it.status,
+          })),
+          weighedCount: existingItems.filter((it) => it.status === "WEIGHED").length,
+          gradedCount: existingItems.filter((it) => it.status === "GRADED").length,
+          totalGrossWeight: Number(existing.totalGrossWeight),
+          totalNetWeight: Number(existing.totalNetWeight),
+          totalPrice: Number(existing.totalPrice),
+          sessionEnded: existing.status === "WEIGHED",
+        }
+      }
+    }
+
     const txSeq = await nextSequence(lane.code, tx, transactionDate)
     const purchase = await tx.purchase.create({
       data: {
         transactionCode: generateTransactionCode(lane.code, txSeq, transactionDate),
+        requestKey,
         farmerId: input.farmerId,
         warehouseId: lane.warehouseId,
         laneId: lane.id,

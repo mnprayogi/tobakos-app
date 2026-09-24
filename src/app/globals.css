@@ -344,6 +344,21 @@
   border: 2px solid var(--border);
 }
 
+@utility grade-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+@utility grade-btn-sm {
+  min-height: 42px;
+  padding: 6px 6px;
+  border-radius: 10px;
+  font-size: 12px;
+  gap: 2px;
+}
+
 @utility price-line {
   display: flex;
   justify-content: space-between;
