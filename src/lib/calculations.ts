@@ -1,11 +1,17 @@
-export type RoundMode = "normal" | "floor" | "ceil"
+export const ROUND_MODES = ["normal", "round", "floor", "ceil"] as const
+
+export type RoundMode = (typeof ROUND_MODES)[number]
+
+export function isRoundMode(value: unknown): value is RoundMode {
+  return typeof value === "string" && ROUND_MODES.includes(value as RoundMode)
+}
 
 export function roundWeight(
   value: number,
   mode: RoundMode,
   decimals: number = 1
 ): number {
-  if (mode === "normal") {
+  if (mode === "normal" || mode === "round") {
     const factor = Math.pow(10, decimals)
     return Math.round(value * factor) / factor
   }
@@ -39,6 +45,43 @@ export function calculateSubtotal(
   pricePerKg: number
 ): number {
   return netWeight * pricePerKg
+}
+
+export interface BaleWeightInput {
+  grossWeight: number
+  packingWeight: number
+  moisturePercent: number
+  moistureRoundingMode: RoundMode
+}
+
+export interface BaleWeightResult {
+  weightAfterPacking: number
+  moistureDeduction: number
+  netWeight: number
+}
+
+export function getMoistureDeductionDecimals(mode: RoundMode): number {
+  return mode === "normal" ? 1 : 0
+}
+
+export function calculateBaleWeights(input: BaleWeightInput): BaleWeightResult {
+  const weightAfterPacking = roundWeight(
+    calculateWeightAfterPacking(input.grossWeight, input.packingWeight),
+    "normal",
+    1
+  )
+  const moistureDeduction = roundWeight(
+    calculateMoistureDeduction(weightAfterPacking, input.moisturePercent),
+    input.moistureRoundingMode,
+    getMoistureDeductionDecimals(input.moistureRoundingMode)
+  )
+  const netWeight = roundWeight(
+    calculateNetWeight(weightAfterPacking, moistureDeduction),
+    "normal",
+    1
+  )
+
+  return { weightAfterPacking, moistureDeduction, netWeight }
 }
 
 export function roundMoney(value: number): number {

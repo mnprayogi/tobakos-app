@@ -85,13 +85,14 @@ const knownMeta: Record<string, SettingMeta> = {
     step: 0.5,
   },
   WEIGHT_ROUND_MODE: {
-    label: "Pembulatan Berat",
-    description: "Cara pembulatan berat bale di Pos 2 (Penimbangan).",
+    label: "Pembulatan MC",
+    description: "Default pembulatan potongan MC di Pos 2; operator dapat mengubahnya per bale.",
     type: "select",
     options: [
-      { label: "Normal", value: "normal" },
-      { label: "Bulatkan ke atas", value: "ceil" },
-      { label: "Bulatkan ke bawah", value: "floor" },
+      { label: "Normal (1 desimal)", value: "normal" },
+      { label: "Round (terdekat bulat)", value: "round" },
+      { label: "Floor (ke bawah)", value: "floor" },
+      { label: "Ceil (ke atas)", value: "ceil" },
     ],
   },
   DEFAULT_WAREHOUSE_ID: {

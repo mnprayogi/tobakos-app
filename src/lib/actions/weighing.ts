@@ -3,10 +3,9 @@
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/db"
 import {
-  calculateWeightAfterPacking,
-  calculateMoistureDeduction,
-  calculateNetWeight,
+  calculateBaleWeights,
   calculateSubtotal,
+  isRoundMode,
   roundWeight,
   type RoundMode,
 } from "@/lib/calculations"
@@ -73,6 +72,7 @@ export async function lookupItem(labelCode: string, laneId: number) {
 export async function saveWeighData(data: WeighInput) {
   await requireRoles("OPERATOR", "ADMIN")
   if (!parseLabelCode(data.labelCode.trim())) throw new Error("Format barcode tidak valid")
+  if (!isRoundMode(data.roundingMode)) throw new Error("Mode pembulatan MC tidak valid")
 
   const lane = await resolveActorLane({ laneId: data.laneId })
 
@@ -88,23 +88,12 @@ export async function saveWeighData(data: WeighInput) {
     if (item.status !== "GRADED") throw new Error("Bale sudah ditimbang")
     if (data.grossWeight <= 0) throw new Error("Berat harus lebih dari 0")
 
-    const weightDecimals = data.roundingMode === "normal" ? 1 : 0
-
-    const weightAfterPacking = roundWeight(
-      calculateWeightAfterPacking(data.grossWeight, item.packingWeight),
-      data.roundingMode,
-      weightDecimals
-    )
-    const moistureDeduction = roundWeight(
-      calculateMoistureDeduction(weightAfterPacking, item.moisturePercent),
-      data.roundingMode,
-      weightDecimals
-    )
-    const netWeight = roundWeight(
-      calculateNetWeight(weightAfterPacking, moistureDeduction),
-      data.roundingMode,
-      weightDecimals
-    )
+    const { weightAfterPacking, moistureDeduction, netWeight } = calculateBaleWeights({
+      grossWeight: data.grossWeight,
+      packingWeight: item.packingWeight,
+      moisturePercent: item.moisturePercent,
+      moistureRoundingMode: data.roundingMode,
+    })
     const pricePerKg = Number(item.pricePerKg ?? 0)
     const subtotal = roundWeight(
       calculateSubtotal(netWeight, pricePerKg),

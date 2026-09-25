@@ -3,7 +3,8 @@ import { getActiveLanes, getLaneByCode } from "@/lib/actions/lanes"
 import { getCurrentUserLane } from "@/lib/lane-resolution"
 import { LanePicker } from "@/components/shared/lane-picker"
 import { SusulanShell } from "@/components/pos-2/susulan-shell"
-import { getSettingNumber } from "@/lib/settings"
+import { getSetting, getSettingNumber } from "@/lib/settings"
+import { isRoundMode } from "@/lib/calculations"
 import {
   getCachedActiveTobaccoTypes,
   getCachedActiveLeafTypes,
@@ -31,17 +32,27 @@ export default async function SusulanPage({ searchParams }: { searchParams: Prom
     )
   }
 
-  const [rawTypes, leafTypes, packingTypes, farmers, customers, maxMoisturePercent, defaultMoisturePercent] =
-    await Promise.all([
-      getCachedActiveTobaccoTypes(),
-      getCachedActiveLeafTypes(),
-      getCachedPackingTypes(),
-      getCachedFarmers(),
-      getCachedCustomers(),
-      getSettingNumber("MAX_MOISTURE_PERCENT", 20),
-      getSettingNumber("DEFAULT_MOISTURE_PERCENT", 3),
-    ])
+  const [
+    rawTypes,
+    leafTypes,
+    packingTypes,
+    farmers,
+    customers,
+    maxMoisturePercent,
+    defaultMoisturePercent,
+    storedRoundingMode,
+  ] = await Promise.all([
+    getCachedActiveTobaccoTypes(),
+    getCachedActiveLeafTypes(),
+    getCachedPackingTypes(),
+    getCachedFarmers(),
+    getCachedCustomers(),
+    getSettingNumber("MAX_MOISTURE_PERCENT", 20),
+    getSettingNumber("DEFAULT_MOISTURE_PERCENT", 3),
+    getSetting("WEIGHT_ROUND_MODE", "normal"),
+  ])
 
+  const defaultRoundingMode = isRoundMode(storedRoundingMode) ? storedRoundingMode : "normal"
   const tobaccoTypes = rawTypes.map((t) => ({
     id: t.id,
     name: t.name,
@@ -61,6 +72,7 @@ export default async function SusulanPage({ searchParams }: { searchParams: Prom
         laneName={lane.name}
         maxMoisturePercent={maxMoisturePercent}
         defaultMoisturePercent={defaultMoisturePercent}
+        defaultRoundingMode={defaultRoundingMode}
         userName={session?.user.name ?? "Operator"}
       />
     </div>

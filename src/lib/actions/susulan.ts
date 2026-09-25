@@ -10,10 +10,9 @@ import { getSettingNumber } from "@/lib/settings"
 import { requireRoles } from "@/lib/roles"
 import { publishEvent } from "@/lib/events"
 import {
-  calculateWeightAfterPacking,
-  calculateMoistureDeduction,
-  calculateNetWeight,
+  calculateBaleWeights,
   calculateSubtotal,
+  isRoundMode,
   roundMoney,
   roundWeight,
   type RoundMode,
@@ -133,6 +132,9 @@ export async function saveSusulanBatch(input: SusulanBatchInput): Promise<Susula
     if (bale.grossWeight != null && (!Number.isFinite(bale.grossWeight) || bale.grossWeight < 0)) {
       throw new Error(`Baris ${idx + 1}: Berat bruto tidak valid`)
     }
+    if (bale.roundingMode != null && !isRoundMode(bale.roundingMode)) {
+      throw new Error(`Baris ${idx + 1}: Mode pembulatan MC tidak valid`)
+    }
   }
 
   const actor = await getActorName()
@@ -231,7 +233,6 @@ export async function saveSusulanBatch(input: SusulanBatchInput): Promise<Susula
       const labelCode = generateLabelCode(lane.warehouse.code, lane.code, seq, transactionDate)
       const pricePerKg = priceMap.get(`${bale.tobaccoTypeId}|${bale.grade.trim()}`)!
       const roundingMode: RoundMode = bale.roundingMode ?? "normal"
-      const weightDecimals = roundingMode === "normal" ? 1 : 0
 
       const hasGross = bale.grossWeight != null && Number.isFinite(bale.grossWeight)
       let weightAfterPacking: number | undefined
@@ -241,21 +242,15 @@ export async function saveSusulanBatch(input: SusulanBatchInput): Promise<Susula
       let status: "GRADED" | "WEIGHED" = "GRADED"
 
       if (hasGross) {
-        weightAfterPacking = roundWeight(
-          calculateWeightAfterPacking(bale.grossWeight!, bale.packingWeight),
-          roundingMode,
-          weightDecimals
-        )
-        moistureDeduction = roundWeight(
-          calculateMoistureDeduction(weightAfterPacking, bale.moisturePercent),
-          roundingMode,
-          weightDecimals
-        )
-        netWeight = roundWeight(
-          calculateNetWeight(weightAfterPacking, moistureDeduction),
-          roundingMode,
-          weightDecimals
-        )
+        const weights = calculateBaleWeights({
+          grossWeight: bale.grossWeight!,
+          packingWeight: bale.packingWeight,
+          moisturePercent: bale.moisturePercent,
+          moistureRoundingMode: roundingMode,
+        })
+        weightAfterPacking = weights.weightAfterPacking
+        moistureDeduction = weights.moistureDeduction
+        netWeight = weights.netWeight
         subtotal = roundWeight(calculateSubtotal(netWeight, Number(pricePerKg)), "normal", 2)
         status = "WEIGHED"
         weighedCount += 1

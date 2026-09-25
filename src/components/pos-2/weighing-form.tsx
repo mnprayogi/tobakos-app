@@ -6,11 +6,11 @@ import { saveWeighData } from "@/lib/actions/weighing"
 import { useOfflineQueue, isNetworkError } from "@/hooks/useOfflineQueue"
 import { useQueueStore } from "@/lib/queue"
 import { StatusPill } from "@/components/shared/status-pill"
+import { RoundingModeToggle } from "@/components/pos-2/rounding-mode-toggle"
 import {
-  calculateWeightAfterPacking,
-  calculateMoistureDeduction,
-  calculateNetWeight,
+  calculateBaleWeights,
   calculateSubtotal,
+  getMoistureDeductionDecimals,
   roundWeight,
   type RoundMode,
 } from "@/lib/calculations"
@@ -198,33 +198,20 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
     )
   }
 
-  const weightDecimals = roundingMode === "normal" ? 1 : 0
-
-  const rawWeightAfterPacking = grossWeightNum > 0
-    ? calculateWeightAfterPacking(grossWeightNum, item?.packingWeight ?? 0)
-    : 0
-  const weightAfterPacking = rawWeightAfterPacking > 0
-    ? roundWeight(rawWeightAfterPacking, roundingMode, weightDecimals)
-    : 0
-
-  const rawMoistureDeduction = weightAfterPacking > 0
-    ? calculateMoistureDeduction(weightAfterPacking, item?.moisturePercent ?? 0)
-    : 0
-  const moistureDeduction = roundWeight(rawMoistureDeduction, roundingMode, weightDecimals)
-
-  const netWeight = weightAfterPacking > 0
-    ? roundWeight(calculateNetWeight(weightAfterPacking, moistureDeduction), roundingMode, weightDecimals)
-    : 0
+  const moistureDecimals = getMoistureDeductionDecimals(roundingMode)
+  const weights = item && grossWeightNum > item.packingWeight
+    ? calculateBaleWeights({
+        grossWeight: grossWeightNum,
+        packingWeight: item.packingWeight,
+        moisturePercent: item.moisturePercent,
+        moistureRoundingMode: roundingMode,
+      })
+    : { weightAfterPacking: 0, moistureDeduction: 0, netWeight: 0 }
+  const { weightAfterPacking, moistureDeduction, netWeight } = weights
 
   const subtotal = netWeight > 0
     ? roundWeight(calculateSubtotal(netWeight, item?.pricePerKg ?? 0), "normal", 2)
     : 0
-
-  const roundingOptions: { value: RoundMode; label: string }[] = [
-    { value: "normal", label: "Normal" },
-    { value: "floor", label: "Floor" },
-    { value: "ceil", label: "Ceil" },
-  ]
 
   async function handleSave() {
     if (!item) return
@@ -244,7 +231,7 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
       try {
         const result = await saveWeighData(payload)
         onSaved?.()
-        toast.success(`Bale ${item.labelCode} — Netto ${(result.netWeight ?? 0).toFixed(weightDecimals)} KG`)
+        toast.success(`Bale ${item.labelCode} — Netto ${(result.netWeight ?? 0).toFixed(1)} KG`)
         handleLocalReset()
       } catch (err) {
         if (isNetworkError(err)) {
@@ -334,7 +321,7 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
               Berat Timbangan (kg)
             </label>
             <span className="text-[10px] font-bold uppercase tracking-[0.06em] text-muted-foreground whitespace-nowrap">
-              Pembulatan
+              Pembulatan MC
             </span>
 
             <div className="flex items-center gap-2 min-w-0">
@@ -356,22 +343,11 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
                 </span>
               )}
             </div>
-            <div className="flex h-[36px] items-center bg-panel-alt rounded-lg border border-border-soft p-0.5 gap-0.5">
-              {roundingOptions.map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => onRoundingModeChange(opt.value)}
-                  className={`flex-1 h-full px-2 rounded-md text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center ${
-                    roundingMode === opt.value
-                      ? "bg-emerald text-primary-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
+            <RoundingModeToggle
+              value={roundingMode}
+              onChange={onRoundingModeChange}
+              className="h-[36px]"
+            />
 
             {!item && (
               <p className="col-span-2 text-[10px] text-muted-2 italic">
@@ -395,7 +371,7 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
                 <div className="rounded-lg bg-panel-alt/80 border border-border-soft/70 px-2.5 py-2">
                   <p className="text-[10px] uppercase tracking-[0.06em] text-muted-foreground mb-1">Setelah Packing</p>
                   <p className="font-mono font-semibold text-[15px] text-foreground">
-                    {weightAfterPacking > 0 ? `${weightAfterPacking.toFixed(weightDecimals)} KG` : "\u2014"}
+                    {weightAfterPacking > 0 ? `${weightAfterPacking.toFixed(1)} KG` : "\u2014"}
                   </p>
                 </div>
                 <div className="rounded-lg bg-panel-alt/80 border border-border-soft/70 px-2.5 py-2">
@@ -403,7 +379,7 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
                     Pot. Kadar Air ({item ? item.moisturePercent.toFixed(2) : "0.00"}%)
                   </p>
                   <p className="font-mono font-semibold text-[15px] text-red-deduction">
-                    {moistureDeduction > 0 ? `(-${moistureDeduction.toFixed(weightDecimals)} KG)` : "\u2014"}
+                    {moistureDeduction > 0 ? `(-${moistureDeduction.toFixed(moistureDecimals)} KG)` : "\u2014"}
                   </p>
                 </div>
                 <div className="rounded-lg bg-panel-alt/80 border border-border-soft/70 px-2.5 py-2">
@@ -423,7 +399,7 @@ export function ScannedBaleDetail({ item, roundingMode, laneId, capturedWeight, 
               Berat Netto
             </p>
             <p className="font-mono font-extrabold text-[32px] leading-tight text-emerald my-1">
-              {netWeight > 0 ? `${netWeight.toFixed(weightDecimals)} KG` : "\u2014"}
+              {netWeight > 0 ? `${netWeight.toFixed(1)} KG` : "\u2014"}
             </p>
             <div className="my-2.5 border-t border-dashed border-emerald/30" />
             <p className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground">

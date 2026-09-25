@@ -4,7 +4,7 @@ import { getCurrentUserLane } from "@/lib/lane-resolution"
 import { LanePicker } from "@/components/shared/lane-picker"
 import { WeighingPageClient } from "@/components/pos-2/weighing-page-client"
 import { getSetting } from "@/lib/settings"
-import type { RoundMode } from "@/lib/calculations"
+import { isRoundMode } from "@/lib/calculations"
 import { Scale } from "lucide-react"
 import { PageHeader } from "@/components/shared/page-header"
 
@@ -24,6 +24,9 @@ export default async function WeighingPage({ searchParams }: { searchParams: Pro
       />
     )
   }
+
+  const storedRoundingMode = await getSetting("WEIGHT_ROUND_MODE", "normal")
+  const defaultRoundingMode = isRoundMode(storedRoundingMode) ? storedRoundingMode : "normal"
 
   return (
     <div className="space-y-5">
@@ -47,7 +50,7 @@ export default async function WeighingPage({ searchParams }: { searchParams: Pro
         </div>
       </PageHeader>
 
-      <WeighingPageClient laneId={lane.id} defaultRoundingMode={(await getSetting("WEIGHT_ROUND_MODE", "normal")) as RoundMode} />
+      <WeighingPageClient laneId={lane.id} defaultRoundingMode={defaultRoundingMode} />
     </div>
   )
 }

@@ -22,6 +22,7 @@ import { useThermalPrinter, type PrinterTransport } from "@/hooks/useThermalPrin
 import { usePrintDocument, printBaseStyle } from "@/lib/print"
 import { StickerBatchPrint } from "@/components/pos-2/sticker-batch-print"
 import { LiveScalePanel } from "@/components/pos-2/live-scale-panel"
+import { RoundingModeToggle } from "@/components/pos-2/rounding-mode-toggle"
 import { SyncStatusBanner } from "@/components/shared/sync-status-banner"
 import {
   checkSusulanDuplicate,
@@ -29,11 +30,11 @@ import {
   type SusulanBatchResult,
 } from "@/lib/actions/susulan"
 import {
+  calculateBaleWeights,
   calculateWeightAfterPacking,
-  calculateMoistureDeduction,
-  calculateNetWeight,
   calculateSubtotal,
-  roundWeight,
+  getMoistureDeductionDecimals,
+  isRoundMode,
   roundMoney,
   type RoundMode,
 } from "@/lib/calculations"
@@ -85,6 +86,7 @@ interface SusulanShellProps {
   laneName: string
   maxMoisturePercent: number
   defaultMoisturePercent: number
+  defaultRoundingMode: RoundMode
   userName: string
 }
 
@@ -110,12 +112,6 @@ interface SavedBale {
   subtotal: number | null
 }
 
-const ROUNDING_OPTIONS: { value: RoundMode; label: string }[] = [
-  { value: "normal", label: "Normal" },
-  { value: "floor", label: "Floor" },
-  { value: "ceil", label: "Ceil" },
-]
-
 interface SusulanDraft {
   savedBales: SavedBale[]
   selectedFarmer: FarmerOption | null
@@ -135,19 +131,49 @@ function draftStorageKey(warehouse: string, laneCode: string) {
   return `tobak:susulan-draft:${warehouse}:${laneCode}`
 }
 
-function loadDraft(key: string): SusulanDraft | null {
+function normalizeSavedBale(
+  bale: SavedBale,
+  defaultRoundingMode: RoundMode
+): SavedBale {
+  const roundingMode = isRoundMode(bale.roundingMode)
+    ? bale.roundingMode
+    : defaultRoundingMode
+  if (bale.grossWeight == null || !Number.isFinite(bale.grossWeight)) {
+    return { ...bale, roundingMode }
+  }
+  const weights = calculateBaleWeights({
+    grossWeight: bale.grossWeight,
+    packingWeight: bale.packingWeight,
+    moisturePercent: bale.moisturePercent,
+    moistureRoundingMode: roundingMode,
+  })
+  return {
+    ...bale,
+    roundingMode,
+    ...weights,
+    subtotal: roundMoney(calculateSubtotal(weights.netWeight, bale.gradePrice)),
+  }
+}
+
+function loadDraft(key: string, defaultRoundingMode: RoundMode): SusulanDraft | null {
   if (typeof window === "undefined") return null
   try {
     const raw = window.localStorage.getItem(key)
     if (!raw) return null
     const parsed = JSON.parse(raw) as Partial<SusulanDraft>
-    return { ...emptyDraft(), ...parsed }
+    const roundingMode = isRoundMode(parsed.roundingMode)
+      ? parsed.roundingMode
+      : defaultRoundingMode
+    const savedBales = Array.isArray(parsed.savedBales)
+      ? parsed.savedBales.map((bale) => normalizeSavedBale(bale, roundingMode))
+      : []
+    return { ...emptyDraft(defaultRoundingMode), ...parsed, roundingMode, savedBales }
   } catch {
     return null
   }
 }
 
-function emptyDraft(): SusulanDraft {
+function emptyDraft(defaultRoundingMode: RoundMode): SusulanDraft {
   return {
     savedBales: [],
     selectedFarmer: null,
@@ -159,7 +185,7 @@ function emptyDraft(): SusulanDraft {
     customerId: null,
     moisturePercent: 0,
     grossWeight: "",
-    roundingMode: "normal",
+    roundingMode: defaultRoundingMode,
     requestId: null,
   }
 }
@@ -182,6 +208,7 @@ export function SusulanShell(props: SusulanShellProps) {
     laneCode,
     maxMoisturePercent,
     defaultMoisturePercent,
+    defaultRoundingMode,
   } = props
 
   const shortLane = laneToken(laneCode, warehouse)
@@ -206,7 +233,7 @@ export function SusulanShell(props: SusulanShellProps) {
   const [moisturePercent, setMoisturePercent] = useState(defaultMoisturePercent)
   const [customerId, setCustomerId] = useState<number | null>(customers[0]?.id ?? null)
   const [grossWeight, setGrossWeight] = useState("")
-  const [roundingMode, setRoundingMode] = useState<RoundMode>("normal")
+  const [roundingMode, setRoundingMode] = useState<RoundMode>(defaultRoundingMode)
   const [requestId, setRequestId] = useState<string | null>(null)
 
   const [savedBales, setSavedBales] = useState<SavedBale[]>([])
@@ -221,7 +248,7 @@ export function SusulanShell(props: SusulanShellProps) {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time mount hydration of persisted draft
     setMounted(true)
 
-    const draft = loadDraft(storageKey)
+    const draft = loadDraft(storageKey, defaultRoundingMode)
     if (!draft) return
 
     setSavedBales(draft.savedBales)
@@ -354,6 +381,7 @@ export function SusulanShell(props: SusulanShellProps) {
   const taraKg = selectedPacking?.deductionWeight ?? 0
 
   const grossWeightNum = grossWeight === "" ? null : parseFloat(grossWeight)
+  const moistureDecimals = getMoistureDeductionDecimals(roundingMode)
 
   const currentPreview = useMemo(() => {
     if (grossWeightNum == null || isNaN(grossWeightNum))
@@ -362,22 +390,19 @@ export function SusulanShell(props: SusulanShellProps) {
       gradeOptions.find((g) => g.name === gradeName)?.defaultPrice ?? null
     if (price == null)
       return { afterPacking: null, mcDeduction: null, price: null, netto: null, subtotal: null, invalid: false }
-    const weightDecimals = roundingMode === "normal" ? 1 : 0
     const afterPackingRaw = calculateWeightAfterPacking(grossWeightNum, taraKg)
     if (afterPackingRaw < 0)
       return { afterPacking: afterPackingRaw, mcDeduction: null, price, netto: null, subtotal: null, invalid: true }
-    const afterPacking = roundWeight(afterPackingRaw, roundingMode, weightDecimals)
-    const mcDeduction = roundWeight(
-      calculateMoistureDeduction(afterPacking, moisturePercent),
-      roundingMode,
-      weightDecimals
-    )
-    const netto = roundWeight(
-      calculateNetWeight(afterPacking, mcDeduction),
-      roundingMode,
-      weightDecimals
-    )
-    const subtotal = roundWeight(calculateSubtotal(netto, price), "normal", 2)
+    const { weightAfterPacking, moistureDeduction, netWeight } = calculateBaleWeights({
+      grossWeight: grossWeightNum,
+      packingWeight: taraKg,
+      moisturePercent,
+      moistureRoundingMode: roundingMode,
+    })
+    const afterPacking = weightAfterPacking
+    const mcDeduction = moistureDeduction
+    const netto = netWeight
+    const subtotal = roundMoney(calculateSubtotal(netto, price))
     return {
       afterPacking,
       mcDeduction,
@@ -523,7 +548,7 @@ export function SusulanShell(props: SusulanShellProps) {
       setMoisturePercent(defaultMoisturePercent)
       setCustomerId(customers[0]?.id ?? null)
       setGrossWeight("")
-      setRoundingMode("normal")
+      setRoundingMode(defaultRoundingMode)
       setRequestId(null)
       try {
         window.localStorage.removeItem(storageKey)
@@ -865,25 +890,13 @@ export function SusulanShell(props: SusulanShellProps) {
           {/* Pembulatan */}
           <div>
             <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.06em] block mb-1">
-              Pembulatan
+              Pembulatan MC
             </span>
-            <div className="flex bg-panel-alt rounded-xl border border-border-soft p-0.5 h-[38px] items-center">
-              {ROUNDING_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  tabIndex={-1}
-                  onClick={() => setRoundingMode(opt.value)}
-                  className={`flex-1 px-2 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                    roundingMode === opt.value
-                      ? "bg-emerald text-primary-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
+            <RoundingModeToggle
+              value={roundingMode}
+              onChange={setRoundingMode}
+              className="h-[38px]"
+            />
           </div>
 
           {/* Berat Bruto */}
@@ -957,7 +970,7 @@ export function SusulanShell(props: SusulanShellProps) {
                 </p>
                 <p className="font-mono font-semibold text-[12.5px] text-red-deduction">
                   {currentPreview.mcDeduction != null
-                    ? `(-${currentPreview.mcDeduction.toFixed(1)} KG)`
+                    ? `(-${currentPreview.mcDeduction.toFixed(moistureDecimals)} KG)`
                     : "\u2014"}
                 </p>
               </div>
