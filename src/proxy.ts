@@ -49,7 +49,7 @@ export const proxy = auth((req) => {
   }
 
   if (pathname === "/admin" || pathname.startsWith("/admin/")) {
-    const adminOnly = ["/admin/master-data", "/admin/settings"]
+    const adminOnly = ["/admin/master-data", "/admin/import", "/admin/settings"]
     const staff = ["/admin/transactions"]
     const readOnly = ["/admin/debt", "/admin/loans", "/admin/reports", "/admin/kas", "/admin/bank"]
 
