@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import { useQueueStore } from "@/lib/queue"
 import { saveGrade } from "@/lib/actions/grading"
 import { saveWeighData } from "@/lib/actions/weighing"
+import { saveSusulanBatch } from "@/lib/actions/susulan"
 
 export function isNetworkError(err: unknown): boolean {
   if (typeof navigator !== "undefined" && navigator.onLine === false) return true
@@ -29,11 +30,17 @@ export function useOfflineQueue() {
         try {
           if (action.type === "GRADE") {
             await saveGrade(action.payload)
-          } else {
+            useQueueStore.getState().remove(action.id)
+            toast.success("Bale ter-sinkron ke server")
+          } else if (action.type === "WEIGH") {
             await saveWeighData(action.payload)
+            useQueueStore.getState().remove(action.id)
+            toast.success("Data timbang ter-sinkron")
+          } else if (action.type === "SUSULAN_BATCH") {
+            await saveSusulanBatch(action.payload)
+            useQueueStore.getState().remove(action.id)
+            toast.success("Batch susulan ter-sinkron ke server")
           }
-          useQueueStore.getState().remove(action.id)
-          toast.success(action.type === "GRADE" ? "Bale ter-sinkron ke server" : "Data timbang ter-sinkron")
         } catch (err) {
           if (isNetworkError(err)) break
           useQueueStore.getState().remove(action.id)

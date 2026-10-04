@@ -245,7 +245,7 @@ function WorkflowList() {
           <div className="flex min-w-0 items-start justify-between gap-4">
             <div>
               <p className="text-sm font-bold text-foreground">{step.label}</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">{step.desc}</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground/95">{step.desc}</p>
             </div>
             <span className={cn(step.pill, "mt-0.5")}>{step.status}</span>
           </div>
@@ -303,29 +303,27 @@ export default function LoginPage() {
             <div className="relative flex h-full flex-col">
               <BrandMark size="lg" />
 
-              <div className="mt-14 text-center">
-                <div className="mb-5 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald to-emerald/60 text-primary-foreground shadow-lg shadow-emerald/20">
-                  <ArrowRight className="size-5" />
-                </div>
-                <h1 className="text-3xl font-extrabold tracking-tight text-foreground">
-                  TobakOS
-                </h1>
-                <p className="mx-auto mt-2 max-w-[34ch] text-sm leading-relaxed text-muted-foreground">
-                  Digitalisasi pembelian tembakau — dari grading hingga pembayaran, dalam satu alur.
+              <div className="mt-14 flex flex-col">
+                <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                  Selamat Datang
+                </p>
+                <h2 className="mt-2 text-2xl font-bold tracking-tight text-foreground lg:text-3xl">
+                  Sistem Pembelian Tembakau
+                </h2>
+                <p className="mt-2 max-w-[40ch] text-sm leading-relaxed text-muted-foreground/90">
+                  Kelola proses grading, penimbangan, hingga penutupan transaksi dalam satu alur terintegrasi.
                 </p>
               </div>
 
               <div className="mt-10">
-                <p className="mb-4 font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-emerald">
+                <p className="mb-4 font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-300">
                   Alur Kerja
                 </p>
                 <WorkflowList />
               </div>
 
-              <div className="mt-auto border-t border-border-soft pt-5">
-                <p className="font-mono text-[11px] tracking-wide text-muted-2">
-                  <span className="text-emerald">{"//"}</span> alur: grading → penimbangan → lunas
-                </p>
+              <div className="mt-auto border-t border-border-soft pt-5 text-xs text-muted-foreground">
+                <span>© 2026 VisuArtive.co</span>
               </div>
             </div>
           </aside>
@@ -338,7 +336,7 @@ export default function LoginPage() {
             <div className="mb-8">
               <div className="flex items-center gap-2">
                 <LockKeyhole className="size-3.5 text-emerald" />
-                <span className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-emerald">
+                <span className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-300">
                   Sistem Internal
                 </span>
               </div>
@@ -429,7 +427,7 @@ export default function LoginPage() {
             </form>
 
             <p className="mt-8 text-center font-mono text-[11px] text-muted-2">
-              Sistem Input Pembelian Tembakau · v0.1
+              Sistem Input Pembelian Tembakau · v2.2
             </p>
           </main>
         </div>

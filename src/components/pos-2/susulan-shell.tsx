@@ -24,6 +24,7 @@ import { StickerBatchPrint } from "@/components/pos-2/sticker-batch-print"
 import { LiveScalePanel } from "@/components/pos-2/live-scale-panel"
 import { RoundingModeToggle } from "@/components/pos-2/rounding-mode-toggle"
 import { SyncStatusBanner } from "@/components/shared/sync-status-banner"
+import { isNetworkError, useOfflineQueue } from "@/hooks/useOfflineQueue"
 import {
   checkSusulanDuplicate,
   saveSusulanBatch,
@@ -331,6 +332,7 @@ export function SusulanShell(props: SusulanShellProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- hanya hydrate sekali saat mount
   }, [])
   const stickerPrintRef = useRef<HTMLDivElement>(null)
+  const { enqueue } = useOfflineQueue()
   const handleStickerPrint = usePrintDocument(stickerPrintRef, printBaseStyle, { documentTitle: "Label-Batch" })
 
   useEffect(() => {
@@ -559,7 +561,45 @@ export function SusulanShell(props: SusulanShellProps) {
           : `Transaksi ${saved.transactionCode} tersimpan (${saved.labels.length} bale)`
       )
     } catch (e) {
-      toast.error((e as Error).message)
+      const err = e as Error
+      if (isNetworkError(err)) {
+        try {
+          const id = requestId ?? createRequestId()
+          const batchPayload = {
+            farmerId: selectedFarmer.id,
+            laneCode,
+            transactionDate: dateValue,
+            requestId: id,
+            bales: savedBales.map((b) => ({
+              tobaccoTypeId: b.tobaccoTypeId,
+              leafTypeId: b.leafTypeId,
+              packingTypeId: b.packingTypeId,
+              grade: b.gradeName,
+              moisturePercent: b.moisturePercent,
+              packingWeight: b.packingWeight,
+              customerId: b.customerId,
+              grossWeight: b.grossWeight,
+              roundingMode: b.roundingMode,
+            })),
+          }
+          enqueue({ type: "SUSULAN_BATCH", payload: batchPayload })
+          setRequestId(id)
+          try {
+            window.localStorage.setItem(
+              storageKey,
+              JSON.stringify({ ...currentDraft(), requestId: id })
+            )
+          } catch {}
+          toast.info(
+            "Koneksi terputus saat menyimpan. Batch susulan dimasukkan ke antrean offline dan akan disinkron otomatis saat koneksi kembali."
+          )
+        } catch (enqueueErr) {
+          toast.error((enqueueErr as Error).message)
+        }
+      } else {
+        setRequestId(null)
+        toast.error(err.message)
+      }
     } finally {
       setSubmitting(false)
     }

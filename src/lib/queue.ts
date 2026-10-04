@@ -6,13 +6,17 @@ import type { GradeInput } from "@/lib/actions/grading"
 import type { WeighInput } from "@/lib/actions/weighing"
 import { randomUUID } from "@/lib/utils"
 
+import type { SusulanBatchInput } from "@/lib/actions/susulan"
+
 export type QueuedAction =
   | { id: string; type: "GRADE"; payload: GradeInput; createdAt: number }
   | { id: string; type: "WEIGH"; payload: WeighInput; createdAt: number }
+  | { id: string; type: "SUSULAN_BATCH"; payload: SusulanBatchInput; createdAt: number }
 
 export type NewQueuedAction =
   | { type: "GRADE"; payload: GradeInput }
   | { type: "WEIGH"; payload: WeighInput }
+  | { type: "SUSULAN_BATCH"; payload: SusulanBatchInput }
 
 interface QueueState {
   pending: QueuedAction[]
@@ -33,10 +37,16 @@ export const useQueueStore = create<QueueState>()(
       online: typeof navigator !== "undefined" ? navigator.onLine : true,
       enqueue: (action) =>
         set((s) => {
-          const full: QueuedAction =
-            action.type === "GRADE"
-              ? { id: randomUUID(), type: "GRADE", payload: action.payload, createdAt: Date.now() }
-              : { id: randomUUID(), type: "WEIGH", payload: action.payload, createdAt: Date.now() }
+          const createdAt = Date.now()
+          const id = randomUUID()
+          let full: QueuedAction
+          if (action.type === "GRADE") {
+            full = { id, type: "GRADE", payload: action.payload, createdAt }
+          } else if (action.type === "WEIGH") {
+            full = { id, type: "WEIGH", payload: action.payload, createdAt }
+          } else {
+            full = { id, type: "SUSULAN_BATCH", payload: action.payload, createdAt }
+          }
           return { pending: [...s.pending, full] }
         }),
       remove: (id) => set((s) => ({ pending: s.pending.filter((a) => a.id !== id) })),
